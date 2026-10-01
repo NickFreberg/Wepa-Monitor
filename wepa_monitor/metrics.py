@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import config, consumables, events, rollup, store
+from . import config, consumables, events, rollup, store, support
 from .reference import load_stations, station_table
 
 
@@ -51,8 +51,10 @@ class Dataset:
     def empty(self) -> bool:
         return self.hourly.empty
 
-    def ids(self, section=None, area=None, building=None) -> list[str]:
+    def ids(self, section=None, area=None, building=None, owner=None) -> list[str]:
         s = self.stations
+        if owner:
+            s = s[s["owner"].isin(owner if isinstance(owner, list) else [owner])]
         if section:
             s = s[s["section"].isin(section if isinstance(section, list) else [section])]
         if area:
@@ -104,7 +106,7 @@ def load(data_dir: Path, now: datetime | None = None, rollups: "rollup.RollupSto
     return Dataset(
         data_dir=data_dir, meta=meta, is_demo=is_demo, as_of=as_of,
         stations=stations, latest=latest, status=status, hourly=hourly, bhourly=r["bhourly"],
-        sev_inc=events.severity_incidents(status, as_of),
+        sev_inc=support.annotate(events.severity_incidents(status, as_of), stations, as_of),
         fault_inc=events.fault_incidents(status, as_of),
         tray_inc=events.tray_incidents(status, as_of),
         cons=cons, repl=repl, levels=levels, log=log,
@@ -242,7 +244,7 @@ def station_scorecard(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
     out["red_incidents"] = out["red_incidents"].fillna(0).astype(int)
     out["mtbf_h"] = np.where(out["red_incidents"] > 0, g["up_s"] / 3600 / out["red_incidents"].replace(0, np.nan), np.nan)
     out = out.reset_index().rename(columns={"index": "station_id"})
-    return out.merge(ds.stations[["station_id", "label", "building", "area", "section"]], on="station_id", how="left")
+    return out.merge(ds.stations[["station_id", "label", "building", "area", "section", "owner"]], on="station_id", how="left")
 
 
 # --- faults ---------------------------------------------------------------------

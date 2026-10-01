@@ -64,3 +64,24 @@ MIN_INCIDENTS_FOR_MEAN = 3
 MIN_COVERAGE_FOR_RATE = 0.5      # share of the window actually observed
 MIN_DAYS_FOR_BURN_RATE = 3
 BURN_RATE_LOOKBACK_DAYS = 14
+
+# --- Support ownership and desk hours ------------------------------------------
+# Who looks after each station, where the team is based, and when its desk is
+# staffed (local time; weekday 0 = Monday; hours may be fractional, e.g. 9.5).
+# Outages that start outside these hours wait for the desk to open, so metrics
+# split downtime into desk hours and after hours for each owner.
+SUPPORT_TEAMS = {
+    "ResNet": {"base": "East Campus Commons", "short": "ECC",
+               "hours": {0: (10, 18), 1: (10, 18), 2: (10, 18), 3: (10, 18), 4: (10, 16)}},
+    "IT Service Center": {"base": "Maxwell Library", "short": "Maxwell",
+                          "hours": {d: (9, 16) for d in range(5)}},
+}
+# Status-page section -> owning team. Anything not listed goes to the default.
+SECTION_OWNER = {"ResNet": "ResNet", "Student Computer Labs": "IT Service Center",
+                 "Satellite Campuses": "IT Service Center"}
+DEFAULT_OWNER = "IT Service Center"
+# Context (not modeled): ResNet has also run RSR (ResNet Support Representative)
+# workstations at Shea-Durgin, Crimson, Scott and the ResNet office in ECC, but they
+# weren't always staffed, so the desk hours above are the dependable coverage.
+# Days both desks are closed (holidays, breaks), as "YYYY-MM-DD" strings.
+SUPPORT_CLOSED_DATES: set[str] = set()

@@ -6,8 +6,9 @@
    interval gives an earliest-latest window for the date.
 2. Statistical process control: a c-chart of daily fault incidents with 3-sigma
    limits, plus per-station checks for days far above that station's own norm.
-3. Time to fix: Kaplan-Meier survival curves of how long outages last, staffed hours
-   vs overnight, compared with a log-rank test. Outages still open (or whose end
+3. Time to fix: Kaplan-Meier survival curves of how long outages last, split by
+   whether they began while the station's support desk was open or after hours,
+   compared with a log-rank test. Outages still open (or whose end
    wasn't observed) are kept as censored observations instead of being dropped.
 4. Usage vs reliability: ordinary least squares of each station's failure rate on
    its usage (black toner burned per day), with R^2, p-value, a 95% confidence band,
@@ -29,7 +30,8 @@ from . import config, metrics as M
 DAY_S = 86400.0
 MIN_POINTS_FOR_FIT = 4
 MIN_SPAN_DAYS = 1.0
-OVERNIGHT_HOURS = (23, 8)      # local time with no desk staffed (approximate)
+DESK_LABEL = "Started while the desk was open"
+AFTER_LABEL = "Started after hours"
 
 
 def replace_point(component: str) -> float:
@@ -216,9 +218,9 @@ def time_to_fix(ds: M.Dataset, start, end, ids=None) -> TimeToFix | None:
                               (inc["last_seen"] - inc["start"]).dt.total_seconds()))
     hours = np.asarray(dur_s, dtype=float) / 3600
     observed = resolved.to_numpy().astype(int)
-    h = inc["start"].dt.tz_convert(config.LOCAL_TZ).dt.hour.to_numpy()
-    night = (h >= OVERNIGHT_HOURS[0]) | (h < OVERNIGHT_HOURS[1])
-    groups = {"Started during staffed hours": ~night, "Started overnight (11 pm-8 am)": night}
+    # Each station's own support desk decides what counts as after hours (config.SUPPORT_TEAMS).
+    night = ~inc["in_hours"].astype(bool).to_numpy()
+    groups = {DESK_LABEL: ~night, AFTER_LABEL: night}
     curves, medians, within, n = {}, {}, {}, {}
     for name, mask in groups.items():
         if mask.sum() < 3:

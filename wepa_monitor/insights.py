@@ -12,7 +12,6 @@ import pandas as pd
 
 from . import config, metrics as M
 
-OVERNIGHT = (23, 8)   # local hours when no desk is staffed (approximate)
 
 
 @dataclass
@@ -48,9 +47,15 @@ def ytd(ds: M.Dataset) -> Period:
 def scorecard(ds: M.Dataset, p: Period, ids=None) -> dict:
     burn = M.burn_rates(ds, p.start, p.end, ids).set_index("component")
     red = M._in(ds.sev_inc, "start", p.start, p.end, ids)
+    reds = red[red["severity"] == "red"]
+    reds_res = M._resolved(reds)
     return {
         "availability": M.availability(ds, p.start, p.end, ids),
         "red_incidents": int((red["severity"] == "red").sum()),
+        # Share of outages that began outside the owning desk's hours, and the median desk time
+        # (staffed minutes only) it took to fix one: the staff-controllable part of MTTR.
+        "after_hours": (~reds["in_hours"].astype(bool)).mean() * 100 if len(reds) else None,
+        "desk_fix": reds_res["staffed_s"].median() / 60 if len(reds_res) else None,
         "mttr_red": M.mttr(ds, "red", p.start, p.end, ids),
         "mttr_yellow": M.mttr(ds, "yellow", p.start, p.end, ids),
         "mtbf": M.mtbf(ds, p.start, p.end, ids),
@@ -74,7 +79,7 @@ def observations(ds: M.Dataset, cur: Period, prev: Period | None, ids=None) -> l
     out: list[str] = []
     a = M.availability(ds, cur.start, cur.end, ids)
     if a.ok:
-        line = f"Fleet availability was {a.value:.1f}% in {cur.label}"
+        line = f"BSU print stations were available {a.value:.1f}% of the time in {cur.label}"
         if prev:
             b = M.availability(ds, prev.start, prev.end, ids)
             if b.ok:
@@ -106,19 +111,19 @@ def observations(ds: M.Dataset, cur: Period, prev: Period | None, ids=None) -> l
     red = M._in(ds.sev_inc, "start", cur.start, cur.end, ids)
     red = M._resolved(red[red["severity"] == "red"])
     if len(red):
-        hour = red["start"].dt.tz_convert(config.LOCAL_TZ).dt.hour
-        night = (hour >= OVERNIGHT[0]) | (hour < OVERNIGHT[1])
+        night = ~red["in_hours"].astype(bool)
         if night.sum() >= 3 and (~night).sum() >= 3:
             n_med = red.loc[night, "duration_s"].median() / 60
             d_med = red.loc[~night, "duration_s"].median() / 60
             if n_med > 2 * d_med:
-                out.append(f"Red incidents that start overnight (11 pm-8 am) take a median {_fmt_dur(n_med)} "
-                           f"to clear vs {_fmt_dur(d_med)} during the day - the main driver of downtime.")
+                out.append(f"{night.mean():.0%} of outages started after support-desk hours; those took a median "
+                           f"{_fmt_dur(n_med)} to clear vs {_fmt_dur(d_med)} for ones that started while the desk "
+                           "was open - the main driver of downtime.")
 
     burn = M.burn_rates(ds, cur.start, cur.end, ids).set_index("component")
     k = burn.loc["toner_k", "used_units"]
     if k > 0:
-        line = f"The fleet used {k:.1f} black-toner cartridges' worth of toner"
+        line = f"BSU print stations used {k:.1f} black-toner cartridges' worth of toner"
         if prev:
             pk = M.burn_rates(ds, prev.start, prev.end, ids).set_index("component").loc["toner_k", "per_day"]
             ck = burn.loc["toner_k", "per_day"]

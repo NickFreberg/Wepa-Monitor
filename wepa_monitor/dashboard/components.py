@@ -106,17 +106,55 @@ def data_table(df: pd.DataFrame, columns: list[tuple[str, str, object]], max_row
     return html.Div(className="table-wrap", children=html.Table([head, html.Tbody(rows)], className="table"))
 
 
+CLICK_HINT = "<br><i>Click for what this means</i>"
+
+
+def prose(paragraphs: list[list], className: str = "prose") -> html.Div:
+    """Render narrative segments: str | ("b", text) | ("st", station_id, text)."""
+    out = []
+    for para in paragraphs:
+        kids = []
+        for seg in para:
+            if isinstance(seg, str):
+                kids.append(seg)
+            elif seg[0] == "b":
+                kids.append(html.Strong(seg[1]))
+            elif seg[0] == "st":
+                kids.append(station_link(seg[1], seg[2]))
+        out.append(html.P(kids))
+    return html.Div(out, className=className)
+
+
+def explain_toggle(text) -> html.Details:
+    """The ⓘ 'How to read this' disclosure on a card: discoverable, never in the way."""
+    body = [html.P(t) for t in ([text] if isinstance(text, str) else text)]
+    return html.Details([html.Summary([icon("info"), html.Span("How to read this")], title="How to read this chart"),
+                         html.Div(body, className="card__explain-body")], className="card__explain")
+
+
 def chart_card(title: str, subtitle: str, figure=None, body=None, table: html.Div | None = None,
-               wide: bool = False, note: str = "", graph_id: str | None = None, action=None) -> html.Section:
+               wide: bool = False, note: str = "", graph_id=None, action=None, explain=None) -> html.Section:
     head = [html.Div([html.H3(title), html.P(subtitle, className="card__sub") if subtitle else None])]
+    tools = []
     if action is not None:
-        head.append(html.Div(action, className="card__action"))
+        tools.append(html.Div(action, className="card__action"))
+    if explain:
+        tools.append(explain_toggle(explain))
+    if tools:
+        head.append(html.Div(tools, className="card__tools-wrap"))
     children = [html.Header(head, className="card__head")]
     if figure is not None:
         height = figure.layout.height or 300
         extra = {"id": graph_id} if graph_id else {}
-        children.append(dcc.Graph(figure=figure, config=GRAPH_CONFIG, className="graph",
-                                  style={"height": f"{height}px"}, **extra))
+        if isinstance(graph_id, dict) and graph_id.get("type") == "xg":
+            # Explainable chart: say so in every hover, and show a pointer cursor.
+            for trace in figure.data:
+                ht = getattr(trace, "hovertemplate", None)
+                if ht and "<extra>" in ht and CLICK_HINT not in ht:
+                    trace.hovertemplate = ht.replace("<extra>", CLICK_HINT + "<extra>", 1)
+            extra["className"] = "graph graph--explain"
+        extra.setdefault("className", "graph")
+        children.append(dcc.Graph(figure=figure, config=GRAPH_CONFIG, style={"height": f"{height}px"}, **extra))
     if body is not None:
         children.append(body)
     if note:
@@ -150,3 +188,24 @@ def segmented(id_, options: list[dict], value, multi: bool = False, persistence:
 def section_title(text: str, sub: str = "") -> html.Div:
     return html.Div([html.H2(text, className="section-title"),
                      html.P(sub, className="section-sub") if sub else None], className="section-head")
+
+
+def explore_hint(text: str = "Explore the data: click any point on a chart to see what it means, open ⓘ on a card "
+                             "for how to read it, or ask a question on Insights.") -> html.Div:
+    return html.Div(className="explore-hint", children=[
+        icon("sparkle"), html.Span(text),
+        html.Button(icon("x", "Hide this tip"), className="explore-hint__close", n_clicks=0,
+                    id={"type": "hint-close", "n": text[:12]}, title="Hide this tip"),
+    ])
+
+
+def desk_line(ds, owner: str, prefix: str = "Supported by ") -> html.Div:
+    """'Supported by ResNet (East Campus Commons) · Open until 6 PM', with an open/closed dot."""
+    from .. import support
+    open_, txt = support.desk_status(owner, ds.as_of)
+    t = support.team(owner)
+    return html.Div(className=f"desk desk--{'open' if open_ else 'closed'}", title=support.hours_text(owner), children=[
+        html.Span(className="desk__dot", **{"aria-hidden": "true"}),
+        html.Span([prefix, html.B(owner), f" ({t['base']})"]),
+        html.Span(f"Desk {txt[0].lower() + txt[1:]}", className="desk__status"),
+    ])

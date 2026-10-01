@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from . import config
+from . import config, support
 
 
 def load_buildings() -> pd.DataFrame:
@@ -44,5 +44,6 @@ def station_table(snap: pd.DataFrame) -> pd.DataFrame:
     out["building"] = out["building"].where(out["building"].fillna("") != "", out["description"])
     out["area"] = out["area"].where(out["area"].fillna("") != "", "Unassigned")
     out["section"] = out["section"].fillna("Unknown")
+    out["owner"] = out["section"].map(support.owner)
     out["label"] = out["description"] + " (" + out["station_id"] + ")"
     return out[out["station_id"].isin(latest["station_id"]) | latest.empty].reset_index(drop=True)

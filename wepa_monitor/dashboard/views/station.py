@@ -4,10 +4,10 @@ from __future__ import annotations
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, config, metrics as M, models, ops, rules
+from ... import activity, config, metrics as M, models, ops, rules, support
 from .. import charts
-from ..components import (chart_card, data_table, fmt_hours, fmt_minutes, fmt_num, headline, level_bar,
-                          station_link, status_pill, tile)
+from ..components import (chart_card, data_table, desk_line, explore_hint, fmt_hours, fmt_minutes, fmt_num, headline,
+                          level_bar, station_link, status_pill, tile)
 from .common import empty, period_label, period_window, station_messages, status_segments
 from .analytics import eol_window
 from .overview import activity_list
@@ -38,7 +38,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
                     f"{'s' if round(p['days']) != 1 else ''}")
     a = M.availability(ds, start, end, ids)
     fleet = M.availability(ds, start, end)
-    avail_txt = (f"Available {a.value:.1f}% of the time over the last {plabel} (fleet: {fleet.value:.1f}%)"
+    avail_txt = (f"Available {a.value:.1f}% of the time over the last {plabel} (all BSU stations: {fleet.value:.1f}%)"
                  if a.value is not None and fleet.value is not None else "")
     state = row["state"]
     if state == "red":
@@ -59,6 +59,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
             html.Div(f"Station #{station_id} · {row['building']} · {row['area']} · {row['section']} · "
                      f"updated {row['scrape_ts'].tz_convert(config.LOCAL_TZ):%-I:%M %p}",
                      className="station-hero__meta"),
+            desk_line(ds, row.get("owner") or support.owner(row["section"])),
         ]),
     ])
 
@@ -68,17 +69,18 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
     mtbf = M.mtbf(ds, start, end, ids)
     inc = M._in(ds.sev_inc, "start", start, end, ids)
     red_n = int((inc["severity"] == "red").sum())
+    after_n = int((~inc.loc[inc["severity"] == "red", "in_hours"].astype(bool)).sum())
     paper = M.paper_refill_time(ds, start, end, ids)
 
     def vs(v, f, fmt, better_low=False):
         if v is None or f is None:
             return ""
-        return f"fleet {fmt(f)}"
+        return f"all BSU stations: {fmt(f)}"
 
     tiles = html.Div(className="tiles", children=[
         tile("Availability", f"{a.value:.1f}%" if a.value is not None else "—", f"last {plabel}",
              compare=vs(a.value, fleet.value, lambda x: f"{x:.1f}%"), ok=a.ok),
-        tile("Times down", str(red_n), f"red incidents, last {plabel}"),
+        tile("Times down", str(red_n), (f"{after_n} began after desk hours" if red_n else f"red incidents, last {plabel}")),
         tile("Time to fix (MTTR)", fmt_minutes(mttr.value) if mttr.value is not None else "—",
              mttr.note or f"mean of {mttr.n} incidents",
              compare=vs(mttr.value, fleet_mttr.value, fmt_minutes), ok=mttr.ok),
@@ -94,7 +96,10 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
     timeline = chart_card(
         "Status timeline", f"What this station was doing, minute by minute"
         f"{' (last 30 days)' if tl_start > start else ''}. Hover for exact times.",
-        charts.status_timeline(theme, segs, tl_start, end) if len(segs) else None,
+        charts.status_timeline(theme, segs, tl_start, end, owner=row.get("owner")) if len(segs) else None, graph_id={"type": "xg", "chart": "timeline"},
+        explain="Green is printing, amber a warning, red down, gray no data. The shaded columns behind the band "
+                "are the support desk's staffed hours, so you can see whether a problem started while someone was "
+                "in. Click any stretch to see what caused it.",
         body=None if len(segs) else empty("No status history in this period.", big=False), wide=True)
 
     # --- consumables ------------------------------------------------------------------------
@@ -131,6 +136,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
                 "Readings since the last replacement, a Theil-Sen line of best fit (robust to sensor blips), and "
                 "where it meets the replacement point.",
                 charts.eol_projection(theme, pts_fit, fit, comp, ds.as_of, models.replace_point(comp)),
+                graph_id={"type": "xg", "chart": "eol"},
                 note=(f"Projected end of life in {eol_window(f)} at {fit['slope_per_day']:.2f} pts/day "
                       f"(R² = {fit['r2']:.2f}, {fit['n']} readings)."))
     consumables = [
@@ -138,11 +144,14 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
                    "The table forecasts each part's end of life.", body=bars, table=fc_table),
         *([eol_card] if eol_card else []),
         chart_card("Toner over time", "Triangles mark detected replacements.",
-                   charts.levels_over_time(theme, pts, repl, ["toner_k", "toner_c", "toner_m", "toner_y"], start, end)),
+                   charts.levels_over_time(theme, pts, repl, ["toner_k", "toner_c", "toner_m", "toner_y"], start, end),
+                   graph_id={"type": "xg", "chart": "levels_toner"}, explain="Lines step down as toner is used and jump back to 100% when "
+                   "it's replaced (triangles). Steeper lines mean heavier printing."),
         chart_card("Drums over time", "",
-                   charts.levels_over_time(theme, pts, repl, ["drum_k", "drum_c", "drum_m", "drum_y"], start, end)),
+                   charts.levels_over_time(theme, pts, repl, ["drum_k", "drum_c", "drum_m", "drum_y"], start, end),
+                   graph_id={"type": "xg", "chart": "levels_drum"}),
         chart_card("Belt and fuser over time", "",
-                   charts.levels_over_time(theme, pts, repl, ["belt", "fuser"], start, end)),
+                   charts.levels_over_time(theme, pts, repl, ["belt", "fuser"], start, end), graph_id={"type": "xg", "chart": "levels_other"}),
     ]
 
     # --- faults & incidents -----------------------------------------------------------------
@@ -158,10 +167,10 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
                           for s, x in zip(d["status"], d["duration_s"])])
     fault_cards = [
         chart_card("What goes wrong", f"Fault incidents, last {plabel}.",
-                   charts.pareto(theme, counts) if len(counts) else None,
+                   charts.pareto(theme, counts) if len(counts) else None, graph_id={"type": "xg", "chart": "station_faults"},
                    body=None if len(counts) else empty("No faults in this period.", big=False)),
         chart_card("When it goes wrong", "Fault incidents by local hour of day.",
-                   charts.hour_bars(theme, faults["hour"], "faults") if len(faults) else None,
+                   charts.hour_bars(theme, faults["hour"], "faults") if len(faults) else None, graph_id={"type": "xg", "chart": "station_hours"},
                    body=None if len(faults) else empty("No faults in this period.", big=False)),
         chart_card("Incident history", f"Every red and yellow incident, last {plabel}.", wide=True,
                    body=data_table(hist, [("when", "Started", None), ("sev", "Type", None), ("cause", "Cause", None),
@@ -183,7 +192,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
         html.Nav([dcc.Link("Stations", href="/stations", className="link link--quiet"), " / ",
                   dcc.Link(row["building"], href=f"/stations?q={row['building']}", className="link link--quiet")],
                  className="breadcrumb", **{"aria-label": "Breadcrumb"}),
-        header, hl, tiles,
+        header, hl, explore_hint(), tiles,
         html.Div(className="grid", children=[timeline]),
         html.H2("Consumables", className="section-title"),
         html.Div(className="grid", children=consumables),

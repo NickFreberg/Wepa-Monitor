@@ -12,8 +12,9 @@ The model is deliberately simple and explainable:
   toner C/M/Y. Yields are typical of a mid-range color laser.
 * Paper drains Tray1 first, then Tray2. One empty tray is only a printer-text
   warning (as seen on the live page); all trays empty is a red PAPER OUT.
-* Staff refill trays on rounds and respond to red alerts with a delay that
-  depends on whether the desk is staffed at that hour.
+* Staff refill trays on rounds and respond to red alerts only while the owning
+  team's desk is open (ResNet or the IT Service Center; see config.SUPPORT_TEAMS),
+  so problems that start after hours wait for the next shift.
 * Jams, network drops, fatal errors and stockouts happen at modest rates.
 * The scraper itself fails occasionally and has a couple of longer outages.
 """
@@ -50,8 +51,8 @@ HOURLY = {
                            .8, .9, .9, .7, .4, .2, .1, 0, 0, 0, 0, 0]),
 }
 WEEKEND = {"residence": 0.8, "lab": 0.3, "satellite": 0.1}
-# Staffed hours (local) for weekday / weekend: (open, close)
-STAFFED = {"residence": ((9, 23), (12, 22)), "lab": ((8, 21), (10, 17)), "satellite": ((9, 17), (9, 9))}
+# Who responds to each kind of station: its desk hours come from config.SUPPORT_TEAMS.
+OWNER = {"residence": "ResNet", "lab": "IT Service Center", "satellite": "IT Service Center"}
 
 
 def academic_factor(d: date, kind: str) -> float:
@@ -76,19 +77,28 @@ def academic_factor(d: date, kind: str) -> float:
 @dataclass
 class _Clock:
     local_hour: np.ndarray
+    local_clock: np.ndarray     # fractional local hour, e.g. 9.5
+    weekday: np.ndarray
     weekend: np.ndarray
     local_date: list
 
 
 def _clock(minutes: pd.DatetimeIndex) -> _Clock:
     local = minutes.tz_convert(config.LOCAL_TZ)
-    return _Clock(np.asarray(local.hour), np.asarray(local.dayofweek >= 5), list(local.date))
+    return _Clock(np.asarray(local.hour), np.asarray(local.hour + local.minute / 60), np.asarray(local.dayofweek),
+                  np.asarray(local.dayofweek >= 5), list(local.date))
 
 
 def _staffed_mask(clock: _Clock, kind: str) -> np.ndarray:
-    (wo, wc), (eo, ec) = STAFFED[kind]
-    h = clock.local_hour
-    return np.where(clock.weekend, (h >= eo) & (h < ec), (h >= wo) & (h < wc))
+    """Minutes when the owning team's desk is open (staff only respond then)."""
+    hours = config.SUPPORT_TEAMS[OWNER[kind]]["hours"]
+    mask = np.zeros(len(clock.local_clock), dtype=bool)
+    for d, (a, b) in hours.items():
+        mask |= (clock.weekday == d) & (clock.local_clock >= a) & (clock.local_clock < b)
+    closed = {pd.Timestamp(x).date() for x in config.SUPPORT_CLOSED_DATES}
+    if closed:
+        mask &= ~np.isin(np.array(clock.local_date, dtype=object), list(closed))
+    return mask
 
 
 def _next_staffed(staffed: np.ndarray) -> np.ndarray:
@@ -243,7 +253,7 @@ class _Station:
 
 
 def _plan_rounds(n: int, clock: _Clock, kind: str, rng) -> set[int]:
-    """Routine refill rounds: residence twice a day, labs once on weekdays."""
+    """Routine refill rounds during desk hours: residence halls twice a day, labs once."""
     rounds = set()
     days = sorted(set(clock.local_date))
     day_start = {}
@@ -251,9 +261,10 @@ def _plan_rounds(n: int, clock: _Clock, kind: str, rng) -> set[int]:
         day_start.setdefault(d, i)
     for d in days:
         base = day_start[d] - int(clock.local_hour[day_start[d]] * 60)
-        weekend = d.weekday() >= 5
-        hours = {"residence": [11.5, 19.5], "lab": [9.0] if not weekend else [],
-                 "satellite": [10.0] if not weekend else []}[kind]
+        desk = config.SUPPORT_TEAMS[OWNER[kind]]["hours"].get(d.weekday())
+        if not desk or d.strftime("%Y-%m-%d") in config.SUPPORT_CLOSED_DATES:
+            continue    # rounds only happen while the owning desk is staffed
+        hours = [desk[0] + 1.0, desk[1] - 1.0] if kind == "residence" else [desk[0] + 0.5]
         for h in hours:
             if rng.random() < 0.08:   # missed round
                 continue
@@ -290,7 +301,7 @@ def generate(data_dir: Path, days: int = 90, end: datetime | None = None, seed: 
     season_lab = np.array([academic_factor(d, "lab") for d in sorted(set(clock.local_date))])
 
     friday = np.array([d.weekday() == 4 for d in clock.local_date])
-    staffed = {k: _staffed_mask(clock, k) for k in STAFFED}
+    staffed = {k: _staffed_mask(clock, k) for k in OWNER}
     next_staffed = {k: _next_staffed(v) for k, v in staffed.items()}
 
     frames = []

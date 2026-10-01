@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from .. import config
+from .. import config, support
 from .theme import STATUS, TOKENS, ink, layout
 
 SECTION_ORDER = ["ResNet", "Student Computer Labs", "Satellite Campuses"]
@@ -27,11 +27,12 @@ def availability_daily(theme: str, fleet: pd.DataFrame, by_section: pd.DataFrame
             d = by_section[by_section["section"] == section]
             fig.add_scatter(x=d["local_date"], y=d["availability"], name=section, mode="lines",
                             line=dict(width=2, color=_section_color(theme, section)),
+                            customdata=np.stack([d["observed_h"], [section] * len(d)], axis=1),
                             hovertemplate="%{y:.1f}%<extra>" + section + "</extra>")
-    fig.add_scatter(x=fleet["local_date"], y=fleet["availability"], name="Fleet", mode="lines",
+    fig.add_scatter(x=fleet["local_date"], y=fleet["availability"], name="All BSU stations", mode="lines",
                     line=dict(width=2.5, color=t["ink"]),
-                    customdata=fleet["observed_h"],
-                    hovertemplate="%{y:.1f}% · %{customdata:,.0f} printer-h observed<extra>Fleet</extra>")
+                    customdata=np.stack([fleet["observed_h"], ["All BSU stations"] * len(fleet)], axis=1),
+                    hovertemplate="%{y:.1f}% · %{customdata[0]:,.0f} printer-h observed<extra>All BSU stations</extra>")
     lo = float(np.nanmin(fleet["availability"])) if len(fleet) else 90
     if by_section is not None and len(by_section):
         lo = min(lo, float(np.nanmin(by_section["availability"])))
@@ -64,7 +65,7 @@ def mttr_weekly(theme: str, weekly: pd.DataFrame) -> go.Figure:
             continue
         fig.add_scatter(x=d["week"], y=d["median_min"], name=name, mode="lines+markers",
                         line=dict(width=2, color=STATUS[tone]), marker=dict(size=8),
-                        customdata=np.stack([d["n"], d["mean_min"]], axis=1),
+                        customdata=np.stack([d["n"], d["mean_min"], [sev] * len(d)], axis=1),
                         hovertemplate="median %{y:.0f} min · mean %{customdata[1]:.0f} min · "
                                       "%{customdata[0]} incidents<extra>" + name + "</extra>")
     fig.update_layout(**layout(theme, 280, hovermode="x unified", yaxis=dict(ticksuffix=" min", rangemode="tozero")))
@@ -86,7 +87,19 @@ def pareto(theme: str, counts: pd.Series) -> go.Figure:
     return fig
 
 
-def heatmap(theme: str, faults: pd.DataFrame) -> go.Figure:
+def _desk_blocks(name: str) -> list[tuple[int, int, float, float]]:
+    """Runs of consecutive weekdays with identical desk hours: (first_day, last_day, open, close)."""
+    blocks: list[list] = []
+    for d in range(7):
+        span = support.team(name)["hours"].get(d)
+        if span and blocks and blocks[-1][1] == d - 1 and (blocks[-1][2], blocks[-1][3]) == tuple(span):
+            blocks[-1][1] = d
+        elif span:
+            blocks.append([d, d, span[0], span[1]])
+    return [tuple(b) for b in blocks]
+
+
+def heatmap(theme: str, faults: pd.DataFrame, teams: list[str] | None = None) -> go.Figure:
     t = TOKENS[theme]
     grid = (faults.groupby(["weekday", "hour"]).size().unstack(fill_value=0)
             .reindex(index=range(7), columns=range(24), fill_value=0))
@@ -96,8 +109,45 @@ def heatmap(theme: str, faults: pd.DataFrame) -> go.Figure:
                                colorbar=dict(thickness=10, outlinewidth=0, tickfont=dict(color=t["muted"]),
                                              title=dict(text="faults", font=dict(color=t["muted"], size=11))),
                                hovertemplate="%{y} %{x}: %{z} fault incidents<extra></extra>"))
-    fig.update_layout(**layout(theme, 260, xaxis=dict(showline=False), yaxis=dict(autorange="reversed",
-                                                                                    showgrid=False)))
+    # Outline each support team's desk hours so after-hours hot spots stand out.
+    styles = [("solid", 0.0), ("dot", 0.12)]
+    for i, name in enumerate(teams or []):
+        dash, inset = styles[i % len(styles)]
+        for d0, d1, a, b in _desk_blocks(name):
+            fig.add_shape(type="rect", xref="x", yref="y", x0=a - 0.5 + inset, x1=b - 0.5 - inset,
+                          y0=d0 - 0.5 + inset, y1=d1 + 0.5 - inset, line=dict(color=t["ink"], width=1.6, dash=dash),
+                          fillcolor="rgba(0,0,0,0)", layer="above")
+        fig.add_scatter(x=[None], y=[None], mode="lines", name=f"{name} desk hours", hoverinfo="skip",
+                        line=dict(color=t["ink"], width=1.6, dash=dash))
+    fig.update_layout(**layout(theme, 260 + (28 if teams else 0), showlegend=bool(teams),
+                               legend=dict(orientation="h", y=1.02, yanchor="bottom", x=0),
+                               margin=dict(t=36 if teams else 10),
+                               xaxis=dict(showline=False, type="category", categoryorder="array", categoryarray=hours,
+                                          tickangle=0, tickmode="array", tickvals=hours[::3], ticktext=hours[::3]),
+                               yaxis=dict(autorange="reversed", showgrid=False, type="category",
+                                          categoryorder="array", categoryarray=WEEKDAYS)))
+    return fig
+
+
+def owner_hours(theme: str, summ: pd.DataFrame) -> go.Figure:
+    """Per support team: printer-hours down inside vs outside desk hours."""
+    t = TOKENS[theme]
+    fig = go.Figure()
+    summ = summ.iloc[::-1]
+    tot = (summ["staffed_h"] + summ["after_h"]).replace(0, np.nan)
+    for col, part, name, color in (("staffed_h", "staffed", "During desk hours", t["series"][0]),
+                                   ("after_h", "after", "After hours", t["muted"])):
+        share = (summ[col] / tot * 100).fillna(0)
+        fig.add_bar(y=summ["owner"], x=summ[col], orientation="h", name=name, marker=dict(color=color),
+                    text=[f"{v:.0f}%" if v >= 14 else "" for v in share], textposition="inside",
+                    insidetextanchor="middle", textfont=dict(color="#ffffff", size=11),
+                    customdata=np.stack([summ["owner"], [part] * len(summ), share, summ["hours"]], axis=1),
+                    hovertemplate="<b>%{y}</b> (%{customdata[3]})<br>" + name +
+                                  ": %{x:,.0f} printer-hours down (%{customdata[2]:.0f}%)<extra></extra>")
+    fig.update_layout(**layout(theme, 70 * len(summ) + 90, barmode="stack", bargap=0.35,
+                               legend=dict(orientation="h", y=1.15, x=0),
+                               xaxis=dict(showgrid=True, title=dict(text="printer-hours down")),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
     return fig
 
 
@@ -108,7 +158,7 @@ def cumulative(theme: str, cum: pd.DataFrame, components: list[str]) -> go.Figur
     for comp in comps:
         name = config.COMPONENT_LABELS[comp]
         fig.add_scatter(x=cum["local_date"], y=cum[comp], name=name, mode="lines",
-                        line=dict(width=2, color=ink(theme, comp)),
+                        line=dict(width=2, color=ink(theme, comp)), customdata=[comp] * len(cum),
                         hovertemplate="%{y:.2f} parts<extra>" + name + "</extra>")
     if len(cum) and comps:
         # End labels, nudged apart when lines finish close together (13 px minimum spacing).
@@ -160,7 +210,7 @@ def monthly_stacked(theme: str, frame: pd.DataFrame, components: list[str]) -> g
     fig = go.Figure()
     for comp in components:
         name = config.COMPONENT_LABELS[comp]
-        fig.add_bar(x=frame["month"], y=frame[comp], name=name,
+        fig.add_bar(x=frame["month"], y=frame[comp], name=name, customdata=[comp] * len(frame),
                     marker=dict(color=ink(theme, comp), line=dict(color=t["surface"], width=2)),
                     hovertemplate="%{y:.1f} parts<extra>" + name + "</extra>")
     fig.update_layout(**layout(theme, 260, barmode="stack", hovermode="x unified", barcornerradius=0,
@@ -248,7 +298,7 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
                               family="Open Sans Bold" if satellite else "Open Sans Regular",
                               color="#ffffff" if satellite or theme == "dark" else t["ink"]),
                 customdata=np.stack([d["hover"], d["target"]], axis=1),
-                hovertemplate="%{customdata[0]}<br><i>Click to open</i><extra></extra>"))
+                hovertemplate="%{customdata[0]}<br><i>Click to open this building</i><extra></extra>"))
     main = pts[pts["campus"] == "Main"] if (pts["campus"] == "Main").any() else pts
     center = dict(lat=float(main["lat"].mean()), lon=float(main["lon"].mean())) if len(main) else \
         dict(lat=41.9873, lon=-70.9680)
@@ -275,10 +325,22 @@ TIMELINE_STATES = [("red", "critical", "Down"), ("yellow", "warning", "Warning")
                    ("green", "good", "Printing"), ("nodata", None, "No data")]
 
 
-def status_timeline(theme: str, segments: pd.DataFrame, start=None, end=None) -> go.Figure:
-    """One horizontal band: what state the station was in, when. segments: start, end, state."""
+def status_timeline(theme: str, segments: pd.DataFrame, start=None, end=None, owner: str | None = None) -> go.Figure:
+    """One horizontal band: what state the station was in, when. segments: start, end, state.
+    With an owner, that team's desk hours are shaded behind the band."""
     t = TOKENS[theme]
     fig = go.Figure()
+    if owner and start is not None and end is not None:
+        day = start.tz_convert(config.LOCAL_TZ).normalize()
+        last = end.tz_convert(config.LOCAL_TZ)
+        while day <= last:
+            span = support._span(owner, day)
+            if span:
+                fig.add_vrect(x0=span[0].tz_localize(None), x1=span[1].tz_localize(None), fillcolor=t["grid"],
+                              opacity=0.9, line_width=0, layer="below")
+            day = (day + pd.Timedelta(days=1, hours=2)).normalize()
+        fig.add_scatter(x=[None], y=[None], mode="markers", name=f"{owner} desk hours", hoverinfo="skip",
+                        marker=dict(symbol="square", size=11, color=t["grid"], line=dict(color=t["axis"], width=1)))
     for state, tone, label in TIMELINE_STATES:
         d = segments[segments["state"] == state]
         if d.empty:
@@ -290,14 +352,16 @@ def status_timeline(theme: str, segments: pd.DataFrame, start=None, end=None) ->
                     name=label, marker=dict(color=STATUS[tone] if tone else t["neutral_bar"], line=dict(width=0)),
                     customdata=np.stack([local_s.dt.strftime("%a %b %-d %-I:%M %p"),
                                          local_e.dt.strftime("%a %b %-d %-I:%M %p"),
-                                         ((d["end"] - d["start"]).dt.total_seconds() / 60).round()], axis=1),
+                                         ((d["end"] - d["start"]).dt.total_seconds() / 60).round(),
+                                         [state] * len(d), d["start"].map(lambda x: x.isoformat()),
+                                         d["end"].map(lambda x: x.isoformat())], axis=1),
                     hovertemplate=label + ": %{customdata[0]} → %{customdata[1]} (%{customdata[2]:,.0f} min)"
                                   "<extra></extra>")
     fig.update_layout(**layout(theme, 150, barmode="overlay", bargap=0.15, barcornerradius=0,
                                xaxis=dict(type="date", showgrid=True, range=None if start is None else [
                                    start.tz_convert(config.LOCAL_TZ).tz_localize(None),
                                    end.tz_convert(config.LOCAL_TZ).tz_localize(None)]),
-                               yaxis=dict(showticklabels=False, showgrid=False),
+                               yaxis=dict(showticklabels=False, showgrid=False, type="category"),
                                legend=dict(y=1.08), margin=dict(t=30)))
     return fig
 
@@ -314,15 +378,16 @@ def levels_over_time(theme: str, points: pd.DataFrame, repl: pd.DataFrame, compo
         name = config.COMPONENT_LABELS[comp]
         x = d["scrape_ts"].dt.tz_convert(config.LOCAL_TZ).dt.tz_localize(None)
         fig.add_scatter(x=x, y=d["level"], mode="lines", line=dict(width=2, color=ink(theme, comp), shape="hv"),
-                        name=name, hovertemplate="%{y:.0f}%<extra>" + name + "</extra>")
+                        name=name, customdata=[[comp, ""]] * len(d),
+                        hovertemplate="%{y:.0f}%<extra>" + name + "</extra>")
         r = repl[repl["component"] == comp]
         if len(r):
             fig.add_scatter(x=r["ts"].dt.tz_convert(config.LOCAL_TZ).dt.tz_localize(None), y=r["level_after"],
                             mode="markers", showlegend=False,
                             marker=dict(symbol="triangle-up", size=10, color=ink(theme, comp),
                                         line=dict(color=t["surface"], width=2)),
-                            customdata=r["level_before"],
-                            hovertemplate="Replaced (old part had %{customdata:.0f}% left)<extra>" + name + "</extra>")
+                            customdata=np.stack([[comp] * len(r), r["level_before"]], axis=1),
+                            hovertemplate="Replaced (old part had %{customdata[1]:.0f}% left)<extra>" + name + "</extra>")
     fig.update_layout(**layout(theme, 230, hovermode="x unified",
                                xaxis=dict(range=[start.tz_convert(config.LOCAL_TZ).tz_localize(None),
                                                  end.tz_convert(config.LOCAL_TZ).tz_localize(None)]),
@@ -411,7 +476,7 @@ def km_curves(theme: str, ttf) -> go.Figure:
         med = ttf.medians[name]
         med_txt = f", median {med:.1f} h" if np.isfinite(med) else ""
         fig.add_scatter(x=x, y=y, mode="lines", line=dict(shape="hv", width=2.5, color=t["series"][i]),
-                        name=f"{name} (n={ttf.n[name]}{med_txt})",
+                        name=f"{name} (n={ttf.n[name]}{med_txt})", customdata=[name] * len(x),
                         hovertemplate="After %{x:.1f} h: %{y:.0f}% still down<extra>" + name + "</extra>")
         if np.isfinite(med):   # where the curve crosses 50%
             fig.add_scatter(x=[med], y=[50], mode="markers", showlegend=False, hoverinfo="skip",
@@ -436,16 +501,17 @@ def usage_scatter(theme: str, uf) -> go.Figure:
     normal = p[~p["outlier"]]
     fig.add_scatter(x=normal["usage"], y=normal["failures_per_week"], mode="markers", name="Station",
                     marker=dict(size=10, color=t["series"][0], line=dict(color=t["surface"], width=2)),
-                    customdata=normal["label"],
-                    hovertemplate="%{customdata}<br>%{x:.2f} pts toner/day · %{y:.1f} failures/week<extra></extra>")
+                    customdata=np.stack([normal["label"], normal["station_id"]], axis=1),
+                    hovertemplate="%{customdata[0]}<br>%{x:.2f} pts toner/day · %{y:.1f} failures/week<extra></extra>")
     out = p[p["outlier"]]
     if len(out):
         fig.add_scatter(x=out["usage"], y=out["failures_per_week"], mode="markers+text", name="Fails more than usage explains",
                         marker=dict(size=12, color=STATUS["critical"], symbol="diamond",
                                     line=dict(color=t["surface"], width=2)),
                         text=out["label"].str.replace(r" \(\d+\)$", "", regex=True), textposition="top center",
-                        textfont=dict(size=11, color=t["secondary"]), customdata=out["label"],
-                        hovertemplate="%{customdata}<br>%{x:.2f} pts toner/day · %{y:.1f} failures/week<extra></extra>")
+                        textfont=dict(size=11, color=t["secondary"]),
+                        customdata=np.stack([out["label"], out["station_id"]], axis=1),
+                        hovertemplate="%{customdata[0]}<br>%{x:.2f} pts toner/day · %{y:.1f} failures/week<extra></extra>")
     fig.update_layout(**layout(theme, 320, hovermode="closest",
                                xaxis=dict(title=dict(text="usage: black toner burned per day (pts)"), showgrid=True),
                                yaxis=dict(title=dict(text="red incidents per week"),

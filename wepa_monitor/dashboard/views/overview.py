@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, config, geo, metrics as M, models, ops
+from ... import activity, config, geo, metrics as M, models, ops, support
 from .. import charts
-from ..components import chart_card, data_table, fmt_minutes, fmt_num, headline, icon, station_link, tile
+from ..components import chart_card, data_table, desk_line, explore_hint, fmt_minutes, fmt_num, headline, icon, station_link, tile
 from .common import empty, scope_ids
 
 KIND_LABEL = {"red": "Down", "yellow": "Warning", "tray": "Tray empty", "consumable_now": "End of life",
@@ -81,20 +81,29 @@ def render(ds: M.Dataset, theme: str, sections, areas, basemap: str = "street"):
 
     # Needs attention: compact rows, each linking to the station.
     rows = []
+    owner_of = ds.stations.set_index("station_id")["owner"].to_dict()
     for r in queue.head(10).itertuples(index=False):
         tone = KIND_TONE.get(r.kind, "info")
         age = (fmt_minutes(r.open_min) + ("+" if r.open_censored else "")) if r.open_min > 0 else ""
+        owner = owner_of.get(r.station_id, config.DEFAULT_OWNER)
+        waits = ""
+        if r.kind in ("red", "yellow", "tray") and not support.is_open(owner, ds.as_of):
+            waits = f"{owner}: {support.desk_status(owner, ds.as_of)[1].lower()}"
         rows.append(html.Li(className=f"todo todo--{tone}", children=[
             html.Span(KIND_LABEL.get(r.kind, r.kind), className=f"todo__tag tag tag--{tone}"),
             html.Div([station_link(r.station_id, r.station, "todo__station"),
                       html.Div(f"{r.issue} · {r.fix}", className="todo__issue")], className="todo__main"),
             html.Div([html.Div(age, className="todo__age"),
-                      html.Div("only printer in building" if not r.backup else "", className="todo__note")],
+                      html.Div("only printer in building" if not r.backup else "", className="todo__note"),
+                      html.Div(waits, className="todo__note") if waits else None],
                      className="todo__side"),
         ]))
     more = len(queue) - 10
     attention = chart_card(
         "Needs attention", "Ranked by severity, whether the building has a backup printer, and how long it's been open.",
+        explain=["The list is ordered by a simple score: down beats warnings, warnings beat supplies, and items "
+                 "in buildings with no backup printer get a 1.5× boost. Older items rise over time.",
+                 "Work from the top. Click a station for its full history."],
         body=html.Ul(rows, className="todo-list") if rows else empty("Nothing needs attention right now.", big=False),
         note=f"+ {more} more lower-priority items on the Stations page." if more > 0 else "")
 
@@ -137,8 +146,13 @@ def render(ds: M.Dataset, theme: str, sections, areas, basemap: str = "street"):
             empty="No consumables are projected to reach end of life in the next 7 days.",
             link_col=("station", "station_id")))
 
+    owners = [o for o in support.TEAMS if (cur["owner"] == o).any()]
+    desks = html.Div([desk_line(ds, o, prefix="") for o in owners], className="desks",
+                     **{"aria-label": "Support desks"})
     return [
         status_headline(ds, cur, queue),
+        desks,
+        explore_hint(),
         tiles,
         html.Div(className="grid grid--2-1", children=[attention, recent]),
         html.Div(className="grid", children=[map_card, parts]),

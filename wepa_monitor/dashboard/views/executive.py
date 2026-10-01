@@ -5,9 +5,9 @@ import numpy as np
 import pandas as pd
 from dash import html
 
-from ... import config, insights, metrics as M
+from ... import config, insights, metrics as M, narrative as N
 from .. import charts
-from ..components import chart_card, data_table, fmt_hours, fmt_minutes, fmt_num, headline
+from ..components import chart_card, data_table, fmt_hours, fmt_minutes, fmt_num, headline, prose
 from .common import empty, scope_ids
 
 
@@ -72,6 +72,8 @@ def render(ds: M.Dataset, theme: str, month_idx, sections, areas):
         ("Red incidents", "red_incidents", lambda v: fmt_num(v, 0), False, False),
         ("MTTR · red", "mttr_red", fmt_minutes, False, False),
         ("MTTR · yellow", "mttr_yellow", fmt_minutes, False, False),
+        ("Outages begun after desk hours", "after_hours", lambda v: fmt_num(v, 0, "%"), False, True),
+        ("Desk time to fix (median)", "desk_fix", fmt_minutes, False, False),
         ("MTBF", "mtbf", fmt_hours, True, False),
         ("Paper refill time", "paper", fmt_minutes, False, False),
         ("Data quality score", "dq", lambda v: fmt_num(v, 0, " / 100"), True, True),
@@ -98,6 +100,15 @@ def render(ds: M.Dataset, theme: str, month_idx, sections, areas):
         html.Tbody(body)]))
 
     obs = insights.observations(ds, cur, prev, ids)
+
+    # The month as a story: same engine as Insights, compared with the previous month.
+    partial = cur.label.endswith("(to date)")
+    month_name = cur.label.replace(" (to date)", "")
+    per = N.Period("custom", month_name if not partial else f"{month_name} so far",
+                   ("So far in " if partial else "In ") + month_name, cur.start, cur.end,
+                   prev.start if prev else cur.start, prev.end if prev else cur.start,
+                   prev.label.replace(" (to date)", "") if prev else "the month before", partial)
+    story = N.story(ds, per, ids)
 
     labels, avail_vals, partial, unit_rows = [], [], [], []
     for p in ms:
@@ -127,16 +138,31 @@ def render(ds: M.Dataset, theme: str, month_idx, sections, areas):
     return [
         hl,
         html.Div(className="grid grid--exec", children=[
+            html.Section(className="card card--wide story-card", children=[
+                html.Header(html.Div([html.H3(f"The story of {month_name}"),
+                                      html.P("Written from the data. The numbers behind it are in the scorecard below.",
+                                             className="card__sub")]), className="card__head"),
+                prose(story.paragraphs),
+            ]),
             chart_card(f"Scorecard · {cur.label}", "Compared with the prior month and the year to date.",
+                       explain=["Each row compares the month with the one before and with the year so far. Green "
+                                "arrows are improvements and red arrows are declines, whichever direction 'good' "
+                                "is for that measure.",
+                                "'After desk hours' means outside the owning team's staffed hours (ResNet: "
+                                "Mon–Thu 10–6, Fri 10–4; IT Service Center: Mon–Fri 9–4). 'Desk time to fix' "
+                                "counts only staffed minutes, so it measures response once someone is in, while "
+                                "MTTR also includes the wait for the desk to open.",
+                                "Parts rows are volumes, not scores, so they have no color."],
                        body=table, wide=True),
-            chart_card("What stands out", "Generated from the data; each line appears only when the evidence "
+            chart_card("Key observations", "Generated from the data; each line appears only when the evidence "
                        "behind it is sufficient.", wide=True,
                        body=html.Ul([html.Li(o) for o in obs], className="observations") if obs
                        else empty("Not enough data for observations yet.", big=False)),
             chart_card("Availability by month", "Gray bars are partial months.",
-                       charts.monthly_bars(theme, labels, avail_vals, "%", partial)),
+                       charts.monthly_bars(theme, labels, avail_vals, "%", partial), graph_id={"type": "xg", "chart": "monthly_avail"}),
             chart_card("Toner used by month", "Parts' worth of toner, stacked by color.",
                        charts.monthly_stacked(theme, units_frame, ["toner_k", "toner_c", "toner_m", "toner_y"]),
+                       graph_id={"type": "xg", "chart": "monthly_toner"},
                        table=data_table(units_frame, [("month", "Month", None)] +
                                         [(c, config.COMPONENT_LABELS[c], lambda v: fmt_num(v, 2))
                                          for c in config.COMPONENTS])),

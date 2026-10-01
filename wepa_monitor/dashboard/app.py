@@ -12,26 +12,29 @@ from pathlib import Path
 from urllib.parse import parse_qs
 
 import pandas as pd
-from dash import Dash, Input, Output, State, dcc, html, no_update
+from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 
 from .. import activity, config, geo, metrics as M
 from .charts import SECTION_ORDER
-from .components import icon, segmented
-from .views import activity_log, analytics, executive, overview, station, stations
+from . import explain as X
+from .components import icon, prose, segmented
+from .views import activity_log, analytics, executive, insights_view, overview, station, stations
 from .views.common import PERIODS, area_key
 from .views.overview import activity_list
 
-NAV = [("/", "Overview", "home"), ("/stations", "Stations", "grid"), ("/analytics", "Analytics", "chart"),
+NAV = [("/", "Overview", "home"), ("/insights", "Insights", "sparkle"), ("/stations", "Stations", "grid"),
+       ("/analytics", "Analytics", "chart"),
        ("/executive", "Executive", "briefcase"), ("/activity", "Activity", "list")]
 PAGE_META = {
     "/": ("Overview", "What needs attention right now."),
+    "/insights": ("Insights", "The story behind the numbers. Pick a time range, or ask a question."),
     "/stations": ("Stations", "Every print station. Click one for its full history."),
     "/analytics": ("Analytics", "Reliability, faults, consumables and data quality over time."),
     "/executive": ("Executive summary", "Month and year-to-date results, and what stands out."),
     "/activity": ("Activity", "Everything that happened, newest first."),
 }
 USES_PERIOD = {"/analytics", "/activity", "/station"}
-USES_SCOPE = {"/", "/stations", "/analytics", "/executive", "/activity"}
+USES_SCOPE = {"/", "/insights", "/stations", "/analytics", "/executive", "/activity"}
 THEME_OPTIONS = [{"label": "Light", "value": "light"}, {"label": "Dark", "value": "dark"},
                  {"label": "BSU", "value": "crimson"}]
 
@@ -138,6 +141,18 @@ def _shell(ds: M.Dataset):
             ]),
             html.Div(id="banner"),
             html.Main(id="content", className="content", tabIndex="-1"),
+        ]),
+        dcc.Store(id="hints-off", storage_type="local"),
+        html.Div(id="hint-sink", hidden=True),
+        html.Div(id="xdrawer", className="drawer drawer--explain", children=[
+            html.Div(id="xdrawer-backdrop", className="drawer__backdrop"),
+            html.Aside(className="drawer__panel", role="dialog", **{"aria-label": "What this means"}, children=[
+                html.Div(className="drawer__head", children=[
+                    html.H2("What this means"),
+                    html.Button(icon("x", "Close"), id="xdrawer-close", className="topbar__icon-btn"),
+                ]),
+                html.Div(id="xdrawer-body", className="drawer__body explain"),
+            ]),
         ]),
         html.Div(id="drawer", className="drawer", children=[
             html.Div(id="drawer-backdrop", className="drawer__backdrop"),
@@ -257,6 +272,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             opts = executive.month_options(ds)
             return [html.Div(segmented("ex-month", opts, executive.default_month(ds)), className="toolbar"),
                     loading("ex-body")]
+        if route == "/insights":
+            return insights_view.layout(params.get("story", "yesterday"))
         if route == "/activity":
             return [html.Div(className="toolbar", children=[
                 html.Div([icon("search"), dcc.Input(id="ac-q", type="search", placeholder="Search activity",
@@ -306,6 +323,73 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
                   Input("period", "value"), Input("tick", "n_intervals"))
     def ac_body(groups, q, sections, areas, period, _):
         return activity_log.render(cache.get(), sections, areas, period or "30", groups, q)
+
+    # --- insights -------------------------------------------------------------------------------------
+    @app.callback(Output("story-body", "children"), Input("story-period", "value"), *scope, Input("tick", "n_intervals"))
+    def story_body(key, sections, areas, _):
+        return insights_view.render_story(cache.get(), key, sections, areas)
+
+    @app.callback(Output("ask-q", "value"), Input({"type": "ask-ex", "q": ALL}, "n_clicks"), prevent_initial_call=True)
+    def ask_example(clicks):
+        if not ctx.triggered_id or not any(clicks or []):
+            return no_update
+        return ctx.triggered_id["q"]
+
+    # The question box is debounced: it answers on Enter, on the Ask button, or when a chip fills it in.
+    @app.callback(Output("ask-body", "children"), Input("ask-go", "n_clicks"), Input("ask-q", "value"), *scope)
+    def ask_body(_, question, sections, areas):
+        return insights_view.render_answer(cache.get(), question, sections, areas)
+
+    # --- explain any clicked chart point ---------------------------------------------------------------
+    @app.callback(Output("xdrawer-body", "children"), Output("xdrawer", "className"),
+                  Input({"type": "xg", "chart": ALL}, "clickData"),
+                  State("scope-sections", "value"), State("scope-areas", "value"), State("period", "value"),
+                  State("url", "pathname"), prevent_initial_call=True)
+    def explain_point(_, sections, areas, period, path):
+        trig = ctx.triggered_id
+        value = ctx.triggered[0]["value"] if ctx.triggered else None
+        if not trig or not value:
+            return no_update, no_update
+        ds = cache.get()
+        route = _route(path)
+        sid = (path or "").rstrip("/").rsplit("/", 1)[-1] if route == "/station" else None
+        ids = [sid] if sid else (ds.ids(section=sections or None, area=areas or None) if (sections or areas) else None)
+        days = None if period in (None, "all") else int(period)
+        if route == "/":
+            days = 30
+        elif route == "/executive":
+            days = None
+        start, end = M.window(ds, days)
+        cx = X.Context(ids, start, end, "recorded history" if days is None else f"last {days} days", sid)
+        ex = X.explain(ds, trig["chart"], value["points"][0], cx)
+        if ex is None:
+            return no_update, no_update
+        body = [html.Div(ex.eyebrow, className="explain__eyebrow"), html.P(ex.title, className="explain__title")]
+        if ex.tells:
+            body += [html.H3("What it tells you"), prose([ex.tells])]
+        if ex.matters:
+            body += [html.H3("Why it matters"), prose([ex.matters])]
+        if ex.next:
+            body += [html.H3("Explore next"), html.Ul([html.Li(dcc.Link(t, href=h, className="link")) for t, h in ex.next],
+                                                       className="explain__links")]
+        return body, "drawer drawer--explain is-open"
+
+    app.clientside_callback(
+        "function(a, b, path) { return 'drawer drawer--explain'; }",
+        Output("xdrawer", "className", allow_duplicate=True), Input("xdrawer-close", "n_clicks"),
+        Input("xdrawer-backdrop", "n_clicks"), Input("url", "pathname"), prevent_initial_call=True,
+    )
+
+    # --- the 'explore' tip: dismiss once, hidden everywhere -------------------------------------------------
+    @app.callback(Output("hints-off", "data"), Input({"type": "hint-close", "n": ALL}, "n_clicks"),
+                  prevent_initial_call=True)
+    def hide_hints(clicks):
+        return True if any(clicks or []) else no_update
+
+    app.clientside_callback(
+        "function(off) { document.documentElement.classList.toggle('hints-off', !!off); return ''; }",
+        Output("hint-sink", "children"), Input("hints-off", "data"),
+    )
 
     # --- map click → station page; KML download -------------------------------------------------
     @app.callback(Output("url", "pathname"), Output("url", "search"), Input("campus-map", "clickData"),
