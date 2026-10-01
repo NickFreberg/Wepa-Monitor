@@ -226,7 +226,8 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
     t = TOKENS[theme]
     satellite = basemap == "satellite"
     pts = points.dropna(subset=["lat", "lon"])
-    pts = pts.assign(size=12 + 5 * (pts["stations"].clip(upper=3) - 1),
+    pts = pts.assign(target=pts["target"] if "target" in pts else "",
+                     size=12 + 5 * (pts["stations"].clip(upper=3) - 1),
                      textpos=_label_positions(pts),
                      hover=pts.apply(lambda p: f"<b>{p['building']}</b> · {p['area']}<br>" +
                                      "<br>".join(p["lines"]), axis=1))
@@ -246,7 +247,8 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
                 textfont=dict(size=12 if satellite else 11,
                               family="Open Sans Bold" if satellite else "Open Sans Regular",
                               color="#ffffff" if satellite or theme == "dark" else t["ink"]),
-                customdata=d["hover"], hovertemplate="%{customdata}<extra></extra>"))
+                customdata=np.stack([d["hover"], d["target"]], axis=1),
+                hovertemplate="%{customdata[0]}<br><i>Click to open</i><extra></extra>"))
     main = pts[pts["campus"] == "Main"] if (pts["campus"] == "Main").any() else pts
     center = dict(lat=float(main["lat"].mean()), lon=float(main["lon"].mean())) if len(main) else \
         dict(lat=41.9873, lon=-70.9680)
@@ -266,4 +268,76 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
                                legend=dict(x=0.01, y=0.99, yanchor="top", bgcolor=t["surface"],
                                            bordercolor=t["border"], borderwidth=1,
                                            font=dict(color=t["ink"]))))
+    return fig
+
+
+TIMELINE_STATES = [("red", "critical", "Down"), ("yellow", "warning", "Warning"),
+                   ("green", "good", "Printing"), ("nodata", None, "No data")]
+
+
+def status_timeline(theme: str, segments: pd.DataFrame, start=None, end=None) -> go.Figure:
+    """One horizontal band: what state the station was in, when. segments: start, end, state."""
+    t = TOKENS[theme]
+    fig = go.Figure()
+    for state, tone, label in TIMELINE_STATES:
+        d = segments[segments["state"] == state]
+        if d.empty:
+            continue
+        dur_ms = (d["end"] - d["start"]).dt.total_seconds() * 1000
+        local_s = d["start"].dt.tz_convert(config.LOCAL_TZ)
+        local_e = d["end"].dt.tz_convert(config.LOCAL_TZ)
+        fig.add_bar(y=["Status"] * len(d), x=dur_ms, base=local_s.dt.tz_localize(None), orientation="h",
+                    name=label, marker=dict(color=STATUS[tone] if tone else t["neutral_bar"], line=dict(width=0)),
+                    customdata=np.stack([local_s.dt.strftime("%a %b %-d %-I:%M %p"),
+                                         local_e.dt.strftime("%a %b %-d %-I:%M %p"),
+                                         ((d["end"] - d["start"]).dt.total_seconds() / 60).round()], axis=1),
+                    hovertemplate=label + ": %{customdata[0]} → %{customdata[1]} (%{customdata[2]:,.0f} min)"
+                                  "<extra></extra>")
+    fig.update_layout(**layout(theme, 150, barmode="overlay", bargap=0.15, barcornerradius=0,
+                               xaxis=dict(type="date", showgrid=True, range=None if start is None else [
+                                   start.tz_convert(config.LOCAL_TZ).tz_localize(None),
+                                   end.tz_convert(config.LOCAL_TZ).tz_localize(None)]),
+                               yaxis=dict(showticklabels=False, showgrid=False),
+                               legend=dict(y=1.08), margin=dict(t=30)))
+    return fig
+
+
+def levels_over_time(theme: str, points: pd.DataFrame, repl: pd.DataFrame, components: list[str],
+                     start, end) -> go.Figure:
+    """Step lines of each part's level; triangles mark detected replacements."""
+    t = TOKENS[theme]
+    fig = go.Figure()
+    for comp in components:
+        d = points[points["component"] == comp]
+        if d.empty:
+            continue
+        name = config.COMPONENT_LABELS[comp]
+        x = d["scrape_ts"].dt.tz_convert(config.LOCAL_TZ).dt.tz_localize(None)
+        fig.add_scatter(x=x, y=d["level"], mode="lines", line=dict(width=2, color=ink(theme, comp), shape="hv"),
+                        name=name, hovertemplate="%{y:.0f}%<extra>" + name + "</extra>")
+        r = repl[repl["component"] == comp]
+        if len(r):
+            fig.add_scatter(x=r["ts"].dt.tz_convert(config.LOCAL_TZ).dt.tz_localize(None), y=r["level_after"],
+                            mode="markers", showlegend=False,
+                            marker=dict(symbol="triangle-up", size=10, color=ink(theme, comp),
+                                        line=dict(color=t["surface"], width=2)),
+                            customdata=r["level_before"],
+                            hovertemplate="Replaced (old part had %{customdata:.0f}% left)<extra>" + name + "</extra>")
+    fig.update_layout(**layout(theme, 230, hovermode="x unified",
+                               xaxis=dict(range=[start.tz_convert(config.LOCAL_TZ).tz_localize(None),
+                                                 end.tz_convert(config.LOCAL_TZ).tz_localize(None)]),
+                               yaxis=dict(range=[0, 104], ticksuffix="%")))
+    return fig
+
+
+def hour_bars(theme: str, hours: pd.Series, label: str) -> go.Figure:
+    """Counts by local hour of day (single series)."""
+    t = TOKENS[theme]
+    counts = hours.value_counts().reindex(range(24), fill_value=0)
+    names = [f"{(h % 12) or 12}{'a' if h < 12 else 'p'}" for h in range(24)]
+    fig = go.Figure(go.Bar(x=names, y=counts.values, marker=dict(color=t["series"][0]),
+                           hovertemplate="%{x}: %{y} " + label + "<extra></extra>"))
+    small = counts.max() <= 10
+    fig.update_layout(**layout(theme, 220, bargap=0.25,
+                               yaxis=dict(rangemode="tozero", dtick=1 if small else None, tickformat=",d")))
     return fig

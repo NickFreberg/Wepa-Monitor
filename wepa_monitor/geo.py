@@ -30,7 +30,7 @@ def building_points(ds: Dataset, ids=None) -> pd.DataFrame:
     cur = current_status(ds, ids)
     if cur.empty:
         return pd.DataFrame(columns=["building", "short_name", "lat", "lon", "campus", "state", "stations", "down",
-                                     "lines", "area"])
+                                     "lines", "area", "target"])
     geo = ds.stations.drop_duplicates("building").set_index("building")[["short_name", "lat", "lon", "campus"]]
     cur = cur.assign(rank=cur["state"].map(STATE_RANK).fillna(0), line=cur.apply(_station_line, axis=1))
     rows = []
@@ -46,6 +46,9 @@ def building_points(ds: Dataset, ids=None) -> pd.DataFrame:
             "stations": len(g),
             "down": int((g["state"] == "red").sum()),
             "lines": list(g.sort_values("station_id")["line"]),
+            # Clicking a building opens its station, or the station list for multi-printer buildings.
+            "target": (f"/station/{g['station_id'].iloc[0]}" if len(g) == 1
+                       else f"/stations?q={building}"),
         })
     return pd.DataFrame(rows)
 

@@ -10,9 +10,13 @@ for operations staff, management and executives.
 every 60 seconds. As of October 2026 it lists 31 stations: ResNet (16), Student Computer Labs (14) and
 Satellite Campuses (1).
 
-| Operations | Management | Executive summary |
+| Overview (light) | Overview (BSU theme) | Station drill-through (BSU) |
 |---|---|---|
-| ![Operations](docs/screenshots/operations.png) | ![Management](docs/screenshots/management.png) | ![Executive](docs/screenshots/executive.png) |
+| ![Overview](docs/screenshots/overview.png) | ![Overview in the BSU theme](docs/screenshots/overview-bsu.png) | ![Station detail](docs/screenshots/station-detail.png) |
+
+| Analytics (BSU) | Executive summary (dark) | Notifications (dark) |
+|---|---|---|
+| ![Analytics](docs/screenshots/analytics.png) | ![Executive](docs/screenshots/executive.png) | ![Notifications](docs/screenshots/notifications.png) |
 
 ![Campus map, aerial view](docs/screenshots/campus-map-aerial.png)
 
@@ -90,20 +94,42 @@ Use `python` instead of `python3`, activate with `.venv\Scripts\activate`, and d
 Run the tests with `pytest`.
 </details>
 
-## The three views
+## Using the dashboard
 
-- **Operations** — what needs attention now. Live counts (printing / down / warning), a **ranked work
-  queue**, a **campus map** (street or aerial, exportable to Google Earth), parts due in the next 7 days,
-  and a station board grouped by area showing every toner, drum, belt and fuser level. Refreshes every
-  minute.
-- **Management** — any period (7 / 30 / 90 days / all), filterable by section and area. Availability,
-  MTTR (red and yellow), MTBF, paper refill time, tray-empty time, fault types by frequency, location and
-  hour, burn rate per day/week/month/year for each consumable, cumulative usage, the replacement log,
-  and data quality.
-- **Executive summary** — month vs prior month vs year to date, observations generated from the data,
-  monthly trends, and a 30-day parts forecast.
+The sidebar has five sections. Each page opens with a **one-sentence summary** (green, amber or red),
+so the main point comes before any chart.
 
-Each chart has a **Show data** table under it, and the light/dark theme follows the OS (◐ toggles it).
+- **Overview:** what needs attention now. Live counts, a ranked "Needs attention" list, recent
+  activity, the campus map (street or aerial; click a building to open it; export to Google Earth),
+  and the **Consumable End-of-Life Watch** (parts at or nearing their replacement point within 7 days).
+  Refreshes every minute.
+- **Stations:** every printer, grouped by area, with search ("Weygand", "02061", "Academic") and a
+  status filter (down, warning, needs attention). Every card opens the station's page.
+- **Station page (drill-through):** current status in a sentence; availability, times down, time to
+  fix and time between failures, each compared with the fleet; a minute-by-minute **status
+  timeline**; consumable levels now and over time, with replacements marked; fault mix by type and hour
+  of day; full incident history; the other printers in the building (students' backup); and the
+  station's activity.
+- **Analytics:** tabs for **Reliability** (availability, time to fix, building coverage, station
+  scorecard), **Faults** (types, when, where), **Consumables** (use per day, week, month or year;
+  cumulative use; replacement log) and **Data quality**.
+- **Executive:** month vs prior month vs year to date, generated observations, monthly trends and a
+  30-day parts forecast.
+- **Activity:** a searchable log of everything that happened, grouped by day: stations going down or
+  recovering, warnings, parts replaced, trays emptied and refilled, monitoring gaps.
+
+**Top bar**, available on every page:
+- **Scope:** pick sections or areas once, and every page reports on just those stations.
+- **Period:** 7, 30, 90 days or all time, on Analytics, Activity and station pages.
+- **Notifications (bell):** stations going down or coming back, and monitoring gaps from the last 72
+  hours. Unread items are grouped under *New*, and "Mark all read" clears the badge.
+- **Theme:** **Light**, **Dark** or **BSU**. The BSU theme uses the crimson (#89191F) and warm
+  neutrals from bridgew.edu's own stylesheets. Its chart colors (crimson, gold, BSU blue, green) were
+  checked for color-blind safety as a set. Toner and drum charts keep their ink colors in every theme,
+  because there the color is the meaning.
+
+Charts include a **Show data** table, and status is always shown with an icon and a label as well as
+color.
 
 ## How the data flows
 
@@ -256,10 +282,11 @@ wepa_monitor/
   consumables.py   replacement-aware usage
   metrics.py       KPI/KRI definitions with evidence and gating
   ops.py           current status and the ranked work queue
+  activity.py      the event feed behind Activity and notifications
   geo.py           building-level map points and KML export for Google Earth
   insights.py      month / YTD scorecards and generated observations
   synth.py         demo-data simulator
-  dashboard/       Dash app, Plotly charts, stylesheet
+  dashboard/       Dash app shell (app.py), views/ (one module per page), charts, stylesheet
 reference/stations.csv   station → building / area
 reference/buildings.csv  building coordinates (OpenStreetMap), short names, campus
 tests/                   parser, replacement rule and incident logic (fixture: a real page capture)

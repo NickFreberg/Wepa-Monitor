@@ -35,6 +35,7 @@ class Dataset:
     as_of: pd.Timestamp
     stations: pd.DataFrame
     latest: pd.DataFrame
+    status: pd.DataFrame      # state-change rows (run starts/ends) for timelines
     hourly: pd.DataFrame      # station x hour: covered_s, up_s (+ local_date, section)
     bhourly: pd.DataFrame     # building x hour: minutes, any_up_min, all_up_min
     sev_inc: pd.DataFrame
@@ -102,7 +103,7 @@ def load(data_dir: Path, now: datetime | None = None, rollups: "rollup.RollupSto
 
     return Dataset(
         data_dir=data_dir, meta=meta, is_demo=is_demo, as_of=as_of,
-        stations=stations, latest=latest, hourly=hourly, bhourly=r["bhourly"],
+        stations=stations, latest=latest, status=status, hourly=hourly, bhourly=r["bhourly"],
         sev_inc=events.severity_incidents(status, as_of),
         fault_inc=events.fault_incidents(status, as_of),
         tray_inc=events.tray_incidents(status, as_of),

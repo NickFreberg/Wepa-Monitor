@@ -199,3 +199,20 @@ def test_rollups_match_raw_processing(tmp_path):
     _, raw_repl = consumables.usage(raw_points)
     assert len(ds.repl) == len(raw_repl)
     assert ds.cons["used"].sum() == pytest.approx(consumables.usage(raw_points)[0]["used"].sum())
+
+
+# --- activity feed ---------------------------------------------------------------------------
+
+def test_activity_feed_matches_incidents(tmp_path):
+    from datetime import datetime, timezone
+    from wepa_monitor import activity, metrics, synth
+
+    synth.generate(tmp_path, days=2, end=datetime(2026, 9, 10, 12, 0, tzinfo=timezone.utc), seed=5,
+                   progress=lambda m: None)
+    ds = metrics.load(tmp_path)
+    ev = activity.events(ds)
+    red = ds.sev_inc[ds.sev_inc["severity"] == "red"]
+    assert (ev["kind"] == "down").sum() == (~red["censored_start"].astype(bool)).sum()
+    assert (ev["kind"] == "recovered").sum() == (red["status"] == "resolved").sum()
+    assert ev["ts"].is_monotonic_decreasing
+    assert set(activity.notifications(ds)["kind"]) <= activity.NOTIFY_KINDS

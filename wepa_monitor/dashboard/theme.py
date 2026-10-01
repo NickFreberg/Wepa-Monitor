@@ -5,6 +5,13 @@ order, a reserved status palette (never reused for series), and CMYK ink
 colors for toner/drum series (validated for color-vision deficiency; the
 neutral K ink is the one intentional exception, so those charts always carry
 direct labels).
+
+Three themes: light, dark, and "crimson" (BSU). The BSU theme takes its
+colors from bridgew.edu's own stylesheets: crimson #89191F for chrome, with
+warm stone neutrals. Its chart series (crimson, gold, BSU blue, green) were
+re-validated as a set: every adjacent pair passes the color-vision checks.
+Consumable charts keep their CMYK inks in every theme, because the color
+*is* the meaning there.
 """
 from __future__ import annotations
 
@@ -29,6 +36,17 @@ TOKENS = {
     },
 }
 
+TOKENS["crimson"] = {
+    "page": "#f4f1ec", "surface": "#fbfaf7", "ink": "#1c1717", "secondary": "#595959",
+    "muted": "#7d7873", "grid": "#e8e5de", "axis": "#cfcbc2", "border": "#e2ded6",
+    # Validated order (adjacent pairs): crimson, gold, BSU blue, green. Charts here use at most 4.
+    "series": ["#9e1b24", "#a87405", "#00558c", "#0f8c62", "#e87ba4", "#008300", "#4a3aa7", "#e34948"],
+    "ink_k": "#3d3c38", "ink_c": "#1592c7", "ink_m": "#cf3678", "ink_y": "#c99700",
+    "seq": ["#f7e4e3", "#eebfbd", "#e09591", "#cc6a66", "#b23f3e", "#8f1f24", "#5f1016"],
+    "neutral_bar": "#cfcbc2",
+}
+THEMES = ("light", "dark", "crimson")
+
 STATUS = {"good": "#0ca30c", "warning": "#fab219", "serious": "#ec835a", "critical": "#d03b3b"}
 STATE_STYLE = {
     "green": ("good", "✓", "Printing"),
@@ -40,7 +58,8 @@ STATE_STYLE = {
 
 def ink(theme: str, component: str) -> str:
     """Color for a consumable series: CMYK inks for toner/drums, categorical for belt/fuser."""
-    t = TOKENS[theme]
+    # Consumables are never brand-themed: the BSU theme uses the light theme's inks.
+    t = TOKENS["light" if theme == "crimson" else theme]
     suffix = component.rsplit("_", 1)[-1]
     if component.startswith(("toner", "drum")):
         return t[f"ink_{suffix}"]
