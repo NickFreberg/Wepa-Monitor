@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -216,3 +217,43 @@ def test_activity_feed_matches_incidents(tmp_path):
     assert (ev["kind"] == "recovered").sum() == (red["status"] == "resolved").sum()
     assert ev["ts"].is_monotonic_decreasing
     assert set(activity.notifications(ds)["kind"]) <= activity.NOTIFY_KINDS
+
+
+# --- statistical models ------------------------------------------------------------------------------
+
+def test_kaplan_meier_matches_hand_calculation():
+    from wepa_monitor import models
+    # durations 1,2,3,4 hours; the 3 h outage is censored (still open).
+    km = models.kaplan_meier(np.array([1.0, 2.0, 3.0, 4.0]), np.array([1, 1, 0, 1]))
+    # S(1)=3/4, S(2)=3/4*2/3=1/2, (3 censored), S(4)=1/2*0/1=0
+    assert km["survival"].round(4).tolist() == [1.0, 0.75, 0.5, 0.0]
+    assert km["t"].tolist() == [0.0, 1.0, 2.0, 4.0]
+
+
+def test_logrank_detects_difference_and_not_noise():
+    from wepa_monitor import models
+    rng = np.random.default_rng(0)
+    fast, slow = rng.exponential(1.0, 80), rng.exponential(4.0, 80)
+    _, p = models.logrank(fast, np.ones(80), slow, np.ones(80))
+    assert p < 0.001
+    _, p_same = models.logrank(fast[:40], np.ones(40), fast[40:], np.ones(40))
+    assert p_same > 0.05
+
+
+def test_eol_regression_projects_the_right_date():
+    from wepa_monitor import models
+    as_of = pd.Timestamp("2026-10-01", tz="UTC")
+    ts = pd.Series(pd.date_range(as_of - pd.Timedelta(days=10), as_of, periods=40))
+    level = pd.Series(np.linspace(50, 30, 40))            # 2 points/day, at 30% now
+    level.iloc[7] += 15                                   # one sensor blip: Theil-Sen should shrug it off
+    fit = models.fit_series(ts, level, as_of, floor=5)
+    assert fit["slope_per_day"] == pytest.approx(-2.0, rel=0.02)
+    assert fit["days"] == pytest.approx(12.5, rel=0.03)   # (30 - 5) / 2
+    assert fit["days_early"] <= fit["days"] <= fit["days_late"]
+
+
+def test_eol_needs_enough_points():
+    from wepa_monitor import models
+    as_of = pd.Timestamp("2026-10-01", tz="UTC")
+    ts = pd.Series(pd.date_range(as_of - pd.Timedelta(hours=3), as_of, periods=3))
+    assert models.fit_series(ts, pd.Series([50.0, 49.0, 48.0]), as_of, floor=5) is None

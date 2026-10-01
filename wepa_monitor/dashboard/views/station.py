@@ -4,11 +4,12 @@ from __future__ import annotations
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, config, metrics as M, ops, rules
+from ... import activity, config, metrics as M, models, ops, rules
 from .. import charts
 from ..components import (chart_card, data_table, fmt_hours, fmt_minutes, fmt_num, headline, level_bar,
                           station_link, status_pill, tile)
 from .common import empty, period_label, period_window, station_messages, status_segments
+from .analytics import eol_window
 from .overview import activity_list
 
 
@@ -27,14 +28,14 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
 
     # --- headline: current state in a sentence --------------------------------------------
     msgs = station_messages(row)
-    fc = M.forecast(ds, ids).sort_values("days_to_replace")
-    next_part = fc.dropna(subset=["days_to_replace"]).head(1)
+    fc = models.eol_forecast(ds, ids).sort_values("days")
+    next_part = fc[fc["days"].notna() & (fc["days"] < 3650)].head(1)
     part_txt = ""
     if len(next_part):
         p = next_part.iloc[0]
-        part_txt = (f"{p['label']} needs replacing now ({p['level']:.0f}%)" if p["days_to_replace"] == 0 else
-                    f"Next part due: {p['label']} in about {p['days_to_replace']:.0f} day"
-                    f"{'s' if round(p['days_to_replace']) != 1 else ''}")
+        part_txt = (f"{p['label']} is at end of life ({p['level']:.0f}%)" if p["days"] == 0 else
+                    f"Next end of life: {p['label']} in about {p['days']:.0f} day"
+                    f"{'s' if round(p['days']) != 1 else ''}")
     a = M.availability(ds, start, end, ids)
     fleet = M.availability(ds, start, end)
     avail_txt = (f"Available {a.value:.1f}% of the time over the last {plabel} (fleet: {fleet.value:.1f}%)"
@@ -112,13 +113,30 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
     last = pts.groupby("component").tail(1).assign(scrape_ts=end)
     pts = pd.concat([pts, last]).sort_values(["component", "scrape_ts"])
     repl = M.replacements(ds, start, end, ids)
+    fc = fc.assign(window=fc.apply(eol_window, axis=1))
     fc_table = data_table(fc, [
         ("label", "Part", None), ("level", "Level", lambda v: f"{v:.0f}%"),
-        ("burn_per_day", "Use per day", lambda v: fmt_num(v, 2, " pts")),
-        ("days_to_replace", "Replace in", lambda v: "now" if v == 0 else (f"{v:.1f} days" if pd.notna(v) else "—"))])
+        ("window", "End of life in (90% window)", None), ("method", "Method", None)])
+    # Regression chart for the part closest to end of life that has a fit.
+    fitted = fc[(fc["method"] == "regression") & (fc["days"] > 0)].head(1)
+    eol_card = None
+    if len(fitted):
+        f = fitted.iloc[0]
+        comp = f["component"]
+        pts_fit = models.eol_points(ds, station_id, comp)
+        fit = models.fit_series(pts_fit["scrape_ts"], pts_fit["level"], ds.as_of, models.replace_point(comp))
+        if fit:
+            eol_card = chart_card(
+                f"End-of-life projection: {f['label']}",
+                "Readings since the last replacement, a Theil-Sen line of best fit (robust to sensor blips), and "
+                "where it meets the replacement point.",
+                charts.eol_projection(theme, pts_fit, fit, comp, ds.as_of, models.replace_point(comp)),
+                note=(f"Projected end of life in {eol_window(f)} at {fit['slope_per_day']:.2f} pts/day "
+                      f"(R² = {fit['r2']:.2f}, {fit['n']} readings)."))
     consumables = [
-        chart_card("Consumable levels now", "Bars turn amber at 10% and red at 5% (belt and fuser: 5% / 2%).",
-                   body=bars, table=fc_table),
+        chart_card("Consumable levels now", "Bars turn amber at 10% and red at 5% (belt and fuser: 5% / 2%). "
+                   "The table forecasts each part's end of life.", body=bars, table=fc_table),
+        *([eol_card] if eol_card else []),
         chart_card("Toner over time", "Triangles mark detected replacements.",
                    charts.levels_over_time(theme, pts, repl, ["toner_k", "toner_c", "toner_m", "toner_y"], start, end)),
         chart_card("Drums over time", "",

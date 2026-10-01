@@ -341,3 +341,114 @@ def hour_bars(theme: str, hours: pd.Series, label: str) -> go.Figure:
     fig.update_layout(**layout(theme, 220, bargap=0.25,
                                yaxis=dict(rangemode="tozero", dtick=1 if small else None, tickformat=",d")))
     return fig
+
+
+# --- statistical models ----------------------------------------------------------------------------
+
+def eol_projection(theme: str, points: pd.DataFrame, fit: dict, component: str, as_of, floor: float) -> go.Figure:
+    """Scatter of a part's readings since its last replacement, the Theil-Sen line of best fit,
+    and its extension to the replacement point (dashed only where it is a projection)."""
+    t = TOKENS[theme]
+    color = ink(theme, component)
+    local = lambda s: s.dt.tz_convert(config.LOCAL_TZ).dt.tz_localize(None)  # noqa: E731
+    fig = go.Figure()
+    fig.add_scatter(x=local(points["scrape_ts"]), y=points["level"], mode="markers", name="Readings",
+                    marker=dict(size=8, color=color, opacity=0.55, line=dict(color=t["surface"], width=1)),
+                    hovertemplate="%{x|%b %-d %-I:%M %p}: %{y:.0f}%<extra>Reading</extra>")
+    t0 = points["scrape_ts"].min()
+    days_back = (t0 - as_of).total_seconds() / 86400
+    days_fwd = min(fit["days"], 120) if np.isfinite(fit["days"]) else 30
+    xs_hist = np.linspace(days_back, 0, 20)
+    xs_proj = np.linspace(0, days_fwd, 20)
+    to_ts = lambda d: (as_of + pd.to_timedelta(d, unit="D")).tz_convert(config.LOCAL_TZ).tz_localize(None)  # noqa
+    fig.add_scatter(x=[to_ts(d) for d in xs_hist], y=fit["intercept"] + fit["slope_per_day"] * xs_hist,
+                    mode="lines", name="Best fit", line=dict(color=t["ink"], width=2),
+                    hovertemplate="Fit: %{y:.1f}%<extra></extra>")
+    fig.add_scatter(x=[to_ts(d) for d in xs_proj], y=fit["intercept"] + fit["slope_per_day"] * xs_proj,
+                    mode="lines", name="Projection", line=dict(color=t["ink"], width=2, dash="dot"),
+                    hovertemplate="Projected: %{y:.1f}%<extra></extra>")
+    fig.add_hline(y=floor, line=dict(color=STATUS["critical"], width=1), annotation_text=f"replace at {floor:.0f}%",
+                  annotation_position="bottom right", annotation_font=dict(size=11, color=t["secondary"]))
+    if np.isfinite(fit["days"]) and fit["days"] <= 120:
+        eol = to_ts(fit["days"])
+        fig.add_scatter(x=[eol], y=[floor], mode="markers", name="Projected end of life",
+                        marker=dict(size=11, symbol="diamond", color=STATUS["critical"],
+                                    line=dict(color=t["surface"], width=2)),
+                        hovertemplate="End of life ≈ %{x|%a %b %-d}<extra></extra>")
+    fig.update_layout(**layout(theme, 260, yaxis=dict(range=[0, 104], ticksuffix="%"), showlegend=True))
+    return fig
+
+
+def control_chart(theme: str, cc) -> go.Figure:
+    t = TOKENS[theme]
+    d = cc.daily
+    fig = go.Figure()
+    fig.add_scatter(x=d["local_date"], y=d["count"], mode="lines+markers", name="Faults per day",
+                    line=dict(color=t["series"][0], width=2), marker=dict(size=7, color=t["series"][0]),
+                    hovertemplate="%{x|%a %b %-d}: %{y} faults<extra></extra>")
+    out = d[d["out"]]
+    if len(out):
+        fig.add_scatter(x=out["local_date"], y=out["count"], mode="markers", name="Out of control",
+                        marker=dict(size=13, symbol="circle-open", color=STATUS["critical"], line=dict(width=2.5)),
+                        hovertemplate="%{x|%a %b %-d}: %{y} faults, beyond the limit<extra></extra>")
+    for y, label in ((cc.center, f"average {cc.center:.1f}"), (cc.ucl, f"upper limit {cc.ucl:.1f}")):
+        fig.add_hline(y=y, line=dict(color=t["secondary"] if y == cc.center else STATUS["critical"], width=1),
+                      annotation_text=label, annotation_position="top left",
+                      annotation_font=dict(size=11, color=t["secondary"]))
+    if cc.lcl > 0:
+        fig.add_hline(y=cc.lcl, line=dict(color=STATUS["critical"], width=1), annotation_text=f"lower {cc.lcl:.1f}",
+                      annotation_position="bottom left", annotation_font=dict(size=11, color=t["secondary"]))
+    fig.update_layout(**layout(theme, 280, yaxis=dict(rangemode="tozero"), hovermode="closest"))
+    return fig
+
+
+def km_curves(theme: str, ttf) -> go.Figure:
+    t = TOKENS[theme]
+    fig = go.Figure()
+    for i, (name, km) in enumerate(ttf.curves.items()):
+        x = np.r_[km["t"].to_numpy(), max(km["t"].max(), 24)]
+        y = np.r_[km["survival"].to_numpy(), km["survival"].iloc[-1]] * 100
+        med = ttf.medians[name]
+        med_txt = f", median {med:.1f} h" if np.isfinite(med) else ""
+        fig.add_scatter(x=x, y=y, mode="lines", line=dict(shape="hv", width=2.5, color=t["series"][i]),
+                        name=f"{name} (n={ttf.n[name]}{med_txt})",
+                        hovertemplate="After %{x:.1f} h: %{y:.0f}% still down<extra>" + name + "</extra>")
+        if np.isfinite(med):   # where the curve crosses 50%
+            fig.add_scatter(x=[med], y=[50], mode="markers", showlegend=False, hoverinfo="skip",
+                            marker=dict(size=9, color=t["series"][i], line=dict(color=t["surface"], width=2)))
+    fig.add_hline(y=50, line=dict(color=t["grid"], width=1))
+    fig.update_layout(**layout(theme, 300, xaxis=dict(title=dict(text="hours since the station went down"),
+                                                      range=[0, 24], showgrid=True),
+                               yaxis=dict(ticksuffix="%", range=[0, 102], title=dict(text="still down")),
+                               legend=dict(y=1.02)))
+    return fig
+
+
+def usage_scatter(theme: str, uf) -> go.Figure:
+    t = TOKENS[theme]
+    p = uf.points
+    fig = go.Figure()
+    fig.add_scatter(x=np.r_[uf.band["x"], uf.band["x"][::-1]], y=np.r_[uf.band["hi"], uf.band["lo"][::-1]],
+                    fill="toself", fillcolor=t["grid"], line=dict(width=0), name="95% confidence band",
+                    hoverinfo="skip")
+    fig.add_scatter(x=uf.band["x"], y=uf.band["fit"], mode="lines", line=dict(color=t["ink"], width=2),
+                    name=f"Best fit (R² = {uf.r2:.2f})", hoverinfo="skip")
+    normal = p[~p["outlier"]]
+    fig.add_scatter(x=normal["usage"], y=normal["failures_per_week"], mode="markers", name="Station",
+                    marker=dict(size=10, color=t["series"][0], line=dict(color=t["surface"], width=2)),
+                    customdata=normal["label"],
+                    hovertemplate="%{customdata}<br>%{x:.2f} pts toner/day · %{y:.1f} failures/week<extra></extra>")
+    out = p[p["outlier"]]
+    if len(out):
+        fig.add_scatter(x=out["usage"], y=out["failures_per_week"], mode="markers+text", name="Fails more than usage explains",
+                        marker=dict(size=12, color=STATUS["critical"], symbol="diamond",
+                                    line=dict(color=t["surface"], width=2)),
+                        text=out["label"].str.replace(r" \(\d+\)$", "", regex=True), textposition="top center",
+                        textfont=dict(size=11, color=t["secondary"]), customdata=out["label"],
+                        hovertemplate="%{customdata}<br>%{x:.2f} pts toner/day · %{y:.1f} failures/week<extra></extra>")
+    fig.update_layout(**layout(theme, 320, hovermode="closest",
+                               xaxis=dict(title=dict(text="usage: black toner burned per day (pts)"), showgrid=True),
+                               yaxis=dict(title=dict(text="red incidents per week"),
+                                          range=[0, float(p["failures_per_week"].max()) * 1.2 + 0.2]),
+                               margin=dict(t=30)))
+    return fig

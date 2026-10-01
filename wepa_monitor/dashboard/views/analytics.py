@@ -5,14 +5,15 @@ import numpy as np
 import pandas as pd
 from dash import html
 
-from ... import config, metrics as M
+from ... import config, metrics as M, models
 from .. import charts
 from ..components import (chart_card, data_table, fmt_hours, fmt_minutes, fmt_num, headline, metric_tile,
                           segmented, tile)
 from .common import empty, needs_days, period_label, period_window, scope_ids
 
 TABS = [{"label": "Reliability", "value": "reliability"}, {"label": "Faults", "value": "faults"},
-        {"label": "Consumables", "value": "consumables"}, {"label": "Data quality", "value": "quality"}]
+        {"label": "Consumables", "value": "consumables"}, {"label": "Forecasts & statistics", "value": "stats"},
+        {"label": "Data quality", "value": "quality"}]
 BURN_UNITS = {"per_day": "day", "per_week": "week", "per_month": "month", "per_year": "year"}
 
 
@@ -34,7 +35,7 @@ def render(ds: M.Dataset, theme: str, sections, areas, period, tab: str, burn_un
     start, end = period_window(ds, period)
     plabel = period_label(period)
     fn = {"reliability": _reliability, "faults": _faults, "consumables": _consumables,
-          "quality": _quality}.get(tab, _reliability)
+          "stats": _stats, "quality": _quality}.get(tab, _reliability)
     return fn(ds, theme, ids, start, end, plabel, burn_unit)
 
 
@@ -222,3 +223,127 @@ def _quality(ds, theme, ids, start, end, plabel, _):
                                         ("attempts", "Attempts", None), ("ok", "Succeeded", None),
                                         ("failure_rate", "Failure rate", lambda v: f"{v:.2f}%")])),
     ])]
+
+
+# --- Forecasts & statistics ---------------------------------------------------------------------------
+
+def _p(p: float) -> str:
+    return "p < 0.001" if p < 0.001 else f"p = {p:.3f}"
+
+
+def eol_window(row) -> str:
+    """'now', '3.2 days (2.9-3.6)' or '12 days' for a row of models.eol_forecast."""
+    d = row["days"]
+    if d is None or not np.isfinite(d):
+        return "—"
+    if d == 0:
+        return "now"
+    text = f"{d:.1f} days" if d < 10 else f"{d:.0f} days"
+    lo, hi = row.get("days_early"), row.get("days_late")
+    if row.get("method") == "regression" and lo is not None and np.isfinite(lo) and hi is not None and np.isfinite(hi) \
+            and hi - lo >= 0.1:
+        text += f" ({lo:.1f}-{hi:.1f})" if d < 10 else f" ({lo:.0f}-{hi:.0f})"
+    return text
+
+
+def _stats(ds, theme, ids, start, end, plabel, _):
+    ttf = models.time_to_fix(ds, start, end, ids)
+    cc = models.fault_control_chart(ds, start, end, ids)
+    anomalies = models.station_anomalies(ds, start, end, ids)
+    uf = models.usage_vs_reliability(ds, start, end, ids)
+    eol = models.eol_forecast(ds, ids)
+
+    # Headline: the single most decision-relevant finding.
+    findings = []
+    if ttf:
+        names = list(ttf.medians)
+        day, night = ttf.medians[names[0]], ttf.medians[names[1]]
+        if ttf.p_value < 0.05 and np.isfinite(day) and np.isfinite(night) and night > day:
+            findings.append(f"Outages that start overnight take {night / day:.1f}× longer to fix "
+                            f"(median {night:.1f} h vs {day:.1f} h, {_p(ttf.p_value)})")
+    if cc is not None:
+        findings.append(f"{len(cc.signals)} control-chart signal{'s' if len(cc.signals) != 1 else ''} "
+                        f"in daily faults" if cc.signals else "Daily faults stayed within normal limits")
+    if uf:
+        findings.append("busier printers fail significantly more" if uf.p_value < 0.05 and uf.slope > 0 else
+                        "usage doesn't explain which printers fail")
+    if findings:
+        first = findings[0]
+        rest = "; ".join(findings[1:])
+        hl = headline("info", first, (rest[:1].upper() + rest[1:] + ".") if rest else "")
+    else:
+        hl = headline("info", "Not enough data for statistical models yet",
+                      "Each model needs a minimum number of incidents or days; they'll appear as data accumulates.")
+
+    cards = []
+    if ttf:
+        rows = pd.DataFrame([{"group": g, "n": ttf.n[g], "median": ttf.medians[g] * 60,
+                              "w1": ttf.within[g][1], "w4": ttf.within[g][4], "w12": ttf.within[g][12]}
+                             for g in ttf.curves])
+        verdict = ("The difference is statistically significant" if ttf.p_value < 0.05 else
+                   "The difference could be chance") + f" (log-rank test, {_p(ttf.p_value)})."
+        cards.append(chart_card(
+            "How long outages last", "Kaplan-Meier survival curves: the share of outages still unresolved after "
+            "each hour. Outages still open are included as censored data rather than dropped.",
+            charts.km_curves(theme, ttf), wide=True, note=verdict,
+            table=data_table(rows, [("group", "Group", None), ("n", "Outages", None),
+                                    ("median", "Median time to fix", fmt_minutes),
+                                    ("w1", "Fixed within 1 h", lambda v: f"{v:.0%}"),
+                                    ("w4", "Within 4 h", lambda v: f"{v:.0%}"),
+                                    ("w12", "Within 12 h", lambda v: f"{v:.0%}")])))
+    else:
+        cards.append(chart_card("How long outages last", "", body=empty(
+            "Needs at least 10 outages, with some in each group.", big=False), wide=True))
+
+    if cc is not None:
+        sig = html.Ul([html.Li(x) for x in cc.signals], className="observations") if cc.signals else \
+            html.P("No day broke the limits, and there was no sustained run above or below average: "
+                   "day-to-day variation looks like normal noise.", className="card__note")
+        cards.append(chart_card(
+            "Is today normal? Fault control chart", "A c-chart: daily fault incidents against limits at the average "
+            "± 3√average. Days outside the limits, or 8 days in a row on one side, signal a real change.",
+            charts.control_chart(theme, cc), body=sig,
+            table=data_table(cc.daily, [("local_date", "Date", lambda d: f"{d:%a %b %-d}"),
+                                        ("count", "Faults", None)])))
+        cards.append(chart_card(
+            "Unusual station-days", "Days when a station had far more faults than its own average "
+            "(Poisson probability below 0.1%).",
+            body=data_table(anomalies, [("local_date", "Date", lambda d: f"{d:%a %b %-d}"),
+                                        ("station", "Station", None), ("count", "Faults", None),
+                                        ("expected", "Usual per day", lambda v: f"{v:.2f}"),
+                                        ("p", "Probability", lambda v: "< 0.001" if v < 0.001 else f"{v:.3f}")],
+                            empty="None: no station had an unusually bad day in this period.",
+                            link_col=("station", "station_id"))))
+
+    if uf:
+        outl = uf.points[uf.points["outlier"]]
+        interp = (f"Each extra point of black toner per day goes with {uf.slope:+.2f} failures a week "
+                  f"(R² = {uf.r2:.2f}, {_p(uf.p_value)}, {uf.n} stations). ")
+        interp += ("Usage explains a real share of the differences between stations." if uf.p_value < 0.05 else
+                   "That isn't statistically significant: how busy a printer is doesn't explain how often it fails.")
+        if len(outl):
+            interp += " Highlighted: stations failing far more than their usage predicts, which suggests a hardware or setup problem."
+        cards.append(chart_card(
+            "Do busier printers fail more?", "Each dot is a station: usage (black toner burned per day) against "
+            "red incidents per week, with an ordinary least squares line and its 95% confidence band.",
+            charts.usage_scatter(theme, uf), wide=True, note=interp,
+            table=data_table(uf.points.sort_values("resid", ascending=False),
+                             [("label", "Station", None), ("usage", "Toner/day (pts)", lambda v: f"{v:.2f}"),
+                              ("failures_per_week", "Failures/week", lambda v: f"{v:.2f}"),
+                              ("fitted", "Predicted", lambda v: f"{v:.2f}"),
+                              ("resid", "Difference", lambda v: f"{v:+.2f}")], link_col=("label", "station_id"))))
+
+    soon = eol.sort_values("days").head(20).copy()
+    soon["window"] = soon.apply(eol_window, axis=1)
+    cards.append(chart_card(
+        "Consumable end-of-life forecast", "Regression (Theil-Sen) on each part's readings since its last "
+        "replacement, with a 90% window. Open a station to see its fitted line.", wide=True,
+        body=data_table(soon, [("station", "Station", None), ("label", "Part", None),
+                               ("level", "Level", lambda v: f"{v:.0f}%"), ("window", "Replace in (90% window)", None),
+                               ("r2", "Fit R²", lambda v: "—" if pd.isna(v) else f"{v:.2f}"),
+                               ("method", "Method", None)], link_col=("station", "station_id"))))
+
+    caveat = html.P("Statistical results describe the selected period and scope. On demo data the models mostly "
+                    "rediscover patterns built into the simulator; on live data they become genuine findings as "
+                    "history accumulates.", className="footnote")
+    return [hl, html.Div(className="grid", children=cards), caveat]

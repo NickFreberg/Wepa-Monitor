@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, config, geo, metrics as M, ops
+from ... import activity, config, geo, metrics as M, models, ops
 from .. import charts
 from ..components import chart_card, data_table, fmt_minutes, fmt_num, headline, icon, station_link, tile
 from .common import empty, scope_ids
@@ -122,18 +122,19 @@ def render(ds: M.Dataset, theme: str, sections, areas, basemap: str = "street"):
         ], className="card__tools"),
         note=off_note + "Locations: OpenStreetMap. Aerial imagery: Esri World Imagery.")
 
-    fc = M.forecast(ds, ids)
-    floor = np.where(fc["component"].str.startswith("toner"), config.CONSUMABLE_REPLACE_PCT, 2)
-    soon = fc[(fc["days_to_replace"] <= 7) | (fc["level"] <= floor)].sort_values(["days_to_replace", "level"])
+    fc = models.eol_forecast(ds, ids)
+    floor = fc["component"].map(models.replace_point)
+    soon = fc[(fc["days"] <= 7) | (fc["level"] <= floor)].sort_values(["days", "level"])
+    from .analytics import eol_window
+    soon = soon.assign(window=soon.apply(eol_window, axis=1))
     parts = chart_card(
         "Consumable End-of-Life Watch",
-        f"Parts at, or projected to reach, their replacement point within 7 days, from each part's burn rate "
-        f"over the last {config.BURN_RATE_LOOKBACK_DAYS} days.",
+        "Parts at, or projected to reach, their replacement point within 7 days. Projections are a regression on "
+        "each part's readings since its last replacement (90% window in brackets).",
         wide=True, body=data_table(soon, [
             ("station", "Station", None), ("label", "Part", None), ("level", "Level", lambda v: f"{v:.0f}%"),
-            ("days_to_replace", "Replace in", lambda v: "now" if v == 0 else f"{fmt_num(v, 1)} days"),
-            ("burn_per_day", "Use per day", lambda v: fmt_num(v, 2, " pts")),
-            ("area", "Area", None)], empty="No consumables are projected to reach end of life in the next 7 days.",
+            ("window", "End of life in", None), ("area", "Area", None)],
+            empty="No consumables are projected to reach end of life in the next 7 days.",
             link_col=("station", "station_id")))
 
     return [

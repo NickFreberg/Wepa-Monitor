@@ -14,9 +14,9 @@ Satellite Campuses (1).
 |---|---|---|
 | ![Overview](docs/screenshots/overview.png) | ![Overview in the BSU theme](docs/screenshots/overview-bsu.png) | ![Station detail](docs/screenshots/station-detail.png) |
 
-| Analytics (BSU) | Executive summary (dark) | Notifications (dark) |
+| Analytics (BSU) | Forecasts & statistics (BSU) | Executive summary (dark) |
 |---|---|---|
-| ![Analytics](docs/screenshots/analytics.png) | ![Executive](docs/screenshots/executive.png) | ![Notifications](docs/screenshots/notifications.png) |
+| ![Analytics](docs/screenshots/analytics.png) | ![Forecasts and statistics](docs/screenshots/forecasts.png) | ![Executive](docs/screenshots/executive.png) |
 
 ![Campus map, aerial view](docs/screenshots/campus-map-aerial.png)
 
@@ -112,7 +112,7 @@ so the main point comes before any chart.
   station's activity.
 - **Analytics:** tabs for **Reliability** (availability, time to fix, building coverage, station
   scorecard), **Faults** (types, when, where), **Consumables** (use per day, week, month or year;
-  cumulative use; replacement log) and **Data quality**.
+  cumulative use; replacement log), **Forecasts & statistics** (see below) and **Data quality**.
 - **Executive:** month vs prior month vs year to date, generated observations, monthly trends and a
   30-day parts forecast.
 - **Activity:** a searchable log of everything that happened, grouped by day: stations going down or
@@ -130,6 +130,22 @@ so the main point comes before any chart.
 
 Charts include a **Show data** table, and status is always shown with an icon and a label as well as
 color.
+
+## Forecasts and statistical models
+
+`wepa_monitor/models.py`, shown on **Analytics → Forecasts & statistics** and on each station page:
+
+| Model | Question it answers | Method |
+|---|---|---|
+| **Consumable end-of-life** | When will this toner, drum, belt or fuser hit its replacement point? | **Theil–Sen regression** (median of pairwise slopes, robust to sensor blips) on the part's readings since its last replacement. The slope's 90% confidence interval gives an earliest–latest window. Falls back to the simple burn rate when there are too few readings. Feeds the Overview's End-of-Life Watch and each station's scatter plot with its fitted line. |
+| **Fault control chart** | Is today's fault count normal, or has something changed? | **Statistical process control c-chart**: daily fault incidents against limits at the average ± 3√average, plus the Western Electric run rule (8 days in a row on one side). Station-days far above that station's own average are flagged with a **Poisson tail test** (p < 0.001). |
+| **Time to fix** | What share of outages are fixed within 1, 4 or 12 hours, staffed vs overnight? | **Kaplan–Meier survival curves**, with outages still open kept as *censored* observations rather than dropped, and a **log-rank test** for whether the two groups differ. |
+| **Usage vs reliability** | Do busier printers fail more, or are some units just bad? | **Ordinary least squares** of red incidents per week on usage (black toner burned per day), with R², p-value, a 95% confidence band, and stations whose residual exceeds 2σ flagged as failing more than their usage explains. |
+
+Each model reports its sample size and shows "not enough data" when the evidence is thin. On demo data
+the models mostly rediscover patterns built into the simulator; on live data their findings are real.
+Time-series forecasting (ARIMA and similar) is deliberately left out until there's at least one full
+academic year of live history, because semester seasonality can't be learned from a few months.
 
 ## How the data flows
 
@@ -283,6 +299,7 @@ wepa_monitor/
   metrics.py       KPI/KRI definitions with evidence and gating
   ops.py           current status and the ranked work queue
   activity.py      the event feed behind Activity and notifications
+  models.py        end-of-life regression, control charts, survival analysis, usage regression
   geo.py           building-level map points and KML export for Google Earth
   insights.py      month / YTD scorecards and generated observations
   synth.py         demo-data simulator
