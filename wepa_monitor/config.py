@@ -1,0 +1,66 @@
+"""Central configuration: paths, source URL, and the business rules.
+
+Every threshold that shapes a metric lives here so it can be changed in one
+place and the whole history recomputed from the raw snapshots.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+REFERENCE_DIR = ROOT / "reference"
+
+# Live data and demo data never mix: they live in separate directories.
+LIVE_DATA_DIR = Path(os.environ.get("WEPA_DATA_DIR", ROOT / "data" / "live"))
+DEMO_DATA_DIR = Path(os.environ.get("WEPA_DEMO_DIR", ROOT / "data" / "demo"))
+
+STATUS_URL = os.environ.get(
+    "WEPA_STATUS_URL", "https://cs.wepanow.com/000BRIDGEW149.html&filter="
+)
+HTTP_TIMEOUT_S = 30
+USER_AGENT = "BSU-ResNet-Wepa-Monitor/2.0 (+https://github.com/nickfreberg/wepa-monitor)"
+
+# Bridgewater, MA. All "time of day" and "per day" metrics use this zone.
+LOCAL_TZ = "America/New_York"
+
+# --- Snapshot cadence -------------------------------------------------------
+# The status page refreshes every 60 s, so one snapshot per minute is expected.
+EXPECTED_INTERVAL_S = 60
+# A gap longer than this between two snapshots of a station is "unobserved"
+# time: excluded from availability, never assumed to be up or down.
+MAX_OBSERVED_GAP_S = 5 * 60
+# An incident that is in the same state on both sides of a gap shorter than
+# this is treated as one continuous incident (e.g. a scraper restart).
+MAX_INCIDENT_BRIDGE_S = 6 * 60 * 60
+
+# --- Consumables ------------------------------------------------------------
+COMPONENTS = [
+    "toner_k", "toner_c", "toner_m", "toner_y",
+    "drum_k", "drum_c", "drum_m", "drum_y",
+    "belt", "fuser",
+]
+COMPONENT_LABELS = {
+    "toner_k": "Toner K", "toner_c": "Toner C", "toner_m": "Toner M", "toner_y": "Toner Y",
+    "drum_k": "Drum K", "drum_c": "Drum C", "drum_m": "Drum M", "drum_y": "Drum Y",
+    "belt": "Belt", "fuser": "Fuser",
+}
+# A rise of at least this many points between two consecutive readings is a
+# replacement, not negative usage. Sensor jitter is +/-1-2 points.
+REPLACEMENT_JUMP_PTS = 15
+# Wepa's own definition: "TONER LOW = Toner level is 10% or less."
+TONER_LOW_PCT = 10
+# Old ResNet practice from the v1 script: <=5% needs replacement, <3% critical.
+CONSUMABLE_REPLACE_PCT = 5
+CONSUMABLE_CRITICAL_PCT = 3
+# Belt policy from the v1 script: change at 2% Mon-Thu, 5% on Fridays.
+BELT_CHANGE_PCT_WEEKDAY = 2
+BELT_CHANGE_PCT_FRIDAY = 5
+
+# --- Data-quality gating ------------------------------------------------------
+# A metric is only shown when it rests on enough evidence; otherwise the
+# dashboard says "insufficient data" instead of showing noise.
+MIN_INCIDENTS_FOR_MEAN = 3
+MIN_COVERAGE_FOR_RATE = 0.5      # share of the window actually observed
+MIN_DAYS_FOR_BURN_RATE = 3
+BURN_RATE_LOOKBACK_DAYS = 14

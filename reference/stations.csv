@@ -1,0 +1,32 @@
+station_id,building,area,station_type,lat,lon,notes
+01270,Crimson Hall,University Park,residence,,,
+00800,Crimson Hall,University Park,residence,,,
+00516,DiNardo Hall,University Park,residence,,,
+00472,Miles Hall,University Park,residence,,,
+00517,Stonehouse Hall,University Park,residence,,,
+02132,East Campus Commons,TBD,residence,,,Area not in v1 script - confirm
+02142,Great Hill Apartments,Upper Great Hill,residence,,,
+01102,Shea/Durgin,Upper Great Hill,residence,,,
+00498,Shea/Durgin,Upper Great Hill,residence,,,
+00762,Weygand Hall,Upper Great Hill,residence,,,
+01143,Weygand Hall,Upper Great Hill,residence,,,
+01331,Pope Hall,West Side,residence,,,Listed on page as "Pope"
+00817,Pope Hall,West Side,residence,,,
+02868,Scott Hall,West Side,residence,,,
+00412,Scott Hall,West Side,residence,,,
+00477,Woodward Hall,West Side,residence,,,
+02143,New Bedford Flight School,Satellite,satellite,,,
+02144,Boyden Hall,Academic,lab,,,
+02134,DMF Science & Math Center,Academic,lab,,,
+02065,DMF Science & Math Center,Academic,lab,,,
+02063,Harrington Hall,Academic,lab,,,
+02060,Hunt Hall,Academic,lab,,,
+00518,Maxwell Library,Academic,lab,,,Was Great Hill Apartments in the v1 script
+02067,Maxwell Library,Academic,lab,,,
+02062,Maxwell Library,Academic,lab,,,
+02066,Moakley Center,Academic,lab,,,
+02059,Moakley Center,Academic,lab,,,
+02064,Rondileau Student Union,Academic,lab,,,
+02869,Rondileau Student Union,Academic,lab,,,
+02133,Tillinghast Hall,Academic,lab,,,Listed on page as "Tilly Humanities Lounge" - confirm building
+02061,Tinsley Center,Upper Great Hill,lab,,,Grouped with Upper Great Hill in the v1 script
