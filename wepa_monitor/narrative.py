@@ -200,7 +200,15 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
                                                         "rougher than usual" if d > -2 else "a rough stretch")
     else:
         verdict = None
-    tone = "good" if a.value >= 98 else ("warning" if a.value >= 95 else "critical")
+    # Tone follows the comparison with normal, with absolute floors so a bad norm can't look "good".
+    if a.value < 85 or verdict == "a rough stretch":
+        tone = "critical"
+    elif a.value < 90 or verdict == "rougher than usual":
+        tone = "warning"
+    elif verdict is None:
+        tone = "good" if a.value >= 97 else "warning"
+    else:
+        tone = "good"
     headline = f"{p.title}{so_far}: {scope_label} could print {a.value:.1f}% of the time"
     were, their = ("was", "its") if singular else ("were", "their")
     lead = [f"{p.title}{so_far}, {scope_label} {were} available ",

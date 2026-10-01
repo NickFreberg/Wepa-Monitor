@@ -145,7 +145,7 @@ def owner_hours(theme: str, summ: pd.DataFrame) -> go.Figure:
                     hovertemplate="<b>%{y}</b> (%{customdata[3]})<br>" + name +
                                   ": %{x:,.0f} printer-hours down (%{customdata[2]:.0f}%)<extra></extra>")
     fig.update_layout(**layout(theme, 70 * len(summ) + 90, barmode="stack", bargap=0.35,
-                               legend=dict(orientation="h", y=1.15, x=0),
+                               legend=dict(orientation="h", y=1.15, x=0, traceorder="normal"),
                                xaxis=dict(showgrid=True, title=dict(text="printer-hours down")),
                                yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
     return fig

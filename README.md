@@ -18,6 +18,10 @@ Satellite Campuses (1).
 |---|---|---|
 | ![Analytics](docs/screenshots/analytics.png) | ![Forecasts and statistics](docs/screenshots/forecasts.png) | ![Executive](docs/screenshots/executive.png) |
 
+| Insights: the story of the week, and Ask the data | Click any point: what it means |
+|---|---|
+| ![Insights](docs/screenshots/insights.png) | ![Explain panel](docs/screenshots/explain.png) |
+
 ![Campus map, aerial view](docs/screenshots/campus-map-aerial.png)
 
 *Screenshots use the synthetic demo data set (see [Demo mode](#demo-mode)).*
@@ -96,25 +100,45 @@ Run the tests with `pytest`.
 
 ## Using the dashboard
 
-The sidebar has five sections. Each page opens with a **one-sentence summary** (green, amber or red),
+The sidebar has six sections. Each page opens with a **one-sentence summary** (green, amber or red),
 so the main point comes before any chart.
+
+**Explore the data to understand more.** The detail is there when you want it, without crowding the
+page:
+
+- **Click any point** on a chart (a day on the availability line, a fault bar, a square on the
+  heatmap, a stretch of a station's timeline, a curve on the survival chart) and a side panel explains
+  it in plain words: *what it is*, *what it tells you*, *why it matters*, and where to look next.
+  Hover still gives the exact numbers. Esc closes the panel.
+- **"ⓘ How to read this"** on a card opens a two-line guide to that chart.
+- A **tip line** at the top of each page says so; dismiss it once and it stays hidden.
 
 - **Overview:** what needs attention now. Live counts, a ranked "Needs attention" list, recent
   activity, the campus map (street or aerial; click a building to open it; export to Google Earth),
   and the **Consumable End-of-Life Watch** (parts at or nearing their replacement point within 7 days).
   Refreshes every minute.
+- **Insights:** the **story** of today, yesterday, this week, last week, this month or last month,
+  written as a short narrative with key figures and key moments. It covers how the period compared
+  with normal, what went down and for how long, patterns, whether problems started while a support
+  desk was open, supplies, and what's coming up. Below it, **Ask the data**: type a question such as
+  "Which station was down the longest last week?", "How is Weygand doing this month?", "How many
+  outages start after hours?" or "Is the ResNet desk open?" and get an answer computed from the data.
+  It is rule-based (time phrases, station / building / area / owner names and a few dozen intent
+  keywords), so it uses **no AI model and no tokens**, and it says what it understood ("Looking at
+  Weygand Hall, last week") so a misreading is obvious.
 - **Stations:** every printer, grouped by area, with search ("Weygand", "02061", "Academic") and a
   status filter (down, warning, needs attention). Every card opens the station's page.
 - **Station page (drill-through):** current status in a sentence; availability, times down, time to
-  fix and time between failures, each compared with the fleet; a minute-by-minute **status
+  fix and time between failures, each compared with all BSU print stations; who supports it and whether that desk is open now; a minute-by-minute **status
   timeline**; consumable levels now and over time, with replacements marked; fault mix by type and hour
   of day; full incident history; the other printers in the building (students' backup); and the
   station's activity.
 - **Analytics:** tabs for **Reliability** (availability, time to fix, building coverage, station
   scorecard), **Faults** (types, when, where), **Consumables** (use per day, week, month or year;
   cumulative use; replacement log), **Forecasts & statistics** (see below) and **Data quality**.
-- **Executive:** month vs prior month vs year to date, generated observations, monthly trends and a
-  30-day parts forecast.
+- **Executive:** the story of the month in a paragraph, then month vs prior month vs year to date
+  (including the share of outages that began after desk hours and the desk time to fix), key
+  observations, monthly trends and a 30-day parts forecast.
 - **Activity:** a searchable log of everything that happened, grouped by day: stations going down or
   recovering, warnings, parts replaced, trays emptied and refilled, monitoring gaps.
 
@@ -131,6 +155,31 @@ so the main point comes before any chart.
 Charts include a **Show data** table, and status is always shown with an icon and a label as well as
 color.
 
+## Support ownership and desk hours
+
+Each station belongs to a support team, and a team can only fix things while its desk is staffed:
+
+| Owner | Based at | Desk hours | Stations |
+|---|---|---|---|
+| **ResNet** | East Campus Commons (ECC) | Mon–Thu 10 AM–6 PM, Fri 10 AM–4 PM | ResNet section (residence halls) |
+| **IT Service Center** | Maxwell Library | Mon–Fri 9 AM–4 PM | Student Computer Labs and Satellite Campuses |
+
+Every outage is classified against its owner's hours. It is recorded as either *began during desk
+hours* or *began after hours*. For after-hours outages, the time spent waiting for the desk to open is
+recorded too. Each outage's downtime is then split into **staffed** and **after-hours** time. This
+drives:
+- the overview's desk status and the "closed until…" notes on Needs attention;
+- the station page's shaded desk hours on the timeline;
+- the outlined desk hours on the faults heatmap;
+- the *Downtime vs. support desk hours* chart and table;
+- the Kaplan–Meier comparison;
+- the executive scorecard rows;
+- the stories and Ask answers.
+
+**Desk time to fix** counts only staffed minutes, so it measures response once someone is in. MTTR
+also includes the wait. The ownership mapping, hours and closed dates (holidays and breaks) are in
+`config.py` (`SUPPORT_TEAMS`, `SECTION_OWNER`, `SUPPORT_CLOSED_DATES`).
+
 ## Forecasts and statistical models
 
 `wepa_monitor/models.py`, shown on **Analytics → Forecasts & statistics** and on each station page:
@@ -139,7 +188,7 @@ color.
 |---|---|---|
 | **Consumable end-of-life** | When will this toner, drum, belt or fuser hit its replacement point? | **Theil–Sen regression** (median of pairwise slopes, robust to sensor blips) on the part's readings since its last replacement. The slope's 90% confidence interval gives an earliest–latest window. Falls back to the simple burn rate when there are too few readings. Feeds the Overview's End-of-Life Watch and each station's scatter plot with its fitted line. |
 | **Fault control chart** | Is today's fault count normal, or has something changed? | **Statistical process control c-chart**: daily fault incidents against limits at the average ± 3√average, plus the Western Electric run rule (8 days in a row on one side). Station-days far above that station's own average are flagged with a **Poisson tail test** (p < 0.001). |
-| **Time to fix** | What share of outages are fixed within 1, 4 or 12 hours, staffed vs overnight? | **Kaplan–Meier survival curves**, with outages still open kept as *censored* observations rather than dropped, and a **log-rank test** for whether the two groups differ. |
+| **Time to fix** | What share of outages are fixed within 1, 4 or 12 hours, started during desk hours vs after hours? | **Kaplan–Meier survival curves**, with outages still open kept as *censored* observations rather than dropped, and a **log-rank test** for whether the two groups differ. |
 | **Usage vs reliability** | Do busier printers fail more, or are some units just bad? | **Ordinary least squares** of red incidents per week on usage (black toner burned per day), with R², p-value, a 95% confidence band, and stations whose residual exceeds 2σ flagged as failing more than their usage explains. |
 
 Each model reports its sample size and shows "not enough data" when the evidence is thin. On demo data
@@ -229,7 +278,8 @@ stations, so the whole pipeline and dashboard run unchanged. The simulation incl
 - paper draining Tray1 then Tray2, refilled on staff rounds;
 - toner, drums, belt and fuser depleting at realistic yields and replaced near their thresholds
   (occasionally early, which leaves stranded toner);
-- jams, network drops and fatal errors, with response times that depend on whether a desk is staffed;
+- jams, network drops and fatal errors; staff respond, and do refill rounds, only during the owning
+  desk's real hours (ResNet or the IT Service Center), so after-hours problems wait for the next shift;
 - scraper failures and a couple of multi-hour outages.
 
 The data directory is stamped `"synthetic": true` and every page shows a **DEMO** banner. Nothing in
@@ -302,11 +352,15 @@ wepa_monitor/
   models.py        end-of-life regression, control charts, survival analysis, usage regression
   geo.py           building-level map points and KML export for Google Earth
   insights.py      month / YTD scorecards and generated observations
+  support.py       ownership, desk hours, and desk-hours vs after-hours splits of downtime
+  narrative.py     plain-language stories for any period
+  ask.py           "Ask the data": a rule-based question interpreter (no AI model)
   synth.py         demo-data simulator
-  dashboard/       Dash app shell (app.py), views/ (one module per page), charts, stylesheet
+  dashboard/       Dash app shell (app.py), views/ (one module per page), charts, stylesheet,
+                   explain.py (the click-to-explain panels)
 reference/stations.csv   station → building / area
 reference/buildings.csv  building coordinates (OpenStreetMap), short names, campus
-tests/                   parser, replacement rule and incident logic (fixture: a real page capture)
+tests/                   parser, replacement rule, incident logic, desk hours, stories and Ask
 legacy/                  the original v1 terminal script
 ```
 
