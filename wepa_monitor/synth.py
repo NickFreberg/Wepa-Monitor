@@ -359,6 +359,8 @@ def generate(data_dir: Path, days: int = 90, end: datetime | None = None, seed: 
     })
 
     if data_dir.exists():
+        import shutil
+        shutil.rmtree(data_dir / "derived", ignore_errors=True)   # rollups of the old data set
         for sub in ("snapshots", "scrape_log"):
             for p in (data_dir / sub).glob("*") if (data_dir / sub).exists() else []:
                 p.unlink()

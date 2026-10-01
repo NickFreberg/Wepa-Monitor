@@ -98,12 +98,42 @@ def _read_partitions(folder: Path, str_cols: dict) -> pd.DataFrame | None:
     return pd.concat(frames, ignore_index=True)
 
 
+_SNAP_STR = {"station_id": str, "status_codes": str, "printer_text": str, "description": str}
+
+
+def snapshot_days(data_dir: Path) -> list[str]:
+    folder = data_dir / "snapshots"
+    if not folder.exists():
+        return []
+    return sorted({p.stem for p in folder.iterdir() if p.suffix in (".csv", ".parquet")})
+
+
+def _dedupe(df: pd.DataFrame) -> pd.DataFrame:
+    """One snapshot per station per minute, even if two collectors briefly overlap (e.g. during a redeploy)."""
+    minute = df["scrape_ts"].dt.floor("min")
+    return df[~pd.DataFrame({"s": df["station_id"], "m": minute}).duplicated()]
+
+
+def load_day(data_dir: Path, day: str) -> pd.DataFrame:
+    """One day's snapshots, typed, deduplicated and sorted by station then time."""
+    folder = data_dir / "snapshots"
+    pq, csv = folder / f"{day}.parquet", folder / f"{day}.csv"
+    if pq.exists():
+        df = pd.read_parquet(pq)
+    elif csv.exists():
+        df = pd.read_csv(csv, dtype=_SNAP_STR)
+    else:
+        return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
+    df = _dedupe(_typed_snapshots(df))
+    return df.sort_values(["station_id", "scrape_ts"], ignore_index=True)
+
+
 def load_snapshots(data_dir: Path) -> pd.DataFrame:
     df = _read_partitions(data_dir / "snapshots", {"station_id": str, "status_codes": str,
                                                    "printer_text": str, "description": str})
     if df is None:
         return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
-    df = _typed_snapshots(df)
+    df = _dedupe(_typed_snapshots(df))
     # Low-cardinality text as categories: ~5x less memory on months of history.
     for col in ("section", "station_id", "description", "row_status", "status_codes", "printer_text"):
         df[col] = df[col].astype("category")

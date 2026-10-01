@@ -28,7 +28,7 @@ STATUS_CODES: dict[str, tuple[str, str, str, bool]] = {
     "toner_sensor_error": ("Toner sensor error", "red", "consumable", False),
     "toner_critical": ("Toner critical", "red", "consumable", False),
     "drum_critical": ("Drum critical", "red", "consumable", False),
-    "paper_low": ("Paper low", "yellow", "paper", False),
+    "paper_low": ("Paper low", "yellow", "paper", True),
     "toner_low": ("Toner low", "yellow", "consumable", False),
     "incorrect_tray_size": ("Incorrect paper tray size", "yellow", "paper", False),
 }
@@ -44,11 +44,20 @@ FIX_CATEGORIES = {
 }
 
 
+# Codes that carry a variable detail, e.g. 'Alert_Paper_Low_Letter_530_sheets_left' (seen live),
+# are folded into one canonical code so fault counts don't split by sheet count.
+_CANONICAL = [(re.compile(r"^paper_low(_|$)"), "paper_low")]
+
+
 def normalize_code(raw: str) -> str:
-    """'Alert_paper_out_error' -> 'paper_out_error'."""
+    """'Alert_paper_out_error' -> 'paper_out_error'; 'Alert_Paper_Low_Letter_530_sheets_left' -> 'paper_low'."""
     code = raw.strip()
     code = re.sub(r"^alert_", "", code, flags=re.IGNORECASE)
-    return re.sub(r"[^a-z0-9]+", "_", code.lower()).strip("_")
+    code = re.sub(r"[^a-z0-9]+", "_", code.lower()).strip("_")
+    for pattern, canonical in _CANONICAL:
+        if pattern.match(code):
+            return canonical
+    return code
 
 
 def code_label(code: str) -> str:

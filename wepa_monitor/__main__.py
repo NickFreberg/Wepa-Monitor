@@ -16,42 +16,10 @@ import sys
 import threading
 import time
 import webbrowser
-from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
-
-
-def _scrape_once(data_dir: Path, archive_html: bool) -> bool:
-    from . import scrape, store
-
-    result = scrape.fetch()
-    store.append_result(data_dir, result, result.html if archive_html else None)
-    status = "ok" if result.ok else f"FAILED ({result.error})"
-    print(f"{result.attempt_ts:%Y-%m-%d %H:%M:%S}Z  {len(result.records):>3} stations  {status}", flush=True)
-    return result.ok
-
-
-def _collect_forever(data_dir: Path, archive_html: bool, quiet: bool = False) -> None:
-    """Scrape on every minute boundary, compacting finished days once a day."""
-    from . import store
-
-    last_compact = None
-    while True:
-        # Sleep to the next minute boundary so snapshots stay evenly spaced.
-        time.sleep(config.EXPECTED_INTERVAL_S - time.time() % config.EXPECTED_INTERVAL_S)
-        if quiet:
-            from . import scrape
-            result = scrape.fetch()
-            store.append_result(data_dir, result, result.html if archive_html else None)
-            if not result.ok:
-                print(f"{result.attempt_ts:%H:%M:%S}Z  scrape failed: {result.error}", flush=True)
-        else:
-            _scrape_once(data_dir, archive_html)
-        today = datetime.now(timezone.utc).date()
-        if last_compact != today:
-            store.compact(data_dir)
-            last_compact = today
+from .collector import collect_forever as _collect_forever, scrape_once as _scrape_once
 
 
 def main(argv: list[str] | None = None) -> int:

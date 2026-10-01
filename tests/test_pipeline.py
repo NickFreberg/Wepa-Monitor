@@ -62,6 +62,12 @@ def test_timestamp_parser_handles_ordinals():
     assert parse_page_timestamp("Mon Nov 02nd, 2026 9:05 CST").hour == 15
 
 
+def test_variable_codes_are_canonical():
+    assert rules.normalize_code("Alert_Paper_Low_Letter_530_sheets_left") == "paper_low"
+    assert rules.normalize_code("Alert_paper_out_error") == "paper_out_error"
+    assert rules.code_label("paper_low") == "Paper low"
+
+
 def test_tray_extraction():
     msgs = rules.split_printer_text("Paper Out Warning for Tray1Paper Out Warning for Tray2")
     assert rules.empty_trays(msgs) == ["Tray1", "Tray2"]
@@ -160,3 +166,36 @@ def test_kml_is_valid_and_escaped():
     assert len(marks) == 1
     assert marks[0].getElementsByTagName("name")[0].firstChild.data == "DMF Science & Math Center - Down"
     assert "-70.970710,41.988290,0" in marks[0].toxml()
+
+
+# --- rollups -------------------------------------------------------------------------------
+
+def test_rollups_match_raw_processing(tmp_path):
+    """Day-by-day rollups must give exactly what processing the whole raw history gives."""
+    from datetime import datetime, timezone
+    from wepa_monitor import metrics, store, synth
+
+    synth.generate(tmp_path, days=3, end=datetime(2026, 9, 10, 15, 37, tzinfo=timezone.utc),
+                   seed=3, progress=lambda m: None)
+    ds = metrics.load(tmp_path)
+    raw = store.load_snapshots(tmp_path)
+    for col in ("station_id", "row_status", "status_codes", "printer_text"):
+        raw[col] = raw[col].astype(str)
+
+    spans = events.observation_spans(raw)
+    assert ds.hourly["covered_s"].sum() == pytest.approx(spans["covered_s"].sum())
+    up = spans.loc[spans["row_status"] != "red", "covered_s"].sum()
+    assert ds.hourly["up_s"].sum() == pytest.approx(up)
+
+    def norm(df):
+        cols = ["station_id", "start", "end", "status", "duration_s"]
+        return df[cols].sort_values(["station_id", "start"]).reset_index(drop=True)
+
+    pd.testing.assert_frame_equal(norm(ds.sev_inc), norm(events.severity_incidents(raw, ds.as_of)),
+                                  check_dtype=False)
+    pd.testing.assert_frame_equal(norm(ds.fault_inc), norm(events.fault_incidents(raw, ds.as_of)),
+                                  check_dtype=False)
+    raw_points = consumables.change_points(raw)
+    _, raw_repl = consumables.usage(raw_points)
+    assert len(ds.repl) == len(raw_repl)
+    assert ds.cons["used"].sum() == pytest.approx(consumables.usage(raw_points)[0]["used"].sum())

@@ -193,17 +193,25 @@ stations, so the whole pipeline and dashboard run unchanged. The simulation incl
 The data directory is stamped `"synthetic": true` and every page shows a **DEMO** banner. Nothing in
 demo mode describes actual BSU printers.
 
-## Running the collector somewhere permanent
+## Hosting it permanently
 
-The collector needs to run continuously, once a minute. Options:
+**Azure App Service (recommended):** one command deploys the dashboard and the every-minute collector
+to a Basic B1 Linux app (~$13/month) with HTTPS, Always On and optional Microsoft sign-in. See the
+step-by-step guide in [`deploy/azure/README.md`](deploy/azure/README.md):
 
-- **Azure Functions** (timer trigger `0 */1 * * * *`) calling `python -m wepa_monitor scrape`, with
-  `WEPA_DATA_DIR` on a mounted Azure Files share or synced to Blob Storage. This is the lowest-cost
-  always-on option.
-- **A small VM or a Raspberry Pi** running `python -m wepa_monitor collect` as a service.
-- **cron**: `* * * * * cd /path && .venv/bin/python -m wepa_monitor scrape`.
+```bash
+brew install azure-cli && az login
+./deploy/azure/deploy.sh
+```
 
-Expect roughly 45k rows per day: a few MB of CSV for the current day, and under 0.5 MB per finished day as Parquet. `--archive-html` adds about 7 MB per day.
+**Anywhere else:** run `gunicorn --workers 1 --threads 8 wepa_monitor.wsgi:server`. It serves the
+dashboard and collects every minute in the same process; set `WEPA_DATA_DIR` to a folder that
+persists. Or run `python -m wepa_monitor start` on an always-on Mac, PC or Raspberry Pi.
+
+**Scale:** about 45k snapshot rows per day (~16 million per year), stored as under 0.5 MB of Parquet
+per finished day. Each finished day is rolled up once into hourly tables and state changes
+(`wepa_monitor/rollup.py`), so the dashboard's memory stays roughly flat as history grows; only the
+current day is reprocessed each minute.
 
 ## Station reference data and the map
 
@@ -241,6 +249,9 @@ wepa_monitor/
   rules.py         status codes → names, severity fallback, fix category; printer-text parsing
   scrape.py        fetch + header-driven parser
   store.py         append-only snapshots and scrape log; daily Parquet compaction
+  rollup.py        per-day rollups (hourly coverage, state changes) cached so memory stays flat
+  collector.py     the every-minute collection loop
+  wsgi.py          production entry point: dashboard + collector (gunicorn)
   events.py        observation spans and incident detection (vectorized)
   consumables.py   replacement-aware usage
   metrics.py       KPI/KRI definitions with evidence and gating
@@ -262,5 +273,3 @@ legacy/                  the original v1 terminal script
   drawn on the campus map with a pick list ("2 reams, 1 black toner"). Building coordinates are in place;
   it still needs the ResNet workstation locations.
 - Confirm the status codes not yet seen on the live page, and the yellow-alert behavior.
-- Incremental metric updates for long live histories (currently a full reload each minute when new data
-  arrives).

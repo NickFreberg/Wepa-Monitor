@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import config, consumables, events, store
-from .reference import station_table
+from . import config, consumables, events, rollup, store
+from .reference import load_stations, station_table
 
 
 @dataclass
@@ -35,7 +35,8 @@ class Dataset:
     as_of: pd.Timestamp
     stations: pd.DataFrame
     latest: pd.DataFrame
-    spans: pd.DataFrame
+    hourly: pd.DataFrame      # station x hour: covered_s, up_s (+ local_date, section)
+    bhourly: pd.DataFrame     # building x hour: minutes, any_up_min, all_up_min
     sev_inc: pd.DataFrame
     fault_inc: pd.DataFrame
     tray_inc: pd.DataFrame
@@ -47,7 +48,7 @@ class Dataset:
 
     @property
     def empty(self) -> bool:
-        return self.spans.empty
+        return self.hourly.empty
 
     def ids(self, section=None, area=None, building=None) -> list[str]:
         s = self.stations
@@ -64,10 +65,11 @@ def _local(ts: pd.Series) -> pd.Series:
     return ts.dt.tz_convert(config.LOCAL_TZ)
 
 
-def load(data_dir: Path, now: datetime | None = None) -> Dataset:
+def load(data_dir: Path, now: datetime | None = None, rollups: "rollup.RollupStore | None" = None) -> Dataset:
+    """Build the dataset from day rollups. Pass the same RollupStore on every refresh so finished
+    days are processed once and only the newest day is recomputed."""
     meta = store.read_meta(data_dir)
     is_demo = bool(meta.get("synthetic"))
-    snap = store.load_snapshots(data_dir)
     log = store.load_scrape_log(data_dir)
 
     # Demo data is frozen in time, so "now" is the end of the generated range.
@@ -78,33 +80,40 @@ def load(data_dir: Path, now: datetime | None = None) -> Dataset:
     if as_of.tzinfo is None:
         as_of = as_of.tz_localize("UTC")
 
-    spans = events.observation_spans(snap)
-    local = _local(spans["start"])
-    spans["local_date"] = local.dt.tz_localize(None).dt.normalize()
-    spans["local_hour"] = local.dt.hour.astype("int8")
-    for col in ("station_id", "row_status"):
-        spans[col] = spans[col].astype("category")
+    if rollups is None:
+        rollups = rollup.RollupStore(data_dir, building_map())
+    r = rollups.refresh()
+    status = r["status"].sort_values(["station_id", "scrape_ts"], kind="stable", ignore_index=True)
+    for col in ("section", "station_id", "description", "row_status", "status_codes", "printer_text"):
+        status[col] = status[col].astype(str)
 
-    latest = snap.groupby("station_id", sort=False, observed=True).tail(1).reset_index(drop=True)
-    latest = latest.astype({c: str for c in latest.columns if isinstance(latest[c].dtype, pd.CategoricalDtype)})
-    points = consumables.change_points(snap)
+    latest = status.groupby("station_id", sort=False).tail(1).reset_index(drop=True).drop(columns="brk")
+    points = r["cons"].sort_values(["station_id", "component", "scrape_ts"], kind="stable", ignore_index=True)
     cons, repl = consumables.usage(points)
     levels = consumables.current_levels(points)
 
-    ds = Dataset(
+    stations = station_table(status)
+    ref = stations.set_index("station_id")
+    hourly = r["hourly"].copy()
+    hourly["station_id"] = hourly["station_id"].astype(str)
+    hourly["local_date"] = _local(hourly["hour"]).dt.tz_localize(None).dt.normalize()
+    hourly["section"] = hourly["station_id"].map(ref["section"])
+    hourly["building"] = hourly["station_id"].map(ref["building"])
+
+    return Dataset(
         data_dir=data_dir, meta=meta, is_demo=is_demo, as_of=as_of,
-        stations=station_table(snap), latest=latest, spans=spans,
-        sev_inc=events.severity_incidents(snap, as_of),
-        fault_inc=events.fault_incidents(snap, as_of),
-        tray_inc=events.tray_incidents(snap, as_of),
+        stations=stations, latest=latest, hourly=hourly, bhourly=r["bhourly"],
+        sev_inc=events.severity_incidents(status, as_of),
+        fault_inc=events.fault_incidents(status, as_of),
+        tray_inc=events.tray_incidents(status, as_of),
         cons=cons, repl=repl, levels=levels, log=log,
-        data_start=snap["scrape_ts"].min() if not snap.empty else None,
+        data_start=status["scrape_ts"].min() if not status.empty else None,
     )
-    ref = ds.stations.set_index("station_id")
-    sid = ds.spans["station_id"].astype(str)
-    for col in ("building", "section"):
-        ds.spans[col] = sid.map(ref[col]).astype("category")
-    return ds
+
+
+def building_map() -> dict[str, str]:
+    st = load_stations()
+    return dict(zip(st["station_id"], st["building"]))
 
 
 # --- window helpers ------------------------------------------------------------
@@ -121,6 +130,15 @@ def window(ds: Dataset, days: int | None) -> tuple[pd.Timestamp, pd.Timestamp]:
 def _resolved(inc: pd.DataFrame) -> pd.DataFrame:
     """Incidents with a known start and end - the only ones a mean duration can use."""
     return inc[(inc["status"] == "resolved") & ~inc["censored_start"].astype(bool)]
+
+
+def _hours(ds: Dataset, start, end, ids) -> pd.DataFrame:
+    """Station-hours overlapping [start, end); windows are resolved to whole hours."""
+    h = ds.hourly
+    m = (h["hour"] >= start.floor("h")) & (h["hour"] < end)
+    if ids is not None:
+        m &= h["station_id"].isin(ids)
+    return h[m]
 
 
 def _in(df: pd.DataFrame, col: str, start, end, ids) -> pd.DataFrame:
@@ -143,14 +161,14 @@ def _gate_mean(durations_s: pd.Series, note_unit="min") -> Metric:
 # --- availability, MTTR, MTBF ----------------------------------------------------
 
 def availability(ds: Dataset, start, end, ids=None) -> Metric:
-    sp = _in(ds.spans, "start", start, end, ids)
+    sp = _hours(ds, start, end, ids)
     observed = sp["covered_s"].sum()
     n_st = len(ids) if ids is not None else ds.stations.shape[0]
-    expected = max(1.0, (end - start).total_seconds() * max(n_st, 1))
+    expected = max(1.0, (end - start.floor("h")).total_seconds() * max(n_st, 1))
     coverage = min(1.0, observed / expected)   # the latest snapshot's minute can spill past `end`
     if observed == 0:
         return Metric(None, 0, False, "no observations in window")
-    up = sp.loc[sp["row_status"] != "red", "covered_s"].sum()
+    up = sp["up_s"].sum()
     ok = coverage >= config.MIN_COVERAGE_FOR_RATE
     return Metric(up / observed * 100, int(len(sp)), ok,
                   "" if ok else f"only {coverage:.0%} of the window observed",
@@ -158,9 +176,8 @@ def availability(ds: Dataset, start, end, ids=None) -> Metric:
 
 
 def availability_daily(ds: Dataset, start, end, ids=None, by: str | None = None) -> pd.DataFrame:
-    sp = _in(ds.spans, "start", start, end, ids)
+    sp = _hours(ds, start, end, ids)
     keys = ["local_date"] + ([by] if by else [])
-    sp = sp.assign(up_s=np.where(sp["row_status"] != "red", sp["covered_s"], 0.0))
     g = sp.groupby(keys, observed=True)[["up_s", "covered_s"]].sum().reset_index()
     g["availability"] = g["up_s"] / g["covered_s"] * 100
     g["observed_h"] = g["covered_s"] / 3600
@@ -169,16 +186,16 @@ def availability_daily(ds: Dataset, start, end, ids=None, by: str | None = None)
 
 def building_availability(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
     """Share of observed minutes in which at least one printer in the building could print."""
-    sp = _in(ds.spans, "start", start, end, ids)
-    if sp.empty:
+    b = ds.bhourly
+    m = (b["hour"] >= start.floor("h")) & (b["hour"] < end)
+    if ids is not None:
+        m &= b["building"].isin(set(ds.stations.loc[ds.stations["station_id"].isin(ids), "building"]))
+    b = b[m]
+    if b.empty:
         return pd.DataFrame(columns=["building", "stations", "any_up", "all_up"])
-    minute = sp["start"].dt.floor("min")
-    frame = pd.DataFrame({"building": sp["building"].values, "minute": minute.values,
-                          "up": (sp["row_status"] != "red").values})
-    per_min = frame.groupby(["building", "minute"], observed=True)["up"].agg(["any", "all"])
-    out = per_min.groupby(level=0).mean().reset_index()
-    out.columns = ["building", "any_up", "all_up"]
-    out[["any_up", "all_up"]] *= 100
+    g = b.groupby("building")[["minutes", "any_up_min", "all_up_min"]].sum()
+    out = pd.DataFrame({"any_up": g["any_up_min"] / g["minutes"] * 100,
+                        "all_up": g["all_up_min"] / g["minutes"] * 100}).reset_index()
     counts = ds.stations.groupby("building")["station_id"].nunique().rename("stations")
     return out.merge(counts, on="building", how="left").sort_values("any_up")
 
@@ -190,8 +207,7 @@ def mttr(ds: Dataset, severity: str, start, end, ids=None) -> Metric:
 
 
 def mtbf(ds: Dataset, start, end, ids=None) -> Metric:
-    sp = _in(ds.spans, "start", start, end, ids)
-    up_h = sp.loc[sp["row_status"] != "red", "covered_s"].sum() / 3600
+    up_h = _hours(ds, start, end, ids)["up_s"].sum() / 3600
     inc = _in(ds.sev_inc, "start", start, end, ids)
     failures = int((inc["severity"] == "red").sum())
     if up_h == 0:
@@ -207,10 +223,7 @@ def mtbf(ds: Dataset, start, end, ids=None) -> Metric:
 
 
 def station_scorecard(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
-    sp = _in(ds.spans, "start", start, end, ids)
-    sp = sp.assign(up_s=np.where(sp["row_status"] != "red", sp["covered_s"], 0.0))
-    g = sp.groupby("station_id", observed=True)[["up_s", "covered_s"]].sum()
-    g.index = g.index.astype(str)
+    g = _hours(ds, start, end, ids).groupby("station_id")[["up_s", "covered_s"]].sum()
     inc = _in(ds.sev_inc, "start", start, end, ids)
     red = inc[inc["severity"] == "red"]
     res = _resolved(red)
@@ -257,10 +270,7 @@ def tray_empty_time(ds: Dataset, start, end, ids=None) -> Metric:
 # --- consumables -------------------------------------------------------------------
 
 def observed_days(ds: Dataset, start, end, ids=None) -> pd.Series:
-    sp = _in(ds.spans, "start", start, end, ids)
-    days = sp.groupby("station_id", observed=True)["covered_s"].sum() / 86400
-    days.index = days.index.astype(str)
-    return days
+    return _hours(ds, start, end, ids).groupby("station_id")["covered_s"].sum() / 86400
 
 
 def usage_in(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
@@ -337,7 +347,7 @@ def data_quality(ds: Dataset, start, end, now: pd.Timestamp | None = None) -> Me
     last_ok = ds.log.loc[ds.log["ok"], "attempt_ts"].max()
     age_min = (now - last_ok).total_seconds() / 60 if pd.notna(last_ok) else np.inf
     freshness = float(np.clip(1 - (age_min - 2) / 58, 0, 1))
-    sp = _in(ds.spans, "start", start, end, None)
+    sp = _hours(ds, start, end, None)
     good = log.loc[log["ok"], "n_stations"]
     station_cov = float((good / good.max()).mean()) if len(good) and good.max() > 0 else 0.0
     cons = _in(ds.cons, "scrape_ts", start, end, None)

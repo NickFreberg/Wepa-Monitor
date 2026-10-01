@@ -23,6 +23,7 @@ class DataCache:
         self.sig = None
         self.checked = 0.0
         self.lock = threading.Lock()
+        self.rollups = None   # kept across refreshes: finished days are processed only once
 
     def _signature(self):
         files = []
@@ -40,7 +41,10 @@ class DataCache:
                 self.checked = now
                 sig = self._signature()
                 if self.ds is None or sig != self.sig:
-                    self.ds = M.load(self.data_dir)
+                    from .. import rollup
+                    if self.rollups is None:
+                        self.rollups = rollup.RollupStore(self.data_dir, M.building_map())
+                    self.ds = M.load(self.data_dir, rollups=self.rollups)
                     self.sig = sig
             return self.ds
 

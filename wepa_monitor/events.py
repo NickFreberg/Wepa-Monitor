@@ -40,7 +40,7 @@ def observation_spans(snap: pd.DataFrame) -> pd.DataFrame:
     }).reset_index(drop=True)
 
 
-def runs(station: pd.Series, ts: pd.Series, state, as_of: pd.Timestamp) -> pd.DataFrame:
+def runs(station: pd.Series, ts: pd.Series, state, as_of: pd.Timestamp, breaks=None) -> pd.DataFrame:
     """Run-length encode `state` per station. Inputs must be sorted by station, ts.
 
     Pure numpy on integer codes: millions of snapshots encode in well under a second.
@@ -53,8 +53,11 @@ def runs(station: pd.Series, ts: pd.Series, state, as_of: pd.Timestamp) -> pd.Da
         return pd.DataFrame(columns=["station_id", "state", "start", "last_seen", "n_obs",
                                      "censored_start", "end", "status", "duration_s"])
     new = np.ones(n, dtype=bool)
-    new[1:] = ((st_codes[1:] != st_codes[:-1]) | (sv_codes[1:] != sv_codes[:-1])
-               | ((tsv[1:] - tsv[:-1]) > _BRIDGE.to_timedelta64()))
+    if breaks is None:      # raw snapshots: a long gap between consecutive rows breaks a run
+        gap_break = (tsv[1:] - tsv[:-1]) > _BRIDGE.to_timedelta64()
+    else:                   # rollup rows: rows are sparse by design, so gaps come pre-flagged
+        gap_break = np.asarray(breaks, dtype=bool)[1:]
+    new[1:] = (st_codes[1:] != st_codes[:-1]) | (sv_codes[1:] != sv_codes[:-1]) | gap_break
     starts = np.flatnonzero(new)
     lasts = np.r_[starts[1:] - 1, n - 1]
     g = pd.DataFrame({
@@ -81,8 +84,12 @@ def runs(station: pd.Series, ts: pd.Series, state, as_of: pd.Timestamp) -> pd.Da
     return g
 
 
+def _breaks(snap: pd.DataFrame):
+    return snap["brk"].to_numpy(dtype=bool) if "brk" in snap else None
+
+
 def severity_incidents(snap: pd.DataFrame, as_of: pd.Timestamp) -> pd.DataFrame:
-    r = runs(snap["station_id"], snap["scrape_ts"], snap["row_status"], as_of)
+    r = runs(snap["station_id"], snap["scrape_ts"], snap["row_status"], as_of, _breaks(snap))
     r = r[r["state"].isin(["red", "yellow"])].rename(columns={"state": "severity"})
     return r.reset_index(drop=True)
 
@@ -95,7 +102,9 @@ def _flag_incidents(snap: pd.DataFrame, flags: dict[str, pd.Series], as_of: pd.T
         if len(stations) == 0:
             continue
         sub = snap["station_id"].isin(stations)
-        r = runs(snap.loc[sub, "station_id"], snap.loc[sub, "scrape_ts"], present[sub], as_of)
+        brk = _breaks(snap)
+        r = runs(snap.loc[sub, "station_id"], snap.loc[sub, "scrape_ts"], present[sub], as_of,
+                 None if brk is None else brk[sub.to_numpy()])
         r = r[r["state"].astype(bool)].drop(columns="state")
         r[kind] = name
         out.append(r)
@@ -116,7 +125,9 @@ def _membership(column: pd.Series, extract) -> tuple[np.ndarray, list[str], dict
 
 def fault_incidents(snap: pd.DataFrame, as_of: pd.Timestamp) -> pd.DataFrame:
     """One incident per (station, status code) episode."""
-    codes, items, lookup = _membership(snap["status_codes"], lambda u: [c for c in str(u).split(",") if c])
+    # Re-normalize so rows stored before a code was made canonical still group together.
+    codes, items, lookup = _membership(snap["status_codes"],
+                                       lambda u: [rules.normalize_code(c) for c in str(u).split(",") if c])
     flags = {c: pd.Series(lookup[c][codes], index=snap.index) for c in items}
     inc = _flag_incidents(snap, flags, as_of, "code")
     inc["label"] = inc["code"].map(rules.code_label)
