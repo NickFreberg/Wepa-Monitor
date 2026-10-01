@@ -5,6 +5,7 @@
     python -m wepa_monitor compact             convert finished days' CSV to parquet
     python -m wepa_monitor demo --days 120     generate synthetic history in data/demo
     python -m wepa_monitor dashboard [--demo]  run the web dashboard
+    python -m wepa_monitor kml [--demo]        building pins with current status, for Google Earth
 """
 from __future__ import annotations
 
@@ -41,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     demo = sub.add_parser("demo", help="generate synthetic demo history")
     demo.add_argument("--days", type=int, default=120)
     demo.add_argument("--seed", type=int, default=7)
+    kml = sub.add_parser("kml", help="export building pins with current status as KML (Google Earth)")
+    kml.add_argument("--demo", action="store_true", help="use the synthetic demo data")
+    kml.add_argument("-o", "--output", type=Path, default=Path("bsu-print-stations.kml"))
     dash = sub.add_parser("dashboard", help="run the dashboard")
     dash.add_argument("--demo", action="store_true", help="use the synthetic demo data")
     dash.add_argument("--host", default="127.0.0.1")
@@ -82,6 +86,14 @@ def main(argv: list[str] | None = None) -> int:
         t0 = time.time()
         meta = synth.generate(data_dir, days=args.days, seed=args.seed, progress=lambda m: None)
         print(f"done: {meta['rows']:,} snapshot rows in {time.time() - t0:.0f}s")
+        return 0
+
+    if args.cmd == "kml":
+        from . import geo, metrics
+        ds = metrics.load(args.data_dir or (config.DEMO_DATA_DIR if args.demo else config.LIVE_DATA_DIR))
+        title = f"BSU print stations{' (DEMO DATA)' if ds.is_demo else ''}"
+        args.output.write_text(geo.to_kml(geo.building_points(ds), title), encoding="utf-8")
+        print(f"wrote {args.output} - open it in Google Earth Pro (File > Open) or import it from Projects in Google Earth on the web")
         return 0
 
     if args.cmd == "dashboard":

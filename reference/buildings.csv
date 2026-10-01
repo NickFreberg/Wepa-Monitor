@@ -1,0 +1,22 @@
+building,short_name,lat,lon,campus,source,osm_ref,notes
+Boyden Hall,Boyden,41.987517,-70.974628,Main,OpenStreetMap,way/212208820,
+Crimson Hall,Crimson,41.986284,-70.965244,Main,OpenStreetMap,way/311754684,
+DMF Science & Math Center,DMF,41.988289,-70.970713,Main,OpenStreetMap,way/212208030,Dana Mohler-Faria Science and Mathematics Center
+DiNardo Hall,DiNardo,41.986987,-70.965116,Main,OpenStreetMap,way/212207511,
+East Campus Commons,ECC,41.986611,-70.964414,Main,OpenStreetMap,way/212207477,
+Great Hill Apartments,Great Hill Apts,41.987795,-70.961902,Main,OpenStreetMap,way/212207292;way/212207315;way/212207331,Mean of the three Great Hill Student Apartments footprints
+Harrington Hall,Harrington,41.986639,-70.974382,Main,OpenStreetMap,way/212208685,
+Hunt Hall,Hunt,41.988608,-70.974517,Main,OpenStreetMap,way/212208797,
+Maxwell Library,Maxwell,41.986968,-70.970692,Main,OpenStreetMap,way/212208058,
+Miles Hall,Miles,41.987302,-70.964811,Main,OpenStreetMap,way/212207509,
+Moakley Center,Moakley,41.988728,-70.965978,Main,OpenStreetMap,way/212207559,
+Pope Hall,Pope,41.988561,-70.972212,Main,OpenStreetMap,way/212208422,
+Rondileau Student Union,RSU,41.987514,-70.971959,Main,OpenStreetMap,way/212208464,
+Scott Hall,Scott,41.986664,-70.972356,Main,OpenStreetMap,way/212208440,
+Shea/Durgin,Shea/Durgin,41.986388,-70.961909,Main,OpenStreetMap,way/212207347,
+Stonehouse Hall,Stonehouse,41.986319,-70.963725,Main,OpenStreetMap,way/212207459,
+Tillinghast Hall,Tilly,41.987550,-70.973293,Main,OpenStreetMap,way/212208558,
+Tinsley Center,Tinsley,41.988990,-70.961552,Main,OpenStreetMap,way/212207252,
+Weygand Hall,Weygand,41.985238,-70.964402,Main,OpenStreetMap,way/641658430,
+Woodward Hall,Woodward,41.986176,-70.973549,Main,OpenStreetMap,way/212208592,
+New Bedford Flight School,Flight School,41.676573,-70.959290,New Bedford,OpenStreetMap,way/32867099,Approximate: New Bedford Regional Airport centroid

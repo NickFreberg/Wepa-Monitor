@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from dash import html
 
-from .. import config, insights, metrics as M, ops, rules
+from .. import config, geo, insights, metrics as M, ops, rules
 from . import charts
 from .components import (chart_card, data_table, fmt_hours, fmt_minutes, fmt_num, level_bar, metric_tile,
                          status_pill, tile)
@@ -61,7 +61,7 @@ def _station_card(row: pd.Series, levels: dict) -> html.Div:
     ])
 
 
-def render_ops(ds: M.Dataset, theme: str, sections, areas):
+def render_ops(ds: M.Dataset, theme: str, sections, areas, basemap: str = "street"):
     if ds.empty:
         return _empty("No snapshots yet. Run `python -m wepa_monitor collect` (live) or "
                       "`python -m wepa_monitor demo` (synthetic) and reload.")
@@ -126,11 +126,28 @@ def render_ops(ds: M.Dataset, theme: str, sections, areas):
         ("area", "Area", None),
     ], empty="No parts expected to need replacement in the next 7 days.")
 
+    points = geo.building_points(ds, ids)
+    off = points[(points["campus"] != "Main") & points["lat"].notna()] if len(points) else points
+    on_map = points.drop(off.index) if len(points) else points
+    off_note = ""
+    if len(off):
+        off_note = "Not shown (off campus): " + "; ".join(
+            f"{r['building']} - {geo.STATE_LABEL.get(r['state'], r['state'])}" for _, r in off.iterrows()) + ". "
+    map_card = chart_card(
+        "Campus map", "Each building shows its worst station. Marker size = number of printers. "
+        "Hover for every station's status.",
+        charts.campus_map(theme, on_map, basemap) if len(on_map) else None,
+        body=None if len(on_map) else html.Div("No mapped buildings match these filters.", className="empty"),
+        wide=True,
+        note=off_note + "Building locations: OpenStreetMap. Aerial imagery: Esri World Imagery. "
+             "Download the KML to open the same pins in Google Earth.")
+
     return [
         tiles,
         html.Div(className="grid grid--ops", children=[
             chart_card("Needs attention", "Ranked by severity, whether the building has a backup printer, "
                        "and how long it has been open.", body=queue_table, wide=True),
+            map_card,
             chart_card("Parts due in the next 7 days", "From each part's burn rate over the last "
                        f"{config.BURN_RATE_LOOKBACK_DAYS} days.", body=forecast_table, wide=True),
         ]),

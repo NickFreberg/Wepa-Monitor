@@ -12,12 +12,22 @@ import pandas as pd
 from . import config
 
 
-def load_stations() -> pd.DataFrame:
-    path = config.REFERENCE_DIR / "stations.csv"
-    df = pd.read_csv(path, dtype=str).fillna("")
-    for col in ("lat", "lon"):
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+def load_buildings() -> pd.DataFrame:
+    """Building coordinates (OpenStreetMap footprint centroids; see reference/buildings.csv)."""
+    path = config.REFERENCE_DIR / "buildings.csv"
+    if not path.exists():
+        return pd.DataFrame(columns=["building", "short_name", "lat", "lon", "campus", "source", "osm_ref", "notes"])
+    text = {c: str for c in ("building", "short_name", "campus", "source", "osm_ref", "notes")}
+    df = pd.read_csv(path, dtype=text)
+    df = df.fillna({"campus": "", "source": "", "osm_ref": "", "notes": ""})
+    df["short_name"] = df["short_name"].fillna(df["building"])
     return df
+
+
+def load_stations() -> pd.DataFrame:
+    df = pd.read_csv(config.REFERENCE_DIR / "stations.csv", dtype=str).fillna("")
+    geo = load_buildings()[["building", "short_name", "lat", "lon", "campus"]]
+    return df.merge(geo, on="building", how="left")
 
 
 def station_table(snap: pd.DataFrame) -> pd.DataFrame:

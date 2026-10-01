@@ -14,6 +14,8 @@ Satellite Campuses (1).
 |---|---|---|
 | ![Operations](docs/screenshots/operations.png) | ![Management](docs/screenshots/management.png) | ![Executive](docs/screenshots/executive.png) |
 
+![Campus map, aerial view](docs/screenshots/campus-map-aerial.png)
+
 *Screenshots use the synthetic demo data set (see [Demo mode](#demo-mode)).*
 
 ---
@@ -34,14 +36,15 @@ python -m wepa_monitor dashboard        # reads data/live, reloads as new snapsh
 ```
 
 Other commands: `scrape` (one snapshot, suited to cron or a cloud timer), `compact` (convert finished
-days to Parquet), and `--archive-html` on `scrape`/`collect` to keep gzipped raw pages so they can be
+days to Parquet), `kml` (building pins for Google Earth), and `--archive-html` on `scrape`/`collect` to keep gzipped raw pages so they can be
 re-parsed later. Run the tests with `pytest`.
 
 ## The three views
 
 - **Operations** — what needs attention now. Live counts (printing / down / warning), a **ranked work
-  queue**, parts due in the next 7 days, and a station board grouped by area showing every toner, drum,
-  belt and fuser level. Refreshes every minute.
+  queue**, a **campus map** (street or aerial, exportable to Google Earth), parts due in the next 7 days,
+  and a station board grouped by area showing every toner, drum, belt and fuser level. Refreshes every
+  minute.
 - **Management** — any period (7 / 30 / 90 days / all), filterable by section and area. Availability,
   MTTR (red and yellow), MTBF, paper refill time, tray-empty time, fault types by frequency, location and
   hour, burn rate per day/week/month/year for each consumable, cumulative usage, the replacement log,
@@ -151,13 +154,33 @@ The collector needs to run continuously, once a minute. Options:
 
 Expect roughly 45k rows per day: a few MB of CSV for the current day, and under 0.5 MB per finished day as Parquet. `--archive-html` adds about 7 MB per day.
 
-## Station reference data
+## Station reference data and the map
 
-[`reference/stations.csv`](reference/stations.csv) maps each station ID to a **building**, an
-**area** (Upper Great Hill, University Park, West Side, Academic, …) and optional **lat/lon**. Stations
-that appear on the page but not in the file still work; they show under "Unassigned". Rows marked
-"confirm" are best guesses from the page's descriptions. Note that Wepa reuses station IDs: `00518` was
-Great Hill Apartments in the v1 script and is now Maxwell Basement.
+- [`reference/stations.csv`](reference/stations.csv) maps each station ID to a **building** and an
+  **area** (Upper Great Hill, University Park, West Side, Academic, …). Stations that appear on the page
+  but not in the file still work; they show under "Unassigned". Rows marked "confirm" are best guesses
+  from the page's descriptions. Wepa reuses station IDs: `00518` was Great Hill Apartments in the v1
+  script and is now Maxwell Basement.
+- [`reference/buildings.csv`](reference/buildings.csv) gives each building's **coordinates** (the
+  centroid of its OpenStreetMap footprint, with the OSM way ID for traceability), a **short name** for map
+  labels (ECC, DMF, RSU, …), and its campus. New Bedford Flight School uses the New Bedford Regional
+  Airport centroid and is marked approximate.
+
+The **campus map** on the Operations page shows each building at its worst station's status
+(down / warning / no data / printing), sized by its number of printers. Hovering shows every station in
+the building. Switch between a street basemap (CARTO / OpenStreetMap) and **aerial imagery** (Esri World
+Imagery); neither needs an API key.
+
+**Google Earth:** the *Open in Google Earth (.kml)* button on the Operations page downloads the current
+pins, colored by status, with each station's detail in the pin balloon. The same file is available
+from the command line:
+
+```bash
+python -m wepa_monitor kml -o bsu-print-stations.kml          # add --demo for the demo data
+```
+
+Open it in Google Earth Pro (*File → Open*), or import it from the *Projects* panel in Google Earth on
+the web.
 
 ## Project layout
 
@@ -171,10 +194,12 @@ wepa_monitor/
   consumables.py   replacement-aware usage
   metrics.py       KPI/KRI definitions with evidence and gating
   ops.py           current status and the ranked work queue
+  geo.py           building-level map points and KML export for Google Earth
   insights.py      month / YTD scorecards and generated observations
   synth.py         demo-data simulator
   dashboard/       Dash app, Plotly charts, stylesheet
-reference/stations.csv   building / area / coordinates per station
+reference/stations.csv   station → building / area
+reference/buildings.csv  building coordinates (OpenStreetMap), short names, campus
 tests/                   parser, replacement rule and incident logic (fixture: a real page capture)
 legacy/                  the original v1 terminal script
 ```
@@ -183,8 +208,8 @@ legacy/                  the original v1 terminal script
 
 - **Route planner.** The work-queue score (severity × no-backup multiplier + age) is designed to feed a
   route optimizer (OR-Tools) over walking times between buildings, starting from a ResNet workstation,
-  shown on a map with a pick list ("2 reams, 1 black toner"). It needs building coordinates and
-  workstation locations in `reference/`.
+  drawn on the campus map with a pick list ("2 reams, 1 black toner"). Building coordinates are in place;
+  it still needs the ResNet workstation locations.
 - Confirm the status codes not yet seen on the live page, and the yellow-alert behavior.
 - Incremental metric updates for long live histories (currently a full reload each minute when new data
   arrives).

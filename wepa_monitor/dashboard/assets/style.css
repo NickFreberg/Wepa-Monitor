@@ -94,6 +94,11 @@ h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
 .chip:has(.chip__input:checked) { background: var(--ink); border-color: var(--ink); color: var(--page); }
 .chip:has(.chip__input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+.btn { border: 1px solid var(--hairline); background: var(--surface); color: var(--ink); border-radius: 8px;
+  padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.btn:hover { background: var(--surface-2); border-color: var(--muted); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ---------- stat tiles ---------- */
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);

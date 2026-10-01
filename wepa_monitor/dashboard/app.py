@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dash import Dash, Input, Output, State, dcc, html
 
-from .. import config, metrics as M
+from .. import config, geo, metrics as M
 from . import pages
 from .charts import SECTION_ORDER
 
@@ -142,10 +142,17 @@ def create_app(data_dir: Path) -> Dash:
         ds = cache.get()
         path = path if path in ROUTES else "/"
         if path == "/":
+            extra = [html.Div([html.Span("Map", className="filters__label"),
+                               _chips("f-basemap", [{"label": "Street", "value": "street"},
+                                                    {"label": "Aerial", "value": "satellite"}],
+                                      "street", multi=False)], className="filters__group"),
+                     html.Button("Open in Google Earth (.kml)", id="kml-btn", className="btn",
+                                 title="Download the current building pins as KML for Google Earth"),
+                     dcc.Download(id="kml-dl")]
             return [html.Div(className="page__head", children=[
                         html.H1("Operations"),
                         html.P("What needs attention right now. Refreshes every minute.", className="lede")]),
-                    _filters(ds), dcc.Loading(html.Div(id="ops-content"), type="dot", delay_show=400)]
+                    _filters(ds, extra), dcc.Loading(html.Div(id="ops-content"), type="dot", delay_show=400)]
         if path == "/management":
             extra = [
                 html.Div([html.Span("Period", className="filters__label"),
@@ -171,10 +178,20 @@ def create_app(data_dir: Path) -> Dash:
                 _filters(ds, extra), dcc.Loading(html.Div(id="exec-content"), type="dot", delay_show=400)]
 
     @app.callback(Output("ops-content", "children"),
-                  Input("f-section", "value"), Input("f-area", "value"), Input("theme", "data"),
-                  Input("tick", "n_intervals"))
-    def ops_content(sections, areas, theme, _):
-        return pages.render_ops(cache.get(), theme or "light", sections, areas)
+                  Input("f-section", "value"), Input("f-area", "value"), Input("f-basemap", "value"),
+                  Input("theme", "data"), Input("tick", "n_intervals"))
+    def ops_content(sections, areas, basemap, theme, _):
+        return pages.render_ops(cache.get(), theme or "light", sections, areas, basemap or "street")
+
+    @app.callback(Output("kml-dl", "data"), Input("kml-btn", "n_clicks"),
+                  State("f-section", "value"), State("f-area", "value"), prevent_initial_call=True)
+    def kml(_, sections, areas):
+        ds = cache.get()
+        ids = ds.ids(section=sections or None, area=areas or None) if (sections or areas) else None
+        stamp = ds.as_of.tz_convert(config.LOCAL_TZ)
+        title = f"BSU print stations{' (DEMO DATA)' if ds.is_demo else ''} - {stamp:%Y-%m-%d %H:%M}"
+        return dict(content=geo.to_kml(geo.building_points(ds, ids), title),
+                    filename=f"bsu-print-stations-{stamp:%Y%m%d-%H%M}.kml", type="application/vnd.google-earth.kml+xml")
 
     @app.callback(Output("mgmt-content", "children"),
                   Input("f-section", "value"), Input("f-area", "value"), Input("f-period", "value"),

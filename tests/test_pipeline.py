@@ -136,3 +136,27 @@ def test_unobserved_gap_not_counted_as_covered_time():
     b = _snap(["green"], start="2026-09-01 02:00")
     spans = events.observation_spans(pd.concat([a, b], ignore_index=True))
     assert spans["covered_s"].tolist() == [60, 60, 60]
+
+
+# --- geography -------------------------------------------------------------------------
+
+def test_every_station_has_building_coordinates():
+    from wepa_monitor.reference import load_stations
+    st = load_stations()
+    assert st["lat"].notna().all() and st["lon"].notna().all()
+    main = st[st["campus"] == "Main"]
+    # Everything on the main campus sits inside BSU's bounding box.
+    assert main["lat"].between(41.983, 41.993).all() and main["lon"].between(-70.976, -70.956).all()
+
+
+def test_kml_is_valid_and_escaped():
+    import xml.dom.minidom
+    from wepa_monitor import geo
+    pts = pd.DataFrame([{"building": "DMF Science & Math Center", "short_name": "DMF", "lat": 41.98829,
+                         "lon": -70.97071, "campus": "Main", "area": "Academic", "state": "red", "stations": 2,
+                         "down": 1, "lines": ["DMF Math & Science (#02065): Down - Printer down"]}])
+    doc = xml.dom.minidom.parseString(geo.to_kml(pts, "test"))
+    marks = doc.getElementsByTagName("Placemark")
+    assert len(marks) == 1
+    assert marks[0].getElementsByTagName("name")[0].firstChild.data == "DMF Science & Math Center - Down"
+    assert "-70.970710,41.988290,0" in marks[0].toxml()

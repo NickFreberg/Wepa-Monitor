@@ -166,3 +166,104 @@ def monthly_stacked(theme: str, frame: pd.DataFrame, components: list[str]) -> g
     fig.update_layout(**layout(theme, 260, barmode="stack", hovermode="x unified", barcornerradius=0,
                                yaxis=dict(title=dict(text="parts used"))))
     return fig
+
+
+ESRI_IMAGERY = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+MAP_STATES = [("red", "critical", "Down"), ("yellow", "warning", "Warning"),
+              ("stale", "serious", "No data"), ("green", "good", "Printing")]
+
+
+def _label_positions(pts: pd.DataFrame, zoom: float = 15.6) -> list[str]:
+    """Greedy label placement: try four positions around each marker and take the first whose
+    estimated text box clears every marker and every label already placed."""
+    deg_lon = 360 / (512 * 2 ** zoom)                     # degrees per pixel (MapLibre: 512 px tiles)
+    deg_lat = deg_lon * np.cos(np.radians(float(pts["lat"].mean()) if len(pts) else 42.0))
+    lat, lon = pts["lat"].to_numpy(), pts["lon"].to_numpy()
+
+    def box(i, pos):
+        name = str(pts["short_name"].iloc[i])
+        lines = 1 if len(name) <= 16 else 2                # MapLibre wraps long labels
+        w = min(len(name), 16) * 6.6 * deg_lon
+        h = (lines * 16 + 4) * deg_lat                    # generous: MapLibre adds collision padding
+        gap = 7 * deg_lon
+        x0 = lon[i] + gap if "right" in pos else lon[i] - gap - w
+        # MapLibre's "top" anchor still lets the text hang ~10 px below the marker centre.
+        overhang = 10 * deg_lat
+        y0 = lat[i] - overhang if "top" in pos else lat[i] - h + overhang
+        return x0 - 3 * deg_lon, y0 - 3 * deg_lat, x0 + w + 3 * deg_lon, y0 + h + 3 * deg_lat
+
+    def overlaps(a, b):
+        return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+    r = 7
+    markers = [(lon[i] - r * deg_lon, lat[i] - r * deg_lat, lon[i] + r * deg_lon, lat[i] + r * deg_lat)
+               for i in range(len(pts))]
+    def area(a, b):
+        return max(0.0, min(a[2], b[2]) - max(a[0], b[0])) * max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+
+    placed, out = [], [""] * len(pts)
+    for i in np.argsort(-lat):
+        # First position with no overlap; failing that, the one with the least overlapped area.
+        best, best_cost = "top right", None
+        for pos in ("top right", "bottom right", "top left", "bottom left"):
+            b = box(i, pos)
+            cost = sum(area(b, m) for j, m in enumerate(markers) if j != i) + sum(area(b, q) for q in placed)
+            if best_cost is None or cost < best_cost:
+                best, best_cost = pos, cost
+            if cost == 0:
+                break
+        placed.append(box(i, best))
+        out[i] = best
+    return out
+
+
+def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.Figure:
+    """Buildings as status-colored markers on a street map or satellite imagery.
+
+    Status is never color alone: each state is its own legend entry, and the hover
+    names the state of every station in the building.
+    """
+    t = TOKENS[theme]
+    satellite = basemap == "satellite"
+    pts = points.dropna(subset=["lat", "lon"])
+    pts = pts.assign(size=12 + 5 * (pts["stations"].clip(upper=3) - 1),
+                     textpos=_label_positions(pts),
+                     hover=pts.apply(lambda p: f"<b>{p['building']}</b> · {p['area']}<br>" +
+                                     "<br>".join(p["lines"]), axis=1))
+    fig = go.Figure()
+    ring = "#ffffff" if satellite or theme == "light" else t["surface"]
+    fig.add_trace(go.Scattermap(lat=pts["lat"], lon=pts["lon"], mode="markers", hoverinfo="skip",
+                                marker=dict(size=pts["size"] + 5, color=ring, opacity=1), showlegend=False))
+    for state, tone, label in MAP_STATES:
+        group = pts[pts["state"] == state]
+        # Scattermap takes one label position per trace, so split by position under one legend entry.
+        for i, (pos, d) in enumerate(group.groupby("textpos", sort=False)):
+            fig.add_trace(go.Scattermap(
+                lat=d["lat"], lon=d["lon"], mode="markers+text", name=label,
+                legendgroup=state, showlegend=i == 0,
+                marker=dict(size=d["size"], color=STATUS[tone], opacity=1),
+                text=d["short_name"], textposition=pos,
+                textfont=dict(size=12 if satellite else 11,
+                              family="Open Sans Bold" if satellite else "Open Sans Regular",
+                              color="#ffffff" if satellite or theme == "dark" else t["ink"]),
+                customdata=d["hover"], hovertemplate="%{customdata}<extra></extra>"))
+    main = pts[pts["campus"] == "Main"] if (pts["campus"] == "Main").any() else pts
+    center = dict(lat=float(main["lat"].mean()), lon=float(main["lon"].mean())) if len(main) else \
+        dict(lat=41.9873, lon=-70.9680)
+    map_layout = dict(center=center, zoom=15.6)
+    if satellite:
+        # Imagery, then a light dark wash so white labels stay legible over bright rooftops.
+        wash = {"type": "Feature", "properties": {}, "geometry": {"type": "Polygon", "coordinates": [
+            [[-180, -85], [180, -85], [180, 85], [-180, 85], [-180, -85]]]}}
+        map_layout.update(style="white-bg", layers=[
+            dict(below="traces", sourcetype="raster", source=[ESRI_IMAGERY],
+                 sourceattribution="Imagery © Esri, Maxar, Earthstar Geographics"),
+            dict(below="traces", sourcetype="geojson", source=wash, type="fill", color="#000000", opacity=0.28),
+        ])
+    else:
+        map_layout.update(style="carto-darkmatter" if theme == "dark" else "carto-positron")
+    fig.update_layout(**layout(theme, 480, margin=dict(l=0, r=0, t=0, b=0), map=map_layout,
+                               legend=dict(x=0.01, y=0.99, yanchor="top", bgcolor=t["surface"],
+                                           bordercolor=t["border"], borderwidth=1,
+                                           font=dict(color=t["ink"]))))
+    return fig
