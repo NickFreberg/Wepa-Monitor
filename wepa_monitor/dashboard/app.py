@@ -67,8 +67,10 @@ def _filters(ds: M.Dataset, extra=None):
     return html.Div((extra or []) + groups, className="filters", role="group", **{"aria-label": "Filters"})
 
 
-def create_app(data_dir: Path) -> Dash:
+def create_app(data_dir: Path, preload: bool = False) -> Dash:
     cache = DataCache(data_dir)
+    if preload:
+        cache.get()   # load and process the data now, so the first page view is instant
     app = Dash(__name__, title="ResNet Print Ops", suppress_callback_exceptions=True,
                update_title=None, assets_folder=str(Path(__file__).parent / "assets"))
 

@@ -53,12 +53,17 @@ off; the gap simply shows as unobserved time.
 The Operations page and map are useful immediately. The Management and Executive pages fill in as
 history builds: about a day for meaningful numbers, a few days for trends.
 
-**Explore with demo data**: 120 days of realistic synthetic history (about 90 seconds to generate):
+**Explore with demo data**: 120 days of realistic synthetic history. These are two separate steps:
+`demo` only *generates* the data (about 90 seconds, then it exits); `dashboard --demo` is what serves
+the web page.
 
 ```bash
-python -m wepa_monitor demo
-python -m wepa_monitor dashboard --demo
+python -m wepa_monitor demo              # step 1: generate the data (one time)
+python -m wepa_monitor dashboard --demo  # step 2: start the dashboard; your browser opens when it's ready
 ```
+
+If the browser doesn't open by itself, go to http://127.0.0.1:8050. Keep the Terminal window open
+while you use the dashboard; `Ctrl+C` stops it.
 
 **Each time you come back**, open Terminal and run the three lines under "Use it with live data".
 

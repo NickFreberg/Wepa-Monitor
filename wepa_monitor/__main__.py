@@ -79,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     dash.add_argument("--host", default="127.0.0.1")
     dash.add_argument("--port", type=int, default=8050)
     dash.add_argument("--debug", action="store_true")
+    dash.add_argument("--no-browser", action="store_true", help="don't open a browser tab")
     args = parser.parse_args(argv)
 
     if args.cmd == "scrape":
@@ -107,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.no_browser:
             threading.Timer(1.5, webbrowser.open, args=(url,)).start()
         try:
-            create_app(data_dir).run(host="127.0.0.1", port=args.port)
+            create_app(data_dir, preload=True).run(host="127.0.0.1", port=args.port)
         except KeyboardInterrupt:
             pass
         print("stopped")
@@ -126,6 +127,8 @@ def main(argv: list[str] | None = None) -> int:
         t0 = time.time()
         meta = synth.generate(data_dir, days=args.days, seed=args.seed, progress=lambda m: None)
         print(f"done: {meta['rows']:,} snapshot rows in {time.time() - t0:.0f}s")
+        print("\nNext, start the dashboard (it opens in your browser):\n"
+              "    python -m wepa_monitor dashboard --demo")
         return 0
 
     if args.cmd == "kml":
@@ -139,8 +142,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "dashboard":
         from .dashboard.app import create_app
         data_dir = args.data_dir or (config.DEMO_DATA_DIR if args.demo else config.LIVE_DATA_DIR)
-        app = create_app(data_dir)
-        app.run(host=args.host, port=args.port, debug=args.debug)
+        if not (data_dir / "snapshots").exists():
+            hint = "python -m wepa_monitor demo" if args.demo else "python -m wepa_monitor start"
+            print(f"No data in {data_dir} yet. Run `{hint}` first.")
+            return 1
+        print(f"Loading data from {data_dir} (this can take ~15 s for the 120-day demo) ...", flush=True)
+        app = create_app(data_dir, preload=True)
+        url = f"http://127.0.0.1:{args.port}" if args.host in ("127.0.0.1", "0.0.0.0", "localhost") \
+            else f"http://{args.host}:{args.port}"
+        print(f"\nDashboard ready: open {url} in your browser. Press Ctrl+C to stop.\n", flush=True)
+        logging.getLogger("werkzeug").setLevel(logging.WARNING)
+        if not args.no_browser and not args.debug:
+            threading.Timer(1.0, webbrowser.open, args=(url,)).start()
+        try:
+            app.run(host=args.host, port=args.port, debug=args.debug)
+        except KeyboardInterrupt:
+            pass
         return 0
     return 1
 
