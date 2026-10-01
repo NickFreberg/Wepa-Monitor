@@ -20,24 +20,70 @@ Satellite Campuses (1).
 
 ---
 
-## Quick start
+## Quick start (macOS)
+
+You need **Python 3.11 or newer**. Check with `python3 --version` in Terminal. If it's older or
+missing, install the latest Python from [python.org/downloads](https://www.python.org/downloads/) or
+with Homebrew (`brew install python`).
+
+**One-time setup** (in Terminal):
 
 ```bash
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+git clone https://github.com/NickFreberg/Wepa-Monitor.git
+cd Wepa-Monitor
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
-# Option A — demo: 120 days of realistic synthetic history (~90 s), then open http://127.0.0.1:8050
-python -m wepa_monitor demo --days 120
-python -m wepa_monitor dashboard --demo
-
-# Option B — live: start collecting real snapshots, and run the dashboard alongside
-python -m wepa_monitor collect          # leave running; one snapshot per minute
-python -m wepa_monitor dashboard        # reads data/live, reloads as new snapshots land
 ```
 
-Other commands: `scrape` (one snapshot, suited to cron or a cloud timer), `compact` (convert finished
-days to Parquet), `kml` (building pins for Google Earth), and `--archive-html` on `scrape`/`collect` to keep gzipped raw pages so they can be
-re-parsed later. Run the tests with `pytest`.
+**Use it with live data**: one command collects a snapshot every minute *and* runs the dashboard, then
+opens it in your browser at http://127.0.0.1:8050:
+
+```bash
+cd Wepa-Monitor
+source .venv/bin/activate
+caffeinate -i python -m wepa_monitor start
+```
+
+Leave that Terminal window open; press `Ctrl+C` to stop. `caffeinate -i` (built into macOS) stops the
+Mac from sleeping while it runs. With the lid closed a Mac still sleeps unless it's plugged in with an
+external display. Data is saved in `data/live/`, so stopping and restarting picks up where it left
+off; the gap simply shows as unobserved time.
+
+The Operations page and map are useful immediately. The Management and Executive pages fill in as
+history builds: about a day for meaningful numbers, a few days for trends.
+
+**Explore with demo data**: 120 days of realistic synthetic history (about 90 seconds to generate):
+
+```bash
+python -m wepa_monitor demo
+python -m wepa_monitor dashboard --demo
+```
+
+**Each time you come back**, open Terminal and run the three lines under "Use it with live data".
+
+<details>
+<summary>Windows</summary>
+
+Use `python` instead of `python3`, activate with `.venv\Scripts\activate`, and drop `caffeinate -i`
+(use *Settings → System → Power* to keep the PC awake).
+</details>
+
+<details>
+<summary>All commands</summary>
+
+| Command | What it does |
+|---|---|
+| `start` | Collect every minute and run the dashboard in one window; opens your browser |
+| `collect` | Collect only, every minute (add `--archive-html` to keep raw pages for re-parsing) |
+| `dashboard [--demo]` | Dashboard only, on live or demo data |
+| `scrape` | One snapshot, for cron or a cloud timer |
+| `demo [--days N]` | Generate synthetic history into `data/demo/` |
+| `kml [--demo]` | Building pins with current status, for Google Earth |
+| `compact` | Convert finished days' CSV to Parquet (`collect`/`start` do this daily) |
+
+Run the tests with `pytest`.
+</details>
 
 ## The three views
 
