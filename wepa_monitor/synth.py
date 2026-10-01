@@ -8,8 +8,8 @@ The model is deliberately simple and explainable:
 
 * Pages printed per minute ~ Poisson(rate), where rate = station baseline x
   hour-of-day profile x weekday factor x academic-calendar factor.
-* Every page drains toner K, drums, belt and fuser; colour pages also drain
-  toner C/M/Y. Yields are typical of a mid-range colour laser.
+* Every page drains toner K, drums, belt and fuser; color pages also drain
+  toner C/M/Y. Yields are typical of a mid-range color laser.
 * Paper drains Tray1 first, then Tray2. One empty tray is only a printer-text
   warning (as seen on the live page); all trays empty is a red PAPER OUT.
 * Staff refill trays on rounds and respond to red alerts with a delay that
@@ -35,7 +35,7 @@ FIXTURE = config.ROOT / "tests" / "fixtures" / "status_page_2026-10-01.html"
 
 # Pages per page-point: how many pages one percentage point of each part lasts.
 PAGES_PER_PT = {
-    "toner_k": 120, "toner_c": 85, "toner_m": 85, "toner_y": 85,   # per colour page for CMY
+    "toner_k": 120, "toner_c": 85, "toner_m": 85, "toner_y": 85,   # per color page for CMY
     "drum_k": 450, "drum_c": 420, "drum_m": 420, "drum_y": 420,
     "belt": 600, "fuser": 800,
 }

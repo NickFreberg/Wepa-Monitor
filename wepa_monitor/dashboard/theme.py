@@ -1,8 +1,8 @@
-"""Colour tokens and Plotly styling, shared by every chart.
+"""Color tokens and Plotly styling, shared by every chart.
 
 Values follow a validated data-viz palette: categorical slots in a fixed
 order, a reserved status palette (never reused for series), and CMYK ink
-colours for toner/drum series (validated for colour-vision deficiency; the
+colors for toner/drum series (validated for color-vision deficiency; the
 neutral K ink is the one intentional exception, so those charts always carry
 direct labels).
 """
@@ -39,7 +39,7 @@ STATE_STYLE = {
 
 
 def ink(theme: str, component: str) -> str:
-    """Colour for a consumable series: CMYK inks for toner/drums, categorical for belt/fuser."""
+    """Color for a consumable series: CMYK inks for toner/drums, categorical for belt/fuser."""
     t = TOKENS[theme]
     suffix = component.rsplit("_", 1)[-1]
     if component.startswith(("toner", "drum")):

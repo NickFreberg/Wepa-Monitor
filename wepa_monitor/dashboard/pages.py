@@ -380,7 +380,7 @@ def render_executive(ds: M.Dataset, theme: str, month_idx, sections, areas):
                              html.Td(_delta(c, p, hib, pts) if prev else "—", className="num"),
                              html.Td(fmt(y), className="num")]))
     for label, comps in (("Black toner used (parts)", ["toner_k"]),
-                         ("Colour toner used (parts)", ["toner_c", "toner_m", "toner_y"]),
+                         ("Color toner used (parts)", ["toner_c", "toner_m", "toner_y"]),
                          ("Drums used (parts)", ["drum_k", "drum_c", "drum_m", "drum_y"]),
                          ("Belts + fusers used (parts)", ["belt", "fuser"])):
         c, p, y = units(sc_cur, comps), units(sc_prev, comps), units(sc_ytd, comps)
@@ -415,9 +415,9 @@ def render_executive(ds: M.Dataset, theme: str, month_idx, sections, areas):
                        "behind it is sufficient.", wide=True,
                        body=html.Ul([html.Li(o) for o in obs], className="observations") if obs
                        else _empty("Not enough data for observations yet.")),
-            chart_card("Availability by month", "Grey bars are partial months.",
+            chart_card("Availability by month", "Gray bars are partial months.",
                        charts.monthly_bars(theme, labels, avail_vals, "%", partial)),
-            chart_card("Toner used by month", "Parts' worth of toner, stacked by colour.",
+            chart_card("Toner used by month", "Parts' worth of toner, stacked by color.",
                        charts.monthly_stacked(theme, units_frame, ["toner_k", "toner_c", "toner_m", "toner_y"]),
                        table=data_table(units_frame, [("month", "Month", None)] +
                                         [(c, config.COMPONENT_LABELS[c], lambda v: fmt_num(v, 2))

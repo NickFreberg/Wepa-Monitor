@@ -3,7 +3,7 @@
 Every function takes a window [start, end) and an optional set of station IDs,
 so the same definitions power the fleet, building and station views. Results
 carry their evidence (n, observed hours, coverage) and an `ok` flag; the
-dashboard greys out anything that does not meet the gating rules in config.
+dashboard grays out anything that does not meet the gating rules in config.
 """
 from __future__ import annotations
 

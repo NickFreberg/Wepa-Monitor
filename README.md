@@ -75,7 +75,7 @@ scrape fails loudly and is logged as a failure, rather than putting values in th
 
 All thresholds live in [`wepa_monitor/config.py`](wepa_monitor/config.py).
 
-**Severity** comes from the status page itself: each row is coloured green / yellow / red, and that
+**Severity** comes from the status page itself: each row is colored green / yellow / red, and that
 vendor verdict is used directly. Status codes (`Alert_paper_out_error`, `Alert_printer_down`,
 `Alert_tray_missing`, …) give the fault type and the fix category ([`rules.py`](wepa_monitor/rules.py)).
 
@@ -121,7 +121,7 @@ burn rate (last 14 days).
 
 A metric is shown only when it rests on enough evidence: at least 3 incidents for a mean, at least 50%
 of the window observed for a rate, and at least 3 observed days for a burn rate. Otherwise the tile is
-greyed out with the reason ("only 2 incidents — low confidence"). Executive observations follow the same
+grayed out with the reason ("only 2 incidents — low confidence"). Executive observations follow the same
 rules and are left out when the evidence is thin.
 
 ## Demo mode
@@ -167,7 +167,7 @@ wepa_monitor/
   rules.py         status codes → names, severity fallback, fix category; printer-text parsing
   scrape.py        fetch + header-driven parser
   store.py         append-only snapshots and scrape log; daily Parquet compaction
-  events.py        observation spans and incident detection (vectorised)
+  events.py        observation spans and incident detection (vectorized)
   consumables.py   replacement-aware usage
   metrics.py       KPI/KRI definitions with evidence and gating
   ops.py           current status and the ranked work queue
@@ -182,9 +182,9 @@ legacy/                  the original v1 terminal script
 ## Roadmap
 
 - **Route planner.** The work-queue score (severity × no-backup multiplier + age) is designed to feed a
-  route optimiser (OR-Tools) over walking times between buildings, starting from a ResNet workstation,
+  route optimizer (OR-Tools) over walking times between buildings, starting from a ResNet workstation,
   shown on a map with a pick list ("2 reams, 1 black toner"). It needs building coordinates and
   workstation locations in `reference/`.
-- Confirm the status codes not yet seen on the live page, and the yellow-alert behaviour.
+- Confirm the status codes not yet seen on the live page, and the yellow-alert behavior.
 - Incremental metric updates for long live histories (currently a full reload each minute when new data
   arrives).

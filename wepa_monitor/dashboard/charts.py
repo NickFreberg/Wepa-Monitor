@@ -13,7 +13,7 @@ WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
 def _section_color(theme: str, section: str) -> str:
-    """Colour follows the entity: each section keeps its slot whatever the filter."""
+    """Color follows the entity: each section keeps its slot whatever the filter."""
     order = SECTION_ORDER + ["Unknown"]
     idx = order.index(section) if section in order else len(order)
     return TOKENS[theme]["series"][idx % 8]
