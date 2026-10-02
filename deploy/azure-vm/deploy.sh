@@ -21,6 +21,9 @@ VM_NAME="${VM_NAME:-vm-resnet-print-ops}"
 # Set LOCATION and/or SIZE to pin one choice.
 REGIONS="${LOCATION:-eastus2 centralus northcentralus westus2 westus3 southcentralus eastus}"
 SIZES="${SIZE:-Standard_B1ms Standard_B2als_v2 Standard_B2s}"
+# When a region is pinned, also try each availability zone: a zone often has room when the region
+# as a whole reports "Capacity Restrictions". ("any" = let Azure choose.)
+ZONES="${ZONES:-$([ -n "${LOCATION:-}" ] && echo "any 1 2 3" || echo "any")}"
 ADMIN="${ADMIN:-azureuser}"
 IMAGE="Canonical:ubuntu-24_04-lts:server:latest"
 
@@ -47,12 +50,14 @@ if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
   REASONS=""
   for LOCATION in $REGIONS; do
     for SIZE in $SIZES; do
-      echo "    trying $SIZE in $LOCATION ..."
+    for ZONE in $ZONES; do
+      ZONE_ARGS=(); [ "$ZONE" != any ] && ZONE_ARGS=(--zone "$ZONE")
+      echo "    trying $SIZE in $LOCATION$([ "$ZONE" != any ] && echo " zone $ZONE") ..."
       if az vm create -g "$RESOURCE_GROUP" -n "$VM_NAME" -l "$LOCATION" --image "$IMAGE" --size "$SIZE" \
           --admin-username "$ADMIN" --generate-ssh-keys --public-ip-sku Standard \
           --public-ip-address-dns-name "$DNS_LABEL" --os-disk-size-gb 32 --storage-sku StandardSSD_LRS \
-          -o none 2>"$ERR"; then
-        CREATED="$SIZE in $LOCATION"; break 2
+          ${ZONE_ARGS[@]+"${ZONE_ARGS[@]}"} -o none 2>"$ERR"; then
+        CREATED="$SIZE in $LOCATION$([ "$ZONE" != any ] && echo " zone $ZONE" || true)"; break 3
       fi
       if grep -qE "NotAvailableForSubscription" "$ERR"; then
         echo "      size restricted for this subscription (needs a support request, not quota); next option"
@@ -74,6 +79,7 @@ if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
           az $kind delete --ids "$id" -o none 2>/dev/null || true
         done
       done
+    done
     done
   done
   if [ -z "$CREATED" ]; then
@@ -102,13 +108,14 @@ az network nsg rule update -g "$RESOURCE_GROUP" --nsg-name "$NSG" -n default-all
 FQDN="$(az vm show -d -g "$RESOURCE_GROUP" -n "$VM_NAME" --query fqdns -o tsv)"
 HOST="$ADMIN@$FQDN"
 SSH=(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "$HOST")
+PROBE=(ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "$HOST")   # -n: never reads your keyboard
 echo "    Address: https://$FQDN   (SSH allowed from $MY_IP)"
 
 echo "==> Waiting for the VM to accept SSH"
-for _ in $(seq 1 30); do "${SSH[@]}" true 2>/dev/null && break; sleep 10; done
+for _ in $(seq 1 30); do "${PROBE[@]}" true 2>/dev/null && break; sleep 10; done
 
 SITE_USER=""; SITE_PASS=""
-if [ "$FIRST_RUN" = 1 ] || [ "${SITE_PASSWORD_RESET:-0}" = 1 ] || ! "${SSH[@]}" test -s /etc/caddy/site-user 2>/dev/null; then
+if [ "$FIRST_RUN" = 1 ] || [ "${SITE_PASSWORD_RESET:-0}" = 1 ] || ! "${PROBE[@]}" test -s /etc/caddy/site-user 2>/dev/null; then
   echo "==> Choose a username and password for the dashboard (you'll type these in the browser)"
   read -r -p "    Username: " SITE_USER
   while :; do
