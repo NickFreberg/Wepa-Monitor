@@ -38,11 +38,16 @@ The first start takes 2–5 minutes.
 
 | Task | How |
 |---|---|
-| Ship new code (data is kept) | `git pull && ./deploy/azure-containerapps/deploy.sh` |
+| Ship new code (no downtime, data kept) | `git pull && ./deploy/azure-containerapps/deploy.sh` |
 | Change the site password | `SITE_PASSWORD_RESET=1 ./deploy/azure-containerapps/deploy.sh` |
 | Watch the live log | `az containerapp logs show -g rg-resnet-print-ops -n resnet-print-ops --follow --format text` |
 | Download a backup | `az storage file download-batch --account-name <storage> -s wepa --pattern 'data/*' -d ./wepa-backup` |
 | Remove everything | `az group delete -n rg-resnet-print-ops` (back up first) |
+
+A deploy starts a new copy of the app beside the running one. The site keeps serving from the old
+copy until the new one has installed its packages (2–5 minutes) and passes its health check; then
+traffic switches and the old copy stops. The new copy starts collecting the moment the old one exits,
+so there is no gap in the data. `CLEAN=1` additionally removes files deleted from the repo.
 
 ## Bring in data collected on your Mac
 

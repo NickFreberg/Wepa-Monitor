@@ -71,7 +71,11 @@ az containerapp env storage set -g "$RESOURCE_GROUP" -n "$ENV_NAME" --storage-na
 echo "==> Uploading the committed code"
 WORKDIR="$(mktemp -d)"; trap 'rm -rf "$WORKDIR"' EXIT
 mkdir -p "$WORKDIR/app" && git archive HEAD | tar -x -C "$WORKDIR/app"
-az storage file delete-batch --account-name "$STORAGE" --account-key "$KEY" -s "$SHARE" --pattern 'app/*' -o none 2>/dev/null || true
+# Files are overwritten in place, not deleted first, so the running copy never finds its code missing.
+# CLEAN=1 removes files that no longer exist in the repo (brief gap for the running copy).
+if [ "${CLEAN:-0}" = 1 ]; then
+  az storage file delete-batch --account-name "$STORAGE" --account-key "$KEY" -s "$SHARE" --pattern 'app/*' -o none 2>/dev/null || true
+fi
 az storage file upload-batch --account-name "$STORAGE" --account-key "$KEY" -d "$SHARE" --destination-path app \
   -s "$WORKDIR/app" --max-connections 8 -o none
 for d in data data/live data/campus; do
@@ -141,12 +145,18 @@ else
   if [ -n "$AUTH" ]; then
     az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "basic-auth=$AUTH" -o none
   fi
-  echo "==> Restarting the app with the new code"
-  REV="$(az containerapp revision list -g "$RESOURCE_GROUP" -n "$APP_NAME" --query "[?properties.active].name | [0]" -o tsv)"
-  if [ -n "$REV" ]; then
-    az containerapp revision restart -g "$RESOURCE_GROUP" -n "$APP_NAME" --revision "$REV" -o none
-  else   # no active revision reported: roll out a fresh one, which also reads the new code
-    az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --set-env-vars "DEPLOYED_AT=$(date +%s)" -o none
+  echo "==> Rolling out the new code (the current copy keeps serving until the new one is ready)"
+  az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --set-env-vars "DEPLOYED_AT=$(date +%s)" -o none
+  # Single-revision mode only moves traffic once the new revision passes its startup probe, which
+  # waits for the package install (2-5 minutes). The old one then stops; the new one takes over collecting.
+  if [ "${SKIP_WAIT:-0}" != 1 ]; then
+    echo "    waiting for the new revision (2-5 minutes; the site stays up meanwhile)"
+    for _ in $(seq 1 90); do
+      latest="$(az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" --query properties.latestRevisionName -o tsv)"
+      ready="$(az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" --query properties.latestReadyRevisionName -o tsv)"
+      [ -n "$latest" ] && [ "$latest" = "$ready" ] && break
+      sleep 10
+    done
   fi
 fi
 

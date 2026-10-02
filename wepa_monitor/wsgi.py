@@ -32,21 +32,37 @@ def _collector() -> None:
     collect_forever(DATA_DIR, quiet=True)
 
 
+def _take_lock(handle, wait: bool) -> bool:
+    """Take the collector lock; with wait=True, block until the current holder lets go.
+    A file system without lock support counts as taken (duplicates are dropped on load)."""
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | (0 if wait else fcntl.LOCK_NB))
+    except BlockingIOError:
+        return False
+    except OSError:
+        pass
+    return True
+
+
+def _collect_when_free(handle) -> None:
+    """During a rolling deploy the old copy still holds the lock: serve the dashboard now and
+    start collecting the moment the old copy exits, so there is no gap in the data."""
+    if _take_lock(handle, wait=False):
+        print(f"Collector running: one snapshot per minute into {DATA_DIR}", flush=True)
+    else:
+        print("Another copy is collecting; this one starts when it exits.", flush=True)
+        _take_lock(handle, wait=True)
+        print(f"Collector running: one snapshot per minute into {DATA_DIR} (took over)", flush=True)
+    _collector()
+
+
 def start_collector() -> bool:
     global _lock_handle
     if os.environ.get("WEPA_COLLECT", "1") != "1":
         return False
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     _lock_handle = open(DATA_DIR / "collector.lock", "w")
-    try:
-        fcntl.flock(_lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        print("Another process holds the collector lock; this one serves the dashboard only.", flush=True)
-        return False
-    except OSError:
-        pass   # the file system doesn't support locks: collect anyway (duplicates are dropped on load)
-    threading.Thread(target=_collector, name="collector", daemon=True).start()
-    print(f"Collector running: one snapshot per minute into {DATA_DIR}", flush=True)
+    threading.Thread(target=_collect_when_free, args=(_lock_handle,), name="collector", daemon=True).start()
     return True
 
 
