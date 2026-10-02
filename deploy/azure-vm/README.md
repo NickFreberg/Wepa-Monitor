@@ -5,7 +5,8 @@ same every-minute collector run on one small Ubuntu VM. The site gets
 `https://resnet-print-ops-xxxxxx.<region>.cloudapp.azure.com` with a free certificate and is
 protected by a username and password.
 
-**Cost:** about **$21/month**: a Standard_B1ms VM (1 vCPU, 2 GB) at about $15, a 32 GB SSD at about
+**Cost:** about **$21/month** on a Standard_B1ms VM (1 vCPU, 2 GB) at about $15 (about $35 if only the
+2 vCPU / 4 GB sizes have capacity), a 32 GB SSD at about
 $2.50, and a static public IP at about $3.65.
 
 **What's on the VM:**
@@ -59,6 +60,11 @@ re-allows SSH from your current IP.
 
 ## Troubleshooting
 
+- **"SkuNotAvailable … Capacity Restrictions":** Azure has no room for that size in that region for
+  your subscription right now (common for new subscriptions in busy regions like East US). The
+  script already tries several regions (East US 2, Central US, North Central US, West US 2/3, South
+  Central US, East US) and sizes (B1ms, B2als_v2, B2s) in turn. To pin one:
+  `LOCATION=centralus SIZE=Standard_B1ms ./deploy/azure-vm/deploy.sh`.
 - **Quota error creating the VM** ("Standard BS Family vCPUs"): portal → **Quotas → Compute** →
   your region → **Standard BS Family vCPUs** → request **2**. Compute requests are usually approved
   automatically within minutes. Or try another region: `LOCATION=centralus ./deploy/azure-vm/deploy.sh`.

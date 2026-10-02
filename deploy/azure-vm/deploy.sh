@@ -8,15 +8,19 @@
 # username and password for the site, and installs everything. Later runs (after `git pull`) upload
 # the new code and restart the app; collected data in /var/lib/wepa on the VM is kept.
 #
-# Override any of these before the command, e.g.  LOCATION=centralus ./deploy/azure-vm/deploy.sh
+# Override any of these before the command, e.g.  LOCATION=centralus SIZE=Standard_B1ms ./deploy/azure-vm/deploy.sh
 #   SITE_PASSWORD_RESET=1   ask for a new site username/password on this run
 #   ACME_EMAIL=you@x.com    email for certificate notices (also enables a backup certificate authority)
 set -euo pipefail
 
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-resnet-print-ops}"
-LOCATION="${LOCATION:-eastus}"
 VM_NAME="${VM_NAME:-vm-resnet-print-ops}"
-SIZE="${SIZE:-Standard_B1ms}"           # 1 vCPU, 2 GB RAM (~$15/month); 1 GB sizes are too small
+# Where to try creating the VM, in order, until Azure has capacity for your subscription. New
+# subscriptions are often turned away from busy regions/sizes ("SkuNotAvailable"). Sizes need
+# 2 GB+ of RAM:  B1ms 1 vCPU/2 GB ~$15/mo · B2als_v2 2 vCPU/4 GB ~$27/mo · B2s 2 vCPU/4 GB ~$30/mo.
+# Set LOCATION and/or SIZE to pin one choice.
+REGIONS="${LOCATION:-eastus2 centralus northcentralus westus2 westus3 southcentralus eastus}"
+SIZES="${SIZE:-Standard_B1ms Standard_B2als_v2 Standard_B2s}"
 ADMIN="${ADMIN:-azureuser}"
 IMAGE="Canonical:ubuntu-24_04-lts:server:latest"
 
@@ -33,23 +37,49 @@ DNS_LABEL="${DNS_LABEL:-resnet-print-ops-$(printf '%s' "$SUBSCRIPTION_ID" | shas
 FIRST_RUN=0
 if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
   FIRST_RUN=1
-  echo "==> First deployment: creating the VM in $LOCATION ($SIZE)"
+  echo "==> First deployment: creating the VM (trying regions and sizes until Azure has capacity)"
   for ns in Microsoft.Compute Microsoft.Network; do az provider register --namespace "$ns" --wait -o none; done
   if [ "$(az group exists -n "$RESOURCE_GROUP")" != "true" ]; then
-    az group create -n "$RESOURCE_GROUP" -l "$LOCATION" -o none
+    az group create -n "$RESOURCE_GROUP" -l "$(echo $REGIONS | cut -d' ' -f1)" -o none
   fi
-  if ! az vm create -g "$RESOURCE_GROUP" -n "$VM_NAME" -l "$LOCATION" --image "$IMAGE" --size "$SIZE" \
-      --admin-username "$ADMIN" --generate-ssh-keys --public-ip-sku Standard \
-      --public-ip-address-dns-name "$DNS_LABEL" --os-disk-size-gb 32 --storage-sku StandardSSD_LRS -o none; then
-    cat >&2 <<QUOTA
+  ERR="$(mktemp)"
+  CREATED=""
+  for LOCATION in $REGIONS; do
+    for SIZE in $SIZES; do
+      echo "    trying $SIZE in $LOCATION ..."
+      if az vm create -g "$RESOURCE_GROUP" -n "$VM_NAME" -l "$LOCATION" --image "$IMAGE" --size "$SIZE" \
+          --admin-username "$ADMIN" --generate-ssh-keys --public-ip-sku Standard \
+          --public-ip-address-dns-name "$DNS_LABEL" --os-disk-size-gb 32 --storage-sku StandardSSD_LRS \
+          -o none 2>"$ERR"; then
+        CREATED="$SIZE in $LOCATION"; break 2
+      fi
+      if grep -qE "SkuNotAvailable|NotAvailableForSubscription|Capacity" "$ERR"; then
+        echo "      no capacity for this subscription; next option"
+      elif grep -qiE "quota" "$ERR"; then
+        echo "      no quota for this size here; next option"
+      else
+        echo "Azure couldn't create the VM:" >&2
+        grep -E "Message:|Code:|ERROR" "$ERR" | head -6 >&2 || tail -20 "$ERR" >&2
+        exit 1
+      fi
+      # A failed attempt can leave a network or IP behind; clear them so the next region starts clean.
+      for kind in "network nic" "network public-ip" "network nsg" "network vnet"; do
+        for id in $(az $kind list -g "$RESOURCE_GROUP" --query "[?starts_with(name, '$VM_NAME')].id" -o tsv); do
+          az $kind delete --ids "$id" -o none 2>/dev/null || true
+        done
+      done
+    done
+  done
+  if [ -z "$CREATED" ]; then
+    cat >&2 <<NONE
 
-Azure couldn't create the VM. If the message mentions quota (e.g. "Standard BS Family vCPUs"),
-request it: portal -> Quotas -> Compute -> region $LOCATION -> "Standard BS Family vCPUs" -> new
-limit 2. Compute quota requests are usually approved automatically within minutes. Or retry in
-another region: LOCATION=centralus ./deploy/azure-vm/deploy.sh
-QUOTA
+None of the regions/sizes tried had capacity or quota for this subscription. Request quota in the
+portal (Quotas -> Compute -> e.g. East US 2 -> "Standard BS Family vCPUs" -> 2; usually approved
+automatically), then rerun. You can pin a choice: LOCATION=eastus2 SIZE=Standard_B1ms $0
+NONE
     exit 1
   fi
+  echo "    created: $CREATED"
   az vm open-port -g "$RESOURCE_GROUP" -n "$VM_NAME" --port 80,443 --priority 1010 -o none
 fi
 
