@@ -64,7 +64,7 @@ class DataCache:
 
     def _signature(self):
         files = []
-        for sub in ("snapshots", "scrape_log"):
+        for sub in ("snapshots", "scrape_log", "imports/snapshots", "imports/scrape_log"):
             folder = self.data_dir / sub
             if folder.exists():
                 files += [(p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in folder.iterdir()]

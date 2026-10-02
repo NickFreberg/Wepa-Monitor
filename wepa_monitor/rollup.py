@@ -117,6 +117,8 @@ class RollupStore:
         self.version = _version_key()
         self.cache_dir = data_dir / "derived" / self.version
         self.finished: dict[str, dict[str, pd.DataFrame]] = {}
+        self.finished_sig: dict[str, tuple] = {}
+        self._listing: dict[str, int] | None = None
         self._combined: dict[str, pd.DataFrame] | None = None
         self._combined_days: tuple = ()
         self._raw: dict[str, pd.DataFrame] = {}
@@ -142,11 +144,23 @@ class RollupStore:
         return derive(self._raw_day(days[i]), self._context(prev_day, True),
                       self._context(next_day, False), self.building_of)
 
+    def _signature(self, days: list[str], i: int) -> tuple:
+        """A finished day's rollups depend on its own files and on the edges of the days beside it
+        (the last reading before midnight, the first after). Neighbors' finished files count; the
+        live day's CSV doesn't, since its first readings never change as minutes are appended."""
+        listing = self._listing if self._listing is not None else store.snapshot_listing(self.data_dir)
+        own = store.day_signature(self.data_dir, days[i], listing)
+        near = [store.day_signature(self.data_dir, days[j], listing) for j in (i - 1, i + 1) if 0 <= j < len(days)]
+        return own + tuple(f for sig in near for f in sig if not f[0].endswith(".csv"))
+
     def _load_or_build(self, days: list[str], i: int) -> dict[str, pd.DataFrame]:
         day = days[i]
         paths = {k: self.cache_dir / k / f"{day}.parquet" for k in KINDS}
-        if all(p.exists() for p in paths.values()):
+        sig = self._signature(days, i)
+        newest_source = max((m for _, m in sig), default=0)
+        if all(p.exists() and p.stat().st_mtime_ns >= newest_source for p in paths.values()):
             return {k: pd.read_parquet(p) for k, p in paths.items()}
+        self._raw.pop(day, None)          # data was added (an import): re-read the day
         out = self._derive_day(days, i)
         for k, p in paths.items():
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -158,16 +172,23 @@ class RollupStore:
         self._prune_old_versions()
         if not days:
             return {k: _empty(k) for k in KINDS}
-        # Every day but the newest is finished: build (or load) it once and keep it.
+        # Every day but the newest is finished: build (or load) it once and keep it. If a finished
+        # day's files change (an import), it and its neighbors are rebuilt from fresh reads.
+        self._listing = store.snapshot_listing(self.data_dir)
+        sigs = {day: self._signature(days, i) for i, day in enumerate(days[:-1])}
+        if any(d in self.finished and self.finished_sig.get(d) != sg for d, sg in sigs.items()):
+            self._raw.clear()
         for i, day in enumerate(days[:-1]):
-            if day not in self.finished:
+            if day not in self.finished or self.finished_sig.get(day) != sigs[day]:
                 self.finished[day] = self._load_or_build(days, i)
+                self.finished_sig[day] = sigs[day]
+        self._listing = None
         for day in list(self.finished):
             if day not in days:
                 del self.finished[day]
-        finished_days = tuple(d for d in days[:-1])
+        finished_days = tuple((d, self.finished_sig[d]) for d in days[:-1])
         if self._combined is None or self._combined_days != finished_days:
-            self._combined = {k: pd.concat([self.finished[d][k] for d in finished_days], ignore_index=True)
+            self._combined = {k: pd.concat([self.finished[d][k] for d, _ in finished_days], ignore_index=True)
                               if finished_days else _empty(k) for k in KINDS}
             self._combined_days = finished_days
         self._raw.pop(days[-1], None)                 # the newest day is still growing: always re-read

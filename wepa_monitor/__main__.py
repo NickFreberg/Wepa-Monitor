@@ -9,6 +9,7 @@
     python -m wepa_monitor start               collect + dashboard together, opens your browser
     python -m wepa_monitor campus [--force]    refresh calendar, hall and library data from bridgew.edu
     python -m wepa_monitor network             rebuild the campus walking/driving network from OpenStreetMap
+    python -m wepa_monitor export --tag mac    package local data for import into another collector's folder
 """
 from __future__ import annotations
 
@@ -36,6 +37,9 @@ def main(argv: list[str] | None = None) -> int:
                        help="also keep a gzipped copy of each raw page (about 7 MB/day)")
     sub.add_parser("compact", help="compact finished days to parquet")
     sub.add_parser("network", help="rebuild the campus walking/driving network from OpenStreetMap")
+    exp = sub.add_parser("export", help="package local data as import files for another collector's data folder")
+    exp.add_argument("--tag", default="import", help="letters/digits naming this source, e.g. mac")
+    exp.add_argument("-o", "--output", type=Path, default=Path("wepa-export"))
     camp = sub.add_parser("campus", help="refresh academic calendar, residence-hall and library data from bridgew.edu")
     camp.add_argument("--force", action="store_true", help="refresh even if the files are recent")
     demo = sub.add_parser("demo", help="generate synthetic demo history")
@@ -85,6 +89,13 @@ def main(argv: list[str] | None = None) -> int:
         except KeyboardInterrupt:
             pass
         print("stopped")
+        return 0
+
+    if args.cmd == "export":
+        from . import store
+        files = store.export_for_import(args.data_dir or config.LIVE_DATA_DIR, args.output, args.tag)
+        print("\n".join(files) if files else "No local data to export.")
+        print(f"\nWrote {len(files)} file(s) to {args.output}/ (upload its contents into the other data folder)")
         return 0
 
     if args.cmd == "network":

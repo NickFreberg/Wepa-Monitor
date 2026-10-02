@@ -13,6 +13,7 @@
 # Later runs upload the new code and restart the app; data is kept.
 #   SITE_PASSWORD_RESET=1   set a new site username/password on this run
 #   LOCATION=eastus2        region (default: eastus, then a few fallbacks on the first run)
+#   SKIP_WAIT=1             don't wait for the restarted app to answer
 set -euo pipefail
 
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-resnet-print-ops}"
@@ -151,6 +152,7 @@ fi
 
 FQDN="$(az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" --query properties.configuration.ingress.fqdn -o tsv)"
 echo "==> Waiting for the app to start (it installs its packages first: 2-5 minutes)"
+[ "${SKIP_WAIT:-0}" = 1 ] && { echo "    (skipped) https://$FQDN"; exit 0; }
 for _ in $(seq 1 60); do
   code="$(curl -s -o /dev/null -w '%{http_code}' "https://$FQDN/" || true)"
   [ "$code" = 401 ] || [ "$code" = 200 ] && break

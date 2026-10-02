@@ -44,6 +44,22 @@ The first start takes 2–5 minutes.
 | Download a backup | `az storage file download-batch --account-name <storage> -s wepa --pattern 'data/*' -d ./wepa-backup` |
 | Remove everything | `az group delete -n rg-resnet-print-ops` (back up first) |
 
+## Bring in data collected on your Mac
+
+If the Mac collected data before the cloud app started, add that history to the cloud:
+
+1. Stop the Mac collector (Ctrl+C in its window). Only one collector should run.
+2. Run:
+
+   ```bash
+   git pull && source .venv/bin/activate
+   ./deploy/azure-containerapps/import-local-data.sh
+   ```
+
+The script updates the cloud app, packages `data/live`, and uploads it to `data/live/imports/` on
+the share. The cloud merges it with its own data and drops duplicate minutes; its own files are
+never changed. Running it again replaces the earlier import.
+
 ## Troubleshooting
 
 - **The page doesn't answer for several minutes on first deploy:** check the log. It should show

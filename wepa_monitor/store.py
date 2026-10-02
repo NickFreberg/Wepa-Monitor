@@ -16,6 +16,7 @@ from __future__ import annotations
 import gzip
 import json
 from datetime import datetime, timezone
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -95,17 +96,59 @@ def _read_parquet_cached(path: Path) -> pd.DataFrame:
     return hit[1]
 
 
+# A day's data is its own file (<day>.parquet once finished, <day>.csv while still being appended)
+# plus any number of imported files, imports/<snapshots|scrape_log>/<day>.<tag>.parquet: history
+# collected on another computer before this one started (`python -m wepa_monitor export`). They
+# are merged on load and duplicate minutes are dropped, so importing never overwrites or conflicts
+# with live files, and code that predates imports simply doesn't see them.
+def _day_of(p: Path) -> str:
+    return p.name.split(".", 1)[0]
+
+
+def _import_dir(folder: Path) -> Path:
+    return folder.parent / "imports" / folder.name
+
+
+def _days(folder: Path) -> list[str]:
+    found = {_day_of(p) for p in folder.iterdir() if p.suffix in (".csv", ".parquet")} if folder.exists() else set()
+    imp = _import_dir(folder)
+    if imp.exists():
+        found |= {_day_of(p) for p in imp.glob("*.parquet")}
+    return sorted(found)
+
+
+def _imports(folder: Path, day: str) -> list[Path]:
+    imp = _import_dir(folder)
+    return sorted(imp.glob(f"{day}.*.parquet")) if imp.exists() else []
+
+
+def snapshot_listing(data_dir: Path) -> dict[str, int]:
+    """name -> modification time of every snapshot file, in one pass (cheap on network storage)."""
+    out = {}
+    for folder, prefix in ((data_dir / "snapshots", ""), (data_dir / "imports" / "snapshots", "imports/")):
+        if folder.exists():
+            out.update({prefix + e.name: e.stat().st_mtime_ns for e in os.scandir(folder)
+                        if e.name.endswith((".csv", ".parquet"))})
+    return out
+
+
+def day_signature(data_dir: Path, day: str, listing: dict[str, int] | None = None) -> tuple:
+    """Which files make up a day, and when they changed (to notice imports into finished days)."""
+    listing = snapshot_listing(data_dir) if listing is None else listing
+    return tuple(sorted((n, m) for n, m in listing.items() if n.rsplit("/", 1)[-1].split(".", 1)[0] == day))
+
+
 def _read_partitions(folder: Path, str_cols: dict) -> pd.DataFrame | None:
-    if not folder.exists():
+    if not folder.exists() and not _import_dir(folder).exists():
         return None
     frames = []
-    days = sorted({p.stem for p in folder.iterdir() if p.suffix in (".csv", ".parquet")})
-    for day in days:
+    for day in _days(folder):
         pq, csv = folder / f"{day}.parquet", folder / f"{day}.csv"
         if pq.exists():
             frames.append(_read_parquet_cached(pq))
         elif csv.exists():
             frames.append(pd.read_csv(csv, dtype=str_cols))
+        frames += [_read_parquet_cached(f) for f in _imports(folder, day)]
     if not frames:
         return None
     return pd.concat(frames, ignore_index=True)
@@ -115,10 +158,7 @@ _SNAP_STR = {"station_id": str, "status_codes": str, "printer_text": str, "descr
 
 
 def snapshot_days(data_dir: Path) -> list[str]:
-    folder = data_dir / "snapshots"
-    if not folder.exists():
-        return []
-    return sorted({p.stem for p in folder.iterdir() if p.suffix in (".csv", ".parquet")})
+    return _days(data_dir / "snapshots")
 
 
 def _dedupe(df: pd.DataFrame) -> pd.DataFrame:
@@ -131,13 +171,11 @@ def load_day(data_dir: Path, day: str) -> pd.DataFrame:
     """One day's snapshots, typed, deduplicated and sorted by station then time."""
     folder = data_dir / "snapshots"
     pq, csv = folder / f"{day}.parquet", folder / f"{day}.csv"
-    if pq.exists():
-        df = pd.read_parquet(pq)
-    elif csv.exists():
-        df = pd.read_csv(csv, dtype=_SNAP_STR)
-    else:
+    frames = [pd.read_parquet(pq)] if pq.exists() else [pd.read_csv(csv, dtype=_SNAP_STR)] if csv.exists() else []
+    frames += [pd.read_parquet(f) for f in _imports(folder, day)]
+    if not frames:
         return pd.DataFrame(columns=SNAPSHOT_COLUMNS)
-    df = _dedupe(_typed_snapshots(df))
+    df = _dedupe(_typed_snapshots(pd.concat(frames, ignore_index=True)))
     return df.sort_values(["station_id", "scrape_ts"], ignore_index=True)
 
 
@@ -160,22 +198,33 @@ def load_scrape_log(data_dir: Path) -> pd.DataFrame:
     """The scrape log, typed and in time order. Finished (parquet) days are typed and combined once
     per process; only today's CSV is read on each refresh."""
     folder = data_dir / "scrape_log"
-    if not folder.exists():
+    imported = sorted(_import_dir(folder).glob("*.parquet")) if _import_dir(folder).exists() else []
+    if not folder.exists() and not imported:
         return pd.DataFrame(columns=LOG_COLUMNS)
-    finished = sorted(folder.glob("*.parquet"))
+    own = sorted(folder.glob("*.parquet")) if folder.exists() else []
+    finished = own + imported
     key = tuple((f.name, f.stat().st_mtime_ns) for f in finished)
     hit = _LOG_CACHE.get(folder)
     if hit is None or hit[0] != key:
         frames = [pd.read_parquet(f) for f in finished]
         hist = _typed_log(pd.concat(frames, ignore_index=True)) if frames else pd.DataFrame(columns=LOG_COLUMNS)
         hit = _LOG_CACHE[folder] = (key, hist.sort_values("attempt_ts", ignore_index=True))
-    done = {f.stem for f in finished}
-    today = [pd.read_csv(f, dtype={"error": str}) for f in sorted(folder.glob("*.csv")) if f.stem not in done]
+    done = {f.stem for f in own}
+    today = [pd.read_csv(f, dtype={"error": str}) for f in sorted(folder.glob("*.csv")) if f.stem not in done] \
+        if folder.exists() else []
     if not today:
-        return hit[1] if len(hit[1]) else pd.DataFrame(columns=LOG_COLUMNS)
-    new = _typed_log(pd.concat(today, ignore_index=True))
-    parts = [f for f in (hit[1], new) if len(f)]
-    return pd.concat(parts, ignore_index=True).sort_values("attempt_ts", kind="stable", ignore_index=True)
+        out = hit[1] if len(hit[1]) else pd.DataFrame(columns=LOG_COLUMNS)
+    else:
+        new = _typed_log(pd.concat(today, ignore_index=True))
+        parts = [f for f in (hit[1], new) if len(f)]
+        out = pd.concat(parts, ignore_index=True).sort_values("attempt_ts", kind="stable", ignore_index=True)
+    if imported and len(out):
+        # Imported history can overlap this collector's: keep one attempt per minute, a success if any.
+        minute = out["attempt_ts"].dt.floor("min")
+        keep = (out.assign(_m=minute).sort_values(["_m", "ok"], ascending=[True, False], kind="stable")
+                .drop_duplicates("_m").index)
+        out = out.loc[sorted(keep)].reset_index(drop=True)
+    return out
 
 
 def write_day(data_dir: Path, day: str, snapshots: pd.DataFrame, log: pd.DataFrame) -> None:
@@ -215,3 +264,25 @@ def read_meta(data_dir: Path) -> dict:
 def write_meta(data_dir: Path, meta: dict) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     (data_dir / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
+
+
+def export_for_import(data_dir: Path, out_dir: Path, tag: str) -> list[str]:
+    """Package this computer's collected data as import files (imports/.../<day>.<tag>.parquet) for another
+    collector's data folder. They sit beside that collector's own files and are merged on load."""
+    if not tag.isalnum():
+        raise ValueError("tag must be letters and digits only")
+    written = []
+    for sub, typer, str_cols in (("snapshots", _typed_snapshots, _SNAP_STR), ("scrape_log", _typed_log, {"error": str})):
+        folder = data_dir / sub
+        if not folder.exists():
+            continue
+        for day in sorted({_day_of(p) for p in folder.iterdir() if p.suffix in (".csv", ".parquet")}):
+            pq, csv = folder / f"{day}.parquet", folder / f"{day}.csv"
+            df = pd.read_parquet(pq) if pq.exists() else pd.read_csv(csv, dtype=str_cols) if csv.exists() else None
+            if df is None or df.empty:
+                continue
+            dest = out_dir / "imports" / sub / f"{day}.{tag}.parquet"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            typer(df).to_parquet(dest, index=False)
+            written.append(f"imports/{sub}/{dest.name} ({len(df):,} rows)")
+    return written
