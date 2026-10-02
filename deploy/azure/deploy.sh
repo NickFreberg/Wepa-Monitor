@@ -41,8 +41,23 @@ if ! az webapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" -o none 2>/dev/null; the
   echo "==> First deployment: creating resources in $LOCATION"
   # New subscriptions must register the App Service provider once (no-op if already registered).
   az provider register --namespace Microsoft.Web --wait -o none
-  az group create -n "$RESOURCE_GROUP" -l "$LOCATION" -o none
-  az appservice plan create -g "$RESOURCE_GROUP" -n "$PLAN" -l "$LOCATION" --sku "$SKU" --is-linux -o none
+  # The resource group is only a folder; keep the existing one if a previous attempt created it
+  # (possibly in another region), and put the plan and app in $LOCATION.
+  if [ "$(az group exists -n "$RESOURCE_GROUP")" != "true" ]; then
+    az group create -n "$RESOURCE_GROUP" -l "$LOCATION" -o none
+  fi
+  if ! az appservice plan show -g "$RESOURCE_GROUP" -n "$PLAN" -o none 2>/dev/null; then
+    if ! az appservice plan create -g "$RESOURCE_GROUP" -n "$PLAN" -l "$LOCATION" --sku "$SKU" --is-linux -o none; then
+      cat >&2 <<QUOTA
+
+Azure refused to create the $SKU plan in $LOCATION. New subscriptions often start with a quota of 0
+for App Service. Request 1 more "$SKU VMs" (portal: Quotas -> provider Microsoft.Web -> region
+$LOCATION -> Request increase), or retry another region: LOCATION=centralus ./deploy/azure/deploy.sh
+See deploy/azure/README.md, Troubleshooting.
+QUOTA
+      exit 1
+    fi
+  fi
   az webapp create -g "$RESOURCE_GROUP" -p "$PLAN" -n "$APP_NAME" --runtime "$RUNTIME" -o none
 fi
 

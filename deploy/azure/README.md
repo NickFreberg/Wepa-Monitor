@@ -108,18 +108,17 @@ They'll get an invitation email and then sign in with their BSU account.
 - **"MissingSubscriptionRegistration" for Microsoft.Web:** run
   `az provider register --namespace Microsoft.Web --wait`, then rerun the script. The script does
   this itself, but registration can take a minute on a brand-new subscription.
-- **"Operation cannot be completed without additional quota" / "SubscriptionIsOverQuotaForSku":**
-  new Pay-As-You-Go subscriptions sometimes have no Basic-plan quota in a region. Try another
-  region (`LOCATION=eastus2 ./deploy/azure/deploy.sh`, or `centralus`), or request quota in the
-  portal (**Quotas → App Service**).
-- **"Application Error" page:** run the log-tail command above and look for a Python traceback. The
-  first deploy needs a few minutes to install packages before it can start.
-- **Name already taken:** web app names are global across Azure. Run again with
-  `APP_NAME=some-other-name ./deploy/azure/deploy.sh`.
-- **No data appearing:** the log should print `Collector running: one snapshot per minute`. If it says
-  another process holds the lock, wait a minute after a redeploy; the old copy releases it when it stops.
-- **Python version:** the script asks for Python 3.12. To see what Azure offers:
-  `az webapp list-runtimes --os linux | grep PYTHON`.
+- **"Operation cannot be completed without additional quota" (Current Limit (B1 VMs): 0):** new
+  Pay-As-You-Go subscriptions often start with an App Service quota of 0. Request 1:
+  1. Portal → search **Quotas** → **Microsoft.Web** (or **App Service**) as the provider.
+  2. Filter **Region** to East US, find **B1 VMs** (or "Basic VMs"), select it → **Request increase** (pencil
+     icon), new limit **1** (or 2 for headroom) → **Submit**.
+  3. If there's no pencil icon: **Help + support → Create a support request → Service and subscription
+     limits (quotas)**, quota type **Function or Web App (Windows and Linux)**, region East US, SKU B1,
+     new limit 1.
+  Small increases are often approved within minutes to a few hours. Then rerun `./deploy/azure/deploy.sh`.
+  While you wait, another region may already have quota: `LOCATION=centralus ./deploy/azure/deploy.sh`
+  (the script keeps the existing resource group and puts the app in the new region).
 
 ## Keep it to one instance
 
