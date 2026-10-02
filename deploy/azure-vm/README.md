@@ -44,6 +44,25 @@ Optional: `ACME_EMAIL=you@example.com ./deploy/azure-vm/deploy.sh` registers an 
 notices and lets Caddy fall back to a second free certificate authority (ZeroSSL) if Let's Encrypt
 is busy.
 
+## Or: create the VM in the portal, then run the script
+
+If the script can't get capacity, the portal's size picker shows what your subscription can actually
+use. Create the VM there with these settings; everything else can stay at its default:
+
+| Setting | Value |
+|---|---|
+| Resource group | `rg-resnet-print-ops` |
+| Virtual machine name | `vm-resnet-print-ops` (the script finds the VM by this name) |
+| Image | Ubuntu Server 24.04 LTS (x64 or Arm64, matching the size) |
+| Size | Any available size with 2 GB+ RAM (B1ms, B2pls_v2, B2als_v2, …) |
+| Authentication | SSH public key · Username `azureuser` · **Use existing public key**: paste the output of `cat ~/.ssh/id_rsa.pub` |
+| Inbound ports | SSH (22), HTTP (80), HTTPS (443) |
+| Disks | 32 GB Standard SSD is plenty |
+
+When it's created, run `./deploy/azure-vm/deploy.sh`. It adopts the VM: opens 80/443 if needed,
+limits SSH to your IP, gives the public IP a `cloudapp.azure.com` name, asks for the dashboard
+login and installs everything.
+
 ## Day to day
 
 | Task | How |

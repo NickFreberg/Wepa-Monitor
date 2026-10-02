@@ -104,12 +104,41 @@ NONE
   az vm open-port -g "$RESOURCE_GROUP" -n "$VM_NAME" --port 80,443 --priority 1010 -o none
 fi
 
-# SSH is only reachable from the computer running this script (updated on every run).
+# Networking, whether this script or the portal created the VM: find the VM's network security
+# group and public IP through its network card, open 80/443, limit SSH to this computer, and give
+# the public IP a DNS name if it has none (the portal doesn't add one).
 MY_IP="$(curl -fsS https://api.ipify.org)"
-NSG="$(az network nsg list -g "$RESOURCE_GROUP" --query "[?starts_with(name, '$VM_NAME')].name | [0]" -o tsv)"
-az network nsg rule update -g "$RESOURCE_GROUP" --nsg-name "$NSG" -n default-allow-ssh \
-  --source-address-prefixes "$MY_IP/32" -o none
+NIC_ID="$(az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" --query "networkProfile.networkInterfaces[0].id" -o tsv)"
+NSG_ID="$(az network nic show --ids "$NIC_ID" --query networkSecurityGroup.id -o tsv)"
+if [ -z "$NSG_ID" ]; then      # portal "Basic" networking may put the NSG on the subnet instead
+  SUBNET_ID="$(az network nic show --ids "$NIC_ID" --query "ipConfigurations[0].subnet.id" -o tsv)"
+  NSG_ID="$(az network vnet subnet show --ids "$SUBNET_ID" --query networkSecurityGroup.id -o tsv)"
+fi
+[ -n "$NSG_ID" ] || { echo "The VM has no network security group; add one in the portal (Networking)." >&2; exit 1; }
+NSG="$(basename "$NSG_ID")"; NSG_RG="$(echo "$NSG_ID" | cut -d/ -f5)"
+rule_for() {   # name of the inbound allow rule for a port, if any
+  az network nsg rule list -g "$NSG_RG" --nsg-name "$NSG" --query \
+    "[?direction=='Inbound' && access=='Allow' && (destinationPortRange=='$1' || contains(destinationPortRanges, '$1'))].name | [0]" -o tsv
+}
+for port_prio in "80 1010" "443 1011"; do
+  set -- $port_prio
+  [ -n "$(rule_for "$1")" ] || az network nsg rule create -g "$NSG_RG" --nsg-name "$NSG" -n "allow-$1" \
+    --priority "$2" --direction Inbound --access Allow --protocol Tcp --destination-port-ranges "$1" -o none
+done
+SSH_RULE="$(rule_for 22)"
+if [ -n "$SSH_RULE" ]; then
+  az network nsg rule update -g "$NSG_RG" --nsg-name "$NSG" -n "$SSH_RULE" --source-address-prefixes "$MY_IP/32" -o none
+else
+  az network nsg rule create -g "$NSG_RG" --nsg-name "$NSG" -n allow-ssh-admin --priority 1000 --direction Inbound \
+    --access Allow --protocol Tcp --destination-port-ranges 22 --source-address-prefixes "$MY_IP/32" -o none
+fi
 FQDN="$(az vm show -d -g "$RESOURCE_GROUP" -n "$VM_NAME" --query fqdns -o tsv)"
+if [ -z "$FQDN" ]; then
+  PIP_ID="$(az network nic show --ids "$NIC_ID" --query "ipConfigurations[0].publicIPAddress.id" -o tsv)"
+  [ -n "$PIP_ID" ] || { echo "The VM has no public IP address; add one in the portal (Networking)." >&2; exit 1; }
+  az network public-ip update --ids "$PIP_ID" --dns-name "$DNS_LABEL" -o none
+  FQDN="$(az network public-ip show --ids "$PIP_ID" --query dnsSettings.fqdn -o tsv)"
+fi
 HOST="$ADMIN@$FQDN"
 SSH=(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "$HOST")
 PROBE=(ssh -n -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "$HOST")   # -n: never reads your keyboard
