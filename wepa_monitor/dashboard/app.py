@@ -15,20 +15,22 @@ import pandas as pd
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 
-from .. import activity, config, geo, metrics as M
+from .. import activity, config, geo, metrics as M, routing
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
-from .views import activity_log, analytics, executive, insights_view, overview, station, stations
+from .views import activity_log, analytics, executive, insights_view, overview, rounds, station, stations
 from .views.common import PERIODS, area_key
 from .views.overview import activity_list
 
-NAV = [("/", "Overview", "home"), ("/insights", "Insights", "sparkle"), ("/stations", "Stations", "grid"),
+NAV = [("/", "Overview", "home"), ("/insights", "Insights", "sparkle"), ("/rounds", "Rounds", "route"),
+       ("/stations", "Stations", "grid"),
        ("/analytics", "Analytics", "chart"),
        ("/executive", "Executive", "briefcase"), ("/activity", "Activity", "list")]
 PAGE_META = {
     "/": ("Overview", "What needs attention right now."),
     "/insights": ("Insights", "The story behind the numbers. Pick a time range, or ask a question."),
+    "/rounds": ("Rounds", "The fastest route to every printer that needs a visit, for whoever is on shift."),
     "/stations": ("Stations", "Every print station. Click one for its full history."),
     "/analytics": ("Analytics", "Reliability, faults, consumables and data quality over time."),
     "/executive": ("Executive summary", "Month and year-to-date results, and what stands out."),
@@ -275,6 +277,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
                     loading("ex-body")]
         if route == "/insights":
             return insights_view.layout(params.get("story", "yesterday"))
+        if route == "/rounds":
+            return rounds.layout(params.get("team", "ResNet"))
         if route == "/activity":
             return [html.Div(className="toolbar", children=[
                 html.Div([icon("search"), dcc.Input(id="ac-q", type="search", placeholder="Search activity",
@@ -324,6 +328,25 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
                   Input("period", "value"), Input("tick", "n_intervals"))
     def ac_body(groups, q, sections, areas, period, _):
         return activity_log.render(cache.get(), sections, areas, period or "30", groups, q)
+
+    # --- rounds ---------------------------------------------------------------------------------------
+    @app.callback(Output("rd-start", "options"), Output("rd-start", "value"), Input("rd-team", "value"),
+                  State("rd-start", "value"))
+    def rd_start(team, current):
+        opts = rounds.start_options(team or "ResNet")
+        values = [o["value"] for o in opts]
+        default = values[0]
+        # Keep a remembered start when it's a sensible place for this team; otherwise use the team's office.
+        keep = current in values[:len(routing.TEAM_STARTS.get(team or "ResNet", []))] or (
+            current in values and ctx.triggered_id is None)
+        return opts, current if keep else default
+
+    @app.callback(Output("rd-body", "children"), Input("rd-team", "value"), Input("rd-start", "value"),
+                  Input("rd-mode", "value"), Input("rd-include", "value"), Input("rd-order", "value"),
+                  Input("rd-return", "value"), Input("theme", "data"), Input("tick", "n_intervals"))
+    def rd_body(team, start, mode, include, order, finish, theme, _):
+        return rounds.render(cache.get(), theme or "light", team or "ResNet", start, mode or "walk", include,
+                             order or "urgent", finish or "loop")
 
     # --- insights -------------------------------------------------------------------------------------
     @app.callback(Output("story-body", "children"), Input("story-period", "value"), *scope, Input("tick", "n_intervals"))

@@ -126,6 +126,21 @@ page:
   It is rule-based (time phrases, station / building / area / owner names and a few dozen intent
   keywords), so it uses **no AI model and no tokens**, and it says what it understood ("Looking at
   Weygand Hall, last week") so a misreading is obvious.
+- **Rounds:** the fastest route for whoever is on shift. Pick the team (ResNet or IT Service Center),
+  where you're starting from (the ResNet office in ECC, the IT Service Center in Maxwell, an RSR
+  desk at Shea/Durgin, Crimson or Scott, or any building), **On foot** or **Transit van**, and what
+  to visit (down printers, warnings, empty trays, parts due).
+  - **Output:** a map of the route, the stops in order with what's wrong at each, travel and
+    on-site time, and what to bring (paper, which toners and drums).
+  - **How it's computed:** shortest paths come from Dijkstra's algorithm on a walking network and
+    a driving network built from OpenStreetMap; the driving network respects one-way streets. The
+    order of stops is then optimized for total time: exact for up to 10 stops, nearest neighbor
+    plus 2-opt beyond that. Down printers are visited first unless you choose "Shortest overall".
+  - **Van mode:** drive to each building's parking spot, then walk in. The planner tells you when
+    walking would be faster.
+  - **Parking spots:** read from `reference/parking.csv`. Fill in `lat`/`lon` for the spot you'd
+    actually use; blank rows fall back to the nearest OpenStreetMap lot (shown in the `suggested_*`
+    columns).
 - **Stations:** every printer, grouped by area, with search ("Weygand", "02061", "Academic") and a
   status filter (down, warning, needs attention). Every card opens the station's page.
 - **Station page (drill-through):** current status in a sentence; availability, times down, time to
@@ -384,20 +399,23 @@ wepa_monitor/
   narrative.py     plain-language stories for any period
   ask.py           "Ask the data": a rule-based question interpreter (no AI model)
   campus.py        bridgew.edu parsers (academic calendar, residence halls, library hours) and day phases
+  routing.py       Rounds planner: campus graph from OpenStreetMap, Dijkstra, stop ordering, van parking
   synth.py         demo-data simulator
   dashboard/       Dash app shell (app.py), views/ (one module per page), charts, stylesheet,
                    explain.py (the click-to-explain panels)
 reference/stations.csv   station → building / area
 reference/buildings.csv  building coordinates (OpenStreetMap), short names, campus
 reference/academic_calendar.csv, residence_halls.csv, library_hours.csv   campus context from bridgew.edu
+reference/campus_network.json   walking and driving network (OpenStreetMap; rebuild: python -m wepa_monitor network)
+reference/parking.csv    where the van parks for each building (fill in lat/lon; blanks use the nearest lot)
 tests/                   parsers (Wepa page and bridgew.edu fixtures), replacement rule, incidents, desk hours, calendar, stories, Ask
 legacy/                  the original v1 terminal script
 ```
 
 ## Roadmap
 
-- **Route planner.** The work-queue score (severity × no-backup multiplier + age) is designed to feed a
-  route optimizer (OR-Tools) over walking times between buildings, starting from a ResNet workstation,
-  drawn on the campus map with a pick list ("2 reams, 1 black toner"). Building coordinates are in place;
-  it still needs the ResNet workstation locations.
+- **Parking spots.** Replace the suggested lots in `reference/parking.csv` with the spots staff
+  actually use.
+- **Building entrances.** Routes go to each building's center point; adding the door nearest each
+  printer would sharpen the walking times.
 - Confirm the status codes not yet seen on the live page, and the yellow-alert behavior.

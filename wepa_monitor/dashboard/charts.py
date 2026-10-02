@@ -1,6 +1,8 @@
 """Plotly figure builders. Every figure takes `theme` and returns a styled go.Figure."""
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -593,4 +595,55 @@ def residents_bars(theme: str, h: pd.DataFrame) -> go.Figure:
     fig.update_layout(**layout(theme, max(220, 28 * len(h) + 50), margin=dict(r=70),
                                xaxis=dict(showgrid=True, title=dict(text="residents per printer"), rangemode="tozero"),
                                yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
+    return fig
+
+
+def route_map(theme: str, plan, start_xy: tuple[float, float]) -> go.Figure:
+    """The planned round: walking legs solid, van legs dashed, numbered stops, the start as a square."""
+    t = TOKENS[theme]
+    fig = go.Figure()
+    walk_c, drive_c = t["series"][0], t["series"][1]
+    shown = set()
+    for legs in plan.legs + [plan.back]:
+        for leg in legs:
+            if len(leg.path) < 2:
+                continue
+            lat, lon = zip(*leg.path)
+            name = "On foot" if leg.mode == "walk" else "Transit van"
+            fig.add_trace(go.Scattermap(lat=list(lat), lon=list(lon), mode="lines", name=name,
+                                        showlegend=name not in shown, legendgroup=name, hoverinfo="skip",
+                                        line=dict(width=4 if leg.mode == "drive" else 3.5,
+                                                  color=drive_c if leg.mode == "drive" else walk_c)))
+            shown.add(name)
+    fig.add_trace(go.Scattermap(lat=[start_xy[0]], lon=[start_xy[1]], mode="markers+text", name="Start",
+                                marker=dict(size=18, color=t["ink"], symbol="circle"), text=["S"],
+                                textfont=dict(color=t["surface"], size=11), textposition="middle center",
+                                hovertext=[f"Start: {plan.start}"], hoverinfo="text"))
+    if plan.order:
+        lat = [s.lat for s in plan.order]
+        lon = [s.lon for s in plan.order]
+        colors = [STATUS["critical"] if s.priority == 0 else STATUS["warning"] for s in plan.order]
+        hover = [f"<b>{i}. {s.building}</b><br>" + "<br>".join(f"{it['station']}: {it['issue']}" for it in s.items)
+                 for i, s in enumerate(plan.order, start=1)]
+        fig.add_trace(go.Scattermap(lat=lat, lon=lon, mode="markers+text", name="Stops", showlegend=False,
+                                    marker=dict(size=22, color=colors), text=[str(i) for i in range(1, len(lat) + 1)],
+                                    textfont=dict(color="#ffffff", size=12), textposition="middle center",
+                                    hovertext=hover, hoverinfo="text"))
+    pts = [start_xy] + [(s.lat, s.lon) for s in plan.order]
+    for legs in plan.legs:
+        for leg in legs:
+            pts += leg.path
+    la = [p[0] for p in pts]
+    lo = [p[1] for p in pts]
+    # Fit the route: a web-map tile is 512 px for 360/2^zoom degrees of longitude; aim for ~70% of a
+    # 700 x 520 px map, with latitude degrees stretched by 1/cos(latitude).
+    lat_span = (max(la) - min(la)) / math.cos(math.radians(sum(la) / len(la)))
+    span = max(max(lo) - min(lo), lat_span * 700 / 520, 0.002)
+    zoom = float(np.clip(math.log2(360 * 700 * 0.7 / (512 * span)), 13.5, 17.5))
+    fig.update_layout(**layout(theme, 520, margin=dict(l=0, r=0, t=0, b=0),
+                               map=dict(style="carto-darkmatter" if theme == "dark" else "carto-positron",
+                                        center=dict(lat=(max(la) + min(la)) / 2, lon=(max(lo) + min(lo)) / 2),
+                                        zoom=zoom),
+                               legend=dict(x=0.01, y=0.99, yanchor="top", bgcolor=t["surface"],
+                                           bordercolor=t["border"], borderwidth=1, font=dict(color=t["ink"]))))
     return fig
