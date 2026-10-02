@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from dash import html
 
-from ... import config, metrics as M, models, support
+from ... import campus, config, insights, metrics as M, models, support
 from .. import charts
 from ..components import (chart_card, data_table, explore_hint, fmt_hours, fmt_minutes, fmt_num, headline, metric_tile,
                           segmented, tile)
@@ -124,13 +124,49 @@ def _reliability(ds, theme, ids, start, end, plabel, _):
             ("staffed_h", "Down in desk hours", lambda v: f"{v:,.0f} h"),
             ("after_h", "Down after hours", lambda v: f"{v:,.0f} h")]) if len(summ) else None)
 
+    cal = campus.load()
+    phases = insights.by_phase(ds, start, end, ids)
+    phase_card = chart_card(
+        "Across the academic year", "Outages per day in each part of the calendar, from BSU's registrar "
+        "and Residence Life schedules.",
+        charts.phase_bars(theme, phases) if len(phases) > 1 else None, graph_id={"type": "xg", "chart": "phases"},
+        body=None if len(phases) > 1 else empty("This period sits inside one part of the calendar; widen the "
+                                                 "period to compare.", big=False),
+        explain=["Each bar is the average number of outages a day during that part of the year. Finals and the "
+                 "first weeks of classes are the busiest printing; breaks and summer are quiet.",
+                 "Compare like with like: a quiet summer week isn't 'good performance', and a rough finals week "
+                 "matters more than a rough week in July."],
+        table=data_table(phases, [("label", "Part of the year", None), ("days", "Days", None),
+                                  ("availability", "Available", lambda v: f"{v:.1f}%"),
+                                  ("outages_per_day", "Outages a day", lambda v: f"{v:.1f}"),
+                                  ("faults_per_day", "Faults a day", lambda v: f"{v:.1f}"),
+                                  ("toner_k_per_day", "Black toners a day", lambda v: f"{v:.2f}")])
+        if len(phases) else None)
+    rpp = campus.residents_per_printer(cal, ds.stations if ids is None else
+                                       ds.stations[ds.stations["station_id"].isin(ids)])
+    res_card = chart_card(
+        "Residents per printer", "Students living in each hall ÷ the Wepa printers in it (Residence Life figures).",
+        charts.residents_bars(theme, rpp) if len(rpp) else None, graph_id={"type": "xg", "chart": "residents"},
+        body=None if len(rpp) else empty("No residence halls in this scope.", big=False),
+        note=("Lighter bars are estimates: Residence Life doesn't list those halls' counts, so they share the "
+              "rest of its ~3,300 total." if len(rpp) and rpp["estimated"].astype(bool).any() else ""),
+        explain=["Longer bars mean more students depend on each printer, so an outage there strands more people "
+                 "and paper runs out faster.", "Use it to decide where a second printer, a bigger paper "
+                 "tray or an extra round pays off most."],
+        table=data_table(rpp, [("building", "Hall", None), ("residents", "Residents", None),
+                               ("printers", "Printers", None), ("per_printer", "Per printer", lambda v: f"{v:.0f}"),
+                               ("who", "Who lives there", None)]) if len(rpp) else None)
+
     return [hl, explore_hint(), tiles, html.Div(className="grid", children=[
         chart_card("Daily availability", "Share of each day with the station able to print.",
-                   *needs_days(fleet, lambda: charts.availability_daily(theme, fleet, by_sec)), wide=True,
+                   *needs_days(fleet, lambda: charts.add_calendar(charts.availability_daily(theme, fleet, by_sec),
+                                                                  theme, cal.days, start, end)), wide=True,
                    graph_id={"type": "xg", "chart": "avail_daily"},
                    explain=["Each line is the share of a day that stations could print. The black line is all BSU "
                             "stations; colored lines split it by section.",
-                            "Dips are days with outages. Click a point to see which stations caused it."],
+                            "Dips are days with outages. Click a point to see which stations caused it. Shaded "
+                            "bands come from BSU's academic calendar (finals, breaks, move-in, summer); dotted "
+                            "lines are holidays."],
                    table=data_table(fleet, [("local_date", "Date", lambda d: f"{d:%Y-%m-%d}"),
                                             ("availability", "Availability", lambda v: f"{v:.2f}%"),
                                             ("observed_h", "Observed printer-h", lambda v: f"{v:,.1f}")])),
@@ -149,6 +185,8 @@ def _reliability(ds, theme, ids, start, end, plabel, _):
                                              ("severity", "Severity", None), ("median_min", "Median", fmt_minutes),
                                              ("mean_min", "Mean", fmt_minutes), ("n", "Incidents", None)])),
         desk_card,
+        phase_card,
+        res_card,
         chart_card("Station scorecard", "Worst availability first. Click a station for its full history.",
                    wide=True, body=data_table(sc, [
                        ("label", "Station", None), ("area", "Area", None), ("owner", "Supported by", None),
@@ -224,7 +262,8 @@ def _consumables(ds, theme, ids, start, end, plabel, burn_unit):
                        ("rate_units", f"Per {unit} (parts)", lambda v: fmt_num(v, 2)),
                        ("stations", "Stations with enough data", None)])),
         chart_card("Cumulative toner use", "Parts' worth used since the start of the period.",
-                   *needs_days(cum, lambda: charts.cumulative(theme, cum, ["toner_k", "toner_c", "toner_m", "toner_y"])),
+                   *needs_days(cum, lambda: charts.add_calendar(charts.cumulative(theme, cum, ["toner_k", "toner_c", "toner_m", "toner_y"]),
+                                                     theme, campus.load().days, start, end)),
                    graph_id={"type": "xg", "chart": "cum_toner"}, explain="Each line climbs as toner is used. The steeper it climbs, the faster "
                    "that color is being consumed; the end value is how many cartridges' worth were used."),
         chart_card("Cumulative drum use", "Parts' worth of drum life used.",

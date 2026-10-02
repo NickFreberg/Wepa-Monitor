@@ -209,3 +209,34 @@ def desk_line(ds, owner: str, prefix: str = "Supported by ") -> html.Div:
         html.Span([prefix, html.B(owner), f" ({t['base']})"]),
         html.Span(f"Desk {txt[0].lower() + txt[1:]}", className="desk__status"),
     ])
+
+
+def campus_line(ds) -> html.Div | None:
+    """'Classes in session · Maxwell Library open 7:30 AM–11 PM · Next: Veterans’ Day, Wed Nov 11'."""
+    from .. import campus, config
+    c = campus.load()
+    if c.empty:
+        return None
+    today = ds.as_of.tz_convert(config.LOCAL_TZ).date()
+    row = c.on(today)
+    if row is None:
+        return None
+    parts = [html.B(campus.PHASES.get(row["phase"], row["phase"]))]
+    if not row["halls_open"]:
+        parts.append(" (residence halls closed)")
+    if row.get("library_known", False):
+        o, cl = row.get("library_open"), row.get("library_close")
+        def fmt(h):
+            h = float(h) % 24
+            return f"{int(h) % 12 or 12}{':%02d' % round((h % 1) * 60) if h % 1 else ''} {'AM' if h < 12 else 'PM'}"
+        parts.append(html.Span(f"Maxwell Library {'open ' + fmt(o) + '–' + fmt(cl) if o == o and o is not None else 'closed today'}",
+                               className="desk__status"))
+    up = c.upcoming(today, days=60)
+    up = up[up["kind"].isin(["holiday", "thanksgiving_start", "break_start", "finals_start", "halls_close",
+                             "move_in", "classes_begin", "commencement"])]
+    if len(up):
+        e = up.iloc[0]
+        name = e["event"].split("–")[0].split(" - ")[0].strip().rstrip(".")
+        parts.append(html.Span(f"Next: {name}, {e['date']:%a %b %-d}", className="desk__status"))
+    return html.Div([html.Span(className="desk__cal", **{"aria-hidden": "true"}), *parts],
+                    className="desk desk--campus", title="From BSU's academic calendar, Residence Life and library hours")

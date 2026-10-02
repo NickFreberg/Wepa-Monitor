@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from . import config, consumables, events, rollup, store, support
+from . import campus, config, consumables, events, rollup, store, support
 from .reference import load_stations, station_table
 
 
@@ -106,7 +106,8 @@ def load(data_dir: Path, now: datetime | None = None, rollups: "rollup.RollupSto
     return Dataset(
         data_dir=data_dir, meta=meta, is_demo=is_demo, as_of=as_of,
         stations=stations, latest=latest, status=status, hourly=hourly, bhourly=r["bhourly"],
-        sev_inc=support.annotate(events.severity_incidents(status, as_of), stations, as_of),
+        sev_inc=campus.annotate_exposure(support.annotate(events.severity_incidents(status, as_of), stations, as_of),
+                                         stations, as_of),
         fault_inc=events.fault_incidents(status, as_of),
         tray_inc=events.tray_incidents(status, as_of),
         cons=cons, repl=repl, levels=levels, log=log,

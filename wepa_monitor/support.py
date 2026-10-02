@@ -47,9 +47,24 @@ def hours_text(name: str) -> str:
     return ", ".join(f"{DAYS[a]}{'–' + DAYS[b] if b > a else ''} {_clock(s[0])}–{_clock(s[1])}" for a, b, s in groups)
 
 
+_closed_cache: dict = {}
+
+
+def closed_dates() -> set[str]:
+    """Days both desks are closed: config.SUPPORT_CLOSED_DATES plus, when enabled, university
+    holidays from the academic calendar and Massachusetts state holidays (campus.py)."""
+    from . import campus
+    c = campus.load() if config.DESKS_CLOSED_ON_HOLIDAYS else None
+    key = (id(c), frozenset(config.SUPPORT_CLOSED_DATES))
+    if key not in _closed_cache:
+        _closed_cache.clear()
+        _closed_cache[key] = set(config.SUPPORT_CLOSED_DATES) | (c.closed_dates() if c is not None else set())
+    return _closed_cache[key]
+
+
 def _span(name: str, day: pd.Timestamp):
     """(open, close) local timestamps for a local calendar day, or None if closed."""
-    if day.strftime("%Y-%m-%d") in config.SUPPORT_CLOSED_DATES:
+    if day.strftime("%Y-%m-%d") in closed_dates():
         return None
     s = team(name)["hours"].get(day.dayofweek)
     if not s:

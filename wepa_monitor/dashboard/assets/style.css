@@ -482,3 +482,4 @@ a.feed__title:hover { text-decoration: underline; }
 .desk__status::before { content: "·"; margin-right: 8px; }
 .desks { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: -4px 0 16px; }
 .desks .desk { margin-top: 0; }
+.desk__cal { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); flex: none; }

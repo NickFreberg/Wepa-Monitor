@@ -7,7 +7,10 @@ directory is stamped {"synthetic": true} and the dashboard shows a DEMO banner.
 The model is deliberately simple and explainable:
 
 * Pages printed per minute ~ Poisson(rate), where rate = station baseline x
-  hour-of-day profile x weekday factor x academic-calendar factor.
+  hour-of-day profile x weekday factor x academic-calendar factor. The calendar
+  factor comes from BSU's real academic calendar and residence-hall schedule
+  (campus.py): finals are busiest, breaks quiet, and hall printers go almost idle
+  while the halls are closed.
 * Every page drains toner K, drums, belt and fuser; color pages also drain
   toner C/M/Y. Yields are typical of a mid-range color laser.
 * Paper drains Tray1 first, then Tray2. One empty tray is only a printer-text
@@ -23,12 +26,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import numpy as np
 import pandas as pd
 
-from . import config, store
+from . import campus, config, store, support
 from .reference import load_stations
 from .scrape import parse_status_page
 
@@ -55,7 +57,27 @@ WEEKEND = {"residence": 0.8, "lab": 0.3, "satellite": 0.1}
 OWNER = {"residence": "ResNet", "lab": "IT Service Center", "satellite": "IT Service Center"}
 
 
+# Demand by point in the academic year, from the real BSU calendar (campus.py) when it covers
+# the date: (residence halls, labs/satellite). Residence demand collapses when halls are closed.
+PHASE_FACTOR = {"classes": (1.0, 1.0), "move_in": (1.25, 0.3), "holiday": (0.8, 0.25), "reading": (1.3, 1.2),
+                "finals": (1.4, 1.35), "thanksgiving": (0.25, 0.1), "spring_break": (0.15, 0.15),
+                "winter_break": (0.06, 0.1), "summer": (0.04, 0.12), "summer_session": (0.04, 0.3)}
+
+
 def academic_factor(d: date, kind: str) -> float:
+    day = _CAMPUS.on(d) if _CAMPUS is not None and not _CAMPUS.empty else None
+    if day is not None:
+        res, lab = PHASE_FACTOR.get(day["phase"], (1.0, 1.0))
+        if kind == "residence":
+            return res if day["halls_open"] else 0.02
+        return lab
+    return _fallback_factor(d, kind)
+
+
+_CAMPUS = None
+
+
+def _fallback_factor(d: date, kind: str) -> float:
     md = (d.month, d.day)
     summer = (5, 18) <= md <= (8, 31)
     winter = md >= (12, 20) or md <= (1, 20)
@@ -95,7 +117,7 @@ def _staffed_mask(clock: _Clock, kind: str) -> np.ndarray:
     mask = np.zeros(len(clock.local_clock), dtype=bool)
     for d, (a, b) in hours.items():
         mask |= (clock.weekday == d) & (clock.local_clock >= a) & (clock.local_clock < b)
-    closed = {pd.Timestamp(x).date() for x in config.SUPPORT_CLOSED_DATES}
+    closed = {pd.Timestamp(x).date() for x in support.closed_dates()}
     if closed:
         mask &= ~np.isin(np.array(clock.local_date, dtype=object), list(closed))
     return mask
@@ -255,6 +277,7 @@ class _Station:
 def _plan_rounds(n: int, clock: _Clock, kind: str, rng) -> set[int]:
     """Routine refill rounds during desk hours: residence halls twice a day, labs once."""
     rounds = set()
+    closed_dates = support.closed_dates()
     days = sorted(set(clock.local_date))
     day_start = {}
     for i, d in enumerate(clock.local_date):
@@ -262,7 +285,7 @@ def _plan_rounds(n: int, clock: _Clock, kind: str, rng) -> set[int]:
     for d in days:
         base = day_start[d] - int(clock.local_hour[day_start[d]] * 60)
         desk = config.SUPPORT_TEAMS[OWNER[kind]]["hours"].get(d.weekday())
-        if not desk or d.strftime("%Y-%m-%d") in config.SUPPORT_CLOSED_DATES:
+        if not desk or d.strftime("%Y-%m-%d") in closed_dates:
             continue    # rounds only happen while the owning desk is staffed
         hours = [desk[0] + 1.0, desk[1] - 1.0] if kind == "residence" else [desk[0] + 0.5]
         for h in hours:
@@ -276,6 +299,8 @@ def _plan_rounds(n: int, clock: _Clock, kind: str, rng) -> set[int]:
 
 def generate(data_dir: Path, days: int = 90, end: datetime | None = None, seed: int = 7,
              progress=print) -> dict:
+    global _CAMPUS
+    _CAMPUS = campus.load()
     rng = np.random.default_rng(seed)
     end = (end or datetime.now(timezone.utc)).replace(second=0, microsecond=0)
     start = end - timedelta(days=days)

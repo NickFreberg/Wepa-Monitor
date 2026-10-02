@@ -518,3 +518,79 @@ def usage_scatter(theme: str, uf) -> go.Figure:
                                           range=[0, float(p["failures_per_week"].max()) * 1.2 + 0.2]),
                                margin=dict(t=30)))
     return fig
+
+
+# --- academic calendar context ---------------------------------------------------------------------
+
+BAND_PHASES = {"finals": "Finals", "spring_break": "Spring break", "winter_break": "Winter break",
+               "thanksgiving": "Thanksgiving", "move_in": "Move-in", "summer": "Summer", "summer_session": "Summer session"}
+
+
+def add_calendar(fig: go.Figure, theme: str, days: pd.DataFrame, start, end, min_days: int = 1) -> go.Figure:
+    """Shade academic-calendar stretches (finals, breaks, move-in, summer) behind a date chart and mark
+    single holidays with a dotted line. `days` is campus.Campus.days."""
+    if days is None or days.empty:
+        return fig
+    t = TOKENS[theme]
+    a = start.tz_convert(config.LOCAL_TZ).date()
+    b = end.tz_convert(config.LOCAL_TZ).date()
+    d = days.loc[(days.index >= a) & (days.index <= b)]
+    if d.empty:
+        return fig
+    runs, cur = [], None
+    for day, ph in d["phase"].replace({"summer_session": "summer"}).items():
+        if cur and cur[2] == ph and (day - cur[1]).days == 1:
+            cur[1] = day
+        else:
+            cur = [day, day, ph]
+            runs.append(cur)
+    for r0, r1, ph in runs:
+        if ph == "holiday":
+            fig.add_vline(x=pd.Timestamp(r0) + pd.Timedelta(hours=12), line=dict(color=t["axis"], width=1, dash="dot"),
+                          layer="below")
+            continue
+        if ph not in BAND_PHASES or (r1 - r0).days + 1 < min_days:
+            continue
+        tint = {"finals": t["series"][3], "move_in": t["series"][2]}.get(ph)
+        fig.add_vrect(x0=pd.Timestamp(r0), x1=pd.Timestamp(r1) + pd.Timedelta(days=1), layer="below", line_width=0,
+                      fillcolor=tint or t["grid"], opacity=0.18 if tint else 0.55,
+                      annotation_text=BAND_PHASES[ph], annotation_position="bottom left",
+                      annotation=dict(font=dict(size=10, color=t["muted"]), yshift=2))
+    return fig
+
+
+def phase_bars(theme: str, g: pd.DataFrame) -> go.Figure:
+    """Outages per day by point in the academic year (one bar per phase)."""
+    t = TOKENS[theme]
+    g = g.iloc[::-1]
+    fig = go.Figure(go.Bar(
+        y=g["label"], x=g["outages_per_day"], orientation="h",
+        marker=dict(color=[t["series"][3] if p == "finals" else t["series"][0] for p in g["phase"]]),
+        text=[f"{v:.1f}/day" for v in g["outages_per_day"]], textposition="outside", cliponaxis=False,
+        textfont=dict(color=t["secondary"], size=11),
+        customdata=np.stack([g["phase"], g["days"], g["availability"], g["toner_k_per_day"]], axis=1),
+        hovertemplate="<b>%{y}</b> (%{customdata[1]} days)<br>%{x:.1f} outages a day · "
+                      "%{customdata[2]:.1f}% available · %{customdata[3]:.2f} black toners a day<extra></extra>"))
+    fig.update_layout(**layout(theme, max(200, 34 * len(g) + 50), margin=dict(r=60),
+                               xaxis=dict(showgrid=True, title=dict(text="outages per day"), rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
+    return fig
+
+
+def residents_bars(theme: str, h: pd.DataFrame) -> go.Figure:
+    """Residents per printer in each hall; estimated counts are drawn lighter."""
+    t = TOKENS[theme]
+    h = h.iloc[::-1]
+    est = h["estimated"].astype(bool)
+    fig = go.Figure(go.Bar(
+        y=h["building"], x=h["per_printer"], orientation="h",
+        marker=dict(color=t["series"][0], opacity=[0.45 if e else 1 for e in est]),
+        text=[f"{v:.0f}" + (" (est.)" if e else "") for v, e in zip(h["per_printer"], est)], textposition="outside",
+        cliponaxis=False, textfont=dict(color=t["secondary"], size=11),
+        customdata=np.stack([h["building"], h["residents"].astype(float), h["printers"], est], axis=1),
+        hovertemplate="<b>%{y}</b><br>%{customdata[1]:.0f} residents · %{customdata[2]} printer(s)"
+                      "<br>%{x:.0f} residents per printer<extra></extra>"))
+    fig.update_layout(**layout(theme, max(220, 28 * len(h) + 50), margin=dict(r=70),
+                               xaxis=dict(showgrid=True, title=dict(text="residents per printer"), rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
+    return fig

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from . import config, metrics as M, models, narrative as N, ops, support
+from . import campus, config, metrics as M, models, narrative as N, ops, support
 from .narrative import dur, hour, plural
 
 TZ = config.LOCAL_TZ
@@ -39,6 +39,8 @@ COMPONENT_WORDS = {"toner": "toner", "drum": "drum", "belt": "belt", "fuser": "f
 
 EXAMPLES = [
     "How was yesterday?",
+    "What's coming up on the calendar?",
+    "Which hall has the most residents per printer?",
     "Which station was down the longest last week?",
     "How is Weygand doing this month?",
     "When do jams happen most?",
@@ -63,7 +65,42 @@ class Answer:
 
 # --- parsing -----------------------------------------------------------------------------------------
 
+PHASE_WORDS = [("finals", r"finals?( week)?|exam week|final exams?"), ("spring_break", r"spring break"),
+               ("winter_break", r"winter break|christmas break|holiday break"), ("thanksgiving", r"thanksgiving"),
+               ("move_in", r"move[- ]?in"), ("summer", r"(the )?summer( break)?"),
+               ("reading", r"reading days?")]
+
+
+def phase_period(ds: M.Dataset, phase: str) -> N.Period | None:
+    """The most recent stretch of a calendar phase that has started by now ('finals' -> last finals)."""
+    c = campus.load()
+    if c.empty:
+        return None
+    today = ds.as_of.tz_convert(TZ).date()
+    d = c.days[(c.days.index <= today)]
+    hits = d.index[d["phase"] == phase]
+    if phase == "summer":
+        hits = d.index[d["phase"].isin(["summer", "summer_session"])]
+    if not len(hits):
+        return None
+    end = hits[-1]
+    start = end
+    for day in reversed(hits[:-1]):
+        if (start - day).days > 3:
+            break
+        start = day
+    s = pd.Timestamp(start).tz_localize(TZ).tz_convert("UTC")
+    e = min(pd.Timestamp(end + pd.Timedelta(days=1)).tz_localize(TZ).tz_convert("UTC"), ds.as_of)
+    label = f"{campus.PHASES[phase].lower() if phase != 'summer' else 'the summer'} ({start:%b %-d}–{end:%b %-d})"
+    return N.custom_period(ds, s, e, label)
+
+
 def parse_period(ds: M.Dataset, q: str) -> N.Period:
+    for phase, pat in PHASE_WORDS:
+        if re.search(rf"\b({pat})\b", q) and not re.search(r"\b(when|next|coming|upcoming|until)\b", q):
+            per = phase_period(ds, phase)
+            if per is not None:
+                return per
     for key, words in (("yesterday", ["yesterday"]), ("today", ["today", "so far today", "right now", "now"]),
                        ("last_week", ["last week", "previous week"]), ("this_week", ["this week", "week so far"]),
                        ("last_month", ["last month", "previous month"]), ("this_month", ["this month", "month so far"])):
@@ -131,6 +168,12 @@ def parse_subject(ds: M.Dataset, q: str) -> Subject:
 
 def intent(q: str) -> str:
     rules = [
+        ("calendar", r"\b(library (open|closed|hours)|is the library|library today|when (is|are|do|does) .*"
+                     r"(finals?|break|classes|move[- ]?in|commencement|graduation|holiday|halls? (close|open)|"
+                     r"semester|thanksgiving)|coming up|upcoming|next (holiday|break|day off)|academic calendar|"
+                     r"no classes)\b"),
+        ("capacity", r"\b(residents? per printer|students? per printer|most crowded|how many (students|residents)|"
+                     r"crowded|capacity)\b"),
         ("compare", r"\b(compare|compared|vs\.?|versus|better or worse|difference between)\b"),
         ("forecast", r"\b(run out|running out|next|end of life|forecast|predict|due|need(s)? replac|about to)\b"),
         ("now", r"\b(right now|currently|at the moment|is .* down|what'?s down|down now|broken now)\b"),
@@ -163,9 +206,12 @@ def answer(ds: M.Dataset, question: str, scope_ids=None) -> Answer:
                   or re.search(r"\b(how|doing|going|summary|overview|story|status|what happened)\b", q))
     handler = {"compare": _compare, "forecast": _forecast, "now": _now, "time_to_fix": _time_to_fix,
                "paper": _paper, "consumables": _consumables, "when": _when, "ranking": _ranking,
-               "faults": _faults, "support": _support, "overview": _overview}[kind]
+               "faults": _faults, "support": _support, "calendar": _calendar, "capacity": _capacity,
+               "overview": _overview}[kind]
     ans = handler(ds, p, subj, q)
     ans.understood = understood if kind != "now" else f"Looking at {subj.label}, right now"
+    if kind == "calendar":
+        ans.understood = "Looking at BSU's academic calendar and library hours"
     if kind == "compare":
         ans.understood = "Comparing two periods" + (f" for {subj.label}" if subj.ids is not None else "")
     if not recognized:
@@ -473,3 +519,88 @@ def _support(ds, p, subj, q):
                                                      ("wait", "Median wait for desk"), ("desk", "Desk time to fix")],
                   followups=["Do weekend outages last longer?", "When do problems happen most?",
                              "How long do outages take to fix?"])
+
+
+def _calendar(ds, p, subj, q):
+    c = campus.load()
+    if c.empty:
+        return Answer("", [["The academic calendar hasn't been loaded yet. Run: python -m wepa_monitor campus"]])
+    today = ds.as_of.tz_convert(TZ).date()
+    paras, table, cols = [], None, []
+    if re.search(r"\blibrary\b", q):
+        rows = []
+        for i in range(7):
+            d = today + pd.Timedelta(days=i)
+            r = c.on(d)
+            if r is None or not r.get("library_known", False):
+                continue
+            o, cl = r.get("library_open"), r.get("library_close")
+            rows.append({"day": f"{pd.Timestamp(d):%a %b %-d}",
+                         "hours": "Closed" if pd.isna(o) else f"{support._clock(o)}–{support._clock(float(cl) % 24)}"})
+        if not rows:
+            return Answer("", [["Library hours for this week haven't been published yet."]])
+        paras.append(["Maxwell Library is ", ("b", rows[0]["hours"].lower() if rows[0]["hours"] == "Closed"
+                                               else f"open {rows[0]['hours']}"), " today. The three library printers "
+                      "can only be used while it's open, so outages after closing don't strand anyone."])
+        return Answer("", paras, table=pd.DataFrame(rows), table_cols=[("day", "Day"), ("hours", "Hours")],
+                      followups=["What's coming up on the calendar?", "How is Maxwell doing this week?"])
+    want = next((k for k, pat in [("finals_start", r"finals?|exam"), ("break_start", r"spring break"),
+                                  ("thanksgiving_start", r"thanksgiving"), ("move_in", r"move[- ]?in"),
+                                  ("commencement", r"commencement|graduation"), ("classes_begin", r"classes|semester"),
+                                  ("holiday", r"holiday|day off|no classes"),
+                                  ("halls_close", r"halls? close|winter break")] if re.search(pat, q)), None)
+    future = c.events[c.events["date"] >= today]
+    if want:
+        hit = future[future["kind"] == want].head(1)
+        if hit.empty:
+            return Answer("", [["That isn't on the published calendar yet."]])
+        e = hit.iloc[0]
+        days = (e["date"] - today).days
+        extra = ""
+        if want == "finals_start":
+            end = future[(future["kind"] == "finals_end") & (future["date"] >= e["date"])].head(1)
+            extra = f", running through {end.iloc[0]['date']:%a %b %-d}" if len(end) else ""
+        paras.append([("b", e["event"].split("–")[0].strip().rstrip(".")), f": {e['date']:%A, %B %-d, %Y}{extra} "
+                      f"(in {plural(days, 'day')})."])
+        if want in ("finals_start", "move_in", "classes_begin"):
+            eol = models.eol_forecast(ds, subj.ids)
+            during = eol[eol["days"].notna() & (eol["days"] >= days - 3) & (eol["days"] <= days + 5)]
+            if len(during):
+                paras.append([("b", plural(len(during), "part")), f" {'is' if len(during) == 1 else 'are'} projected "
+                              "to reach end of life right around then. Swap them a few days early so they don't fail "
+                              "at the busiest time."])
+            else:
+                paras.append(["No parts are projected to run out right around then (at current usage)."])
+    else:
+        up = c.upcoming(today, days=60)
+        up = up[~up["kind"].isin(["halls_open"])].head(6)
+        paras.append(["Here's what's coming up on BSU's academic calendar. Holidays close both support desks; "
+                      "finals and move-in are the busiest printing of the term."])
+        table = up.assign(when=up["date"].map(lambda d: f"{pd.Timestamp(d):%a %b %-d}"),
+                          what=up["event"].str.replace(r"\s*\(.*\)$", "", regex=True))
+        cols = [("when", "Date"), ("what", "Event")]
+    return Answer("", paras, table=table, table_cols=cols,
+                  followups=["How did the last finals go?", "Is the library open?", "When are finals?"])
+
+
+def _capacity(ds, p, subj, q):
+    c = campus.load()
+    st = ds.stations if subj.ids is None else ds.stations[ds.stations["station_id"].isin(subj.ids)]
+    h = campus.residents_per_printer(c, st)
+    if h.empty:
+        return Answer("", [["No residence-hall figures for these stations."]])
+    top = h.iloc[0]
+    para = [("b", top["building"]), f" is the most crowded: about {top['residents']} residents share "
+            f"{plural(int(top['printers']), 'printer')}, roughly ", ("b", f"{top['per_printer']:.0f} per printer"),
+            ". " + (f"{h.iloc[1]['building']} is next at {h.iloc[1]['per_printer']:.0f}. " if len(h) > 1 else "") +
+            "These halls feel an outage most, and their paper runs out fastest."]
+    tot = h["residents"].sum()
+    paras = [para, [f"Altogether about {tot:,} students live in these halls. Figures are from Residence Life"
+                    + ("; halls it doesn't list are estimated." if h["estimated"].astype(bool).any() else ".")]]
+    tbl = h.assign(per=h["per_printer"].map(lambda v: f"{v:.0f}"),
+                   note=h["estimated"].map(lambda e: "estimated" if str(e).lower() == "true" else ""))
+    return Answer("", paras, table=tbl, table_cols=[("building", "Hall"), ("residents", "Residents"),
+                                                     ("printers", "Printers"), ("per", "Per printer"),
+                                                     ("note", "")],
+                  followups=[f"How is {top['building'].replace(' Hall', '')} doing this month?",
+                             "Which station was down the longest last week?"])

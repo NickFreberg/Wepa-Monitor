@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import config, scrape, store
+from . import campus, config, scrape, store
 
 
 def scrape_once(data_dir: Path, archive_html: bool = False, quiet: bool = False) -> bool:
@@ -19,7 +19,7 @@ def scrape_once(data_dir: Path, archive_html: bool = False, quiet: bool = False)
 
 
 def collect_forever(data_dir: Path, archive_html: bool = False, quiet: bool = False) -> None:
-    """Scrape on every minute boundary, compacting finished days once a day."""
+    """Scrape on every minute boundary; once a day, compact finished days and refresh campus data."""
     last_compact = None
     while True:
         # Sleep to the next minute boundary so snapshots stay evenly spaced.
@@ -29,6 +29,9 @@ def collect_forever(data_dir: Path, archive_html: bool = False, quiet: bool = Fa
             today = datetime.now(timezone.utc).date()
             if last_compact != today:
                 store.compact(data_dir)
+                # Campus context from bridgew.edu: a no-op unless something is due
+                # (academic calendar yearly, library hours weekly); failures keep the old files.
+                campus.refresh(log=lambda m: print(m, flush=True))
                 last_compact = today
         except Exception as exc:  # noqa: BLE001 - a disk hiccup must not kill the collector thread
             print(f"collector error: {type(exc).__name__}: {exc}", flush=True)

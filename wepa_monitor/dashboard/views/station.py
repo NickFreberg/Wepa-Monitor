@@ -4,9 +4,9 @@ from __future__ import annotations
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, config, metrics as M, models, ops, rules, support
+from ... import activity, campus, config, metrics as M, models, ops, support
 from .. import charts
-from ..components import (chart_card, data_table, desk_line, explore_hint, fmt_hours, fmt_minutes, fmt_num, headline,
+from ..components import (chart_card, data_table, desk_line, explore_hint, fmt_hours, fmt_minutes, headline,
                           level_bar, station_link, status_pill, tile)
 from .common import empty, period_label, period_window, station_messages, status_segments
 from .analytics import eol_window
@@ -60,6 +60,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
                      f"updated {row['scrape_ts'].tz_convert(config.LOCAL_TZ):%-I:%M %p}",
                      className="station-hero__meta"),
             desk_line(ds, row.get("owner") or support.owner(row["section"])),
+            building_line(ds, row),
         ]),
     ])
 
@@ -206,3 +207,37 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
                        action=dcc.Link("View all", href=f"/activity?q={station_id}", className="link link--quiet")),
         ]),
     ]
+
+
+def building_line(ds: M.Dataset, row) -> html.Div | None:
+    """Who depends on this printer: hall residents per printer, or library opening hours."""
+    c = campus.load()
+    if c.empty:
+        return None
+    if row.get("station_type") == "residence":
+        h = campus.residents_per_printer(c, ds.stations)
+        h = h[h["building"] == row["building"]]
+        if h.empty:
+            return None
+        r = h.iloc[0]
+        today = c.on(ds.as_of.tz_convert(config.LOCAL_TZ).date())
+        closed = today is not None and not today["halls_open"]
+        est = " (estimated)" if str(r["estimated"]).lower() == "true" else ""
+        return html.Div([html.Span(className="desk__cal", **{"aria-hidden": "true"}),
+                         html.Span([f"About {r['per_printer']:.0f} residents per printer{est} ",
+                                    html.Span(f"{r['residents']} {str(r['who']).split(',')[0].lower()} residents, "
+                                              f"{r['printers']} printer{'s' if r['printers'] != 1 else ''}",
+                                              className="desk__status")]),
+                         html.Span("Residence halls are closed right now", className="desk__status") if closed
+                         else None], className="desk desk--campus")
+    if row.get("building") == campus.LIBRARY_BUILDING:
+        today = c.on(ds.as_of.tz_convert(config.LOCAL_TZ).date())
+        if today is None or not today.get("library_known", False):
+            return None
+        o, cl = today["library_open"], today["library_close"]
+        txt = "Maxwell Library is closed today" if pd.isna(o) else \
+            f"Maxwell Library open {support._clock(o)}–{support._clock(float(cl) % 24)} today"
+        return html.Div([html.Span(className="desk__cal", **{"aria-hidden": "true"}), html.Span(txt),
+                         html.Span("outages while it's closed don't strand anyone", className="desk__status")],
+                        className="desk desk--campus")
+    return None

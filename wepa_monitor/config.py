@@ -85,3 +85,12 @@ DEFAULT_OWNER = "IT Service Center"
 # weren't always staffed, so the desk hours above are the dependable coverage.
 # Days both desks are closed (holidays, breaks), as "YYYY-MM-DD" strings.
 SUPPORT_CLOSED_DATES: set[str] = set()
+
+# --- Campus intelligence (bridgew.edu) ----------------------------------------------
+# The academic calendar is published years ahead, so a yearly refresh is enough; library
+# hours are published a few weeks ahead, so they are refreshed weekly and accumulated.
+CAMPUS_CALENDAR_REFRESH_DAYS = 365
+CAMPUS_LIBRARY_REFRESH_DAYS = 7
+# Treat university holidays (from the academic calendar, plus Massachusetts state holidays)
+# as days both support desks are closed.
+DESKS_CLOSED_ON_HOLIDAYS = True

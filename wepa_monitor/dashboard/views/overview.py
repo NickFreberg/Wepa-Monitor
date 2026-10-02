@@ -1,13 +1,12 @@
 """Overview: what is happening right now, in one screen."""
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 from dash import dcc, html
 
 from ... import activity, config, geo, metrics as M, models, ops, support
 from .. import charts
-from ..components import chart_card, data_table, desk_line, explore_hint, fmt_minutes, fmt_num, headline, icon, station_link, tile
+from ..components import campus_line, chart_card, data_table, desk_line, explore_hint, fmt_minutes, headline, icon, station_link, tile
 from .common import empty, scope_ids
 
 KIND_LABEL = {"red": "Down", "yellow": "Warning", "tray": "Tray empty", "consumable_now": "End of life",
@@ -147,7 +146,7 @@ def render(ds: M.Dataset, theme: str, sections, areas, basemap: str = "street"):
             link_col=("station", "station_id")))
 
     owners = [o for o in support.TEAMS if (cur["owner"] == o).any()]
-    desks = html.Div([desk_line(ds, o, prefix="") for o in owners], className="desks",
+    desks = html.Div([desk_line(ds, o, prefix="") for o in owners] + [campus_line(ds)], className="desks",
                      **{"aria-label": "Support desks"})
     return [
         status_headline(ds, cur, queue),

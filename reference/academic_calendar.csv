@@ -1,0 +1,175 @@
+date,term,event,kind,source
+2025-09-03,Fall 2025,Fall classes begin,classes_begin,registrar
+2025-10-13,Fall 2025,Columbus Day/Indigenous Peoples Day – No classes,holiday,registrar
+2025-10-22,Fall 2025,First quarter ends,quarter,registrar
+2025-10-23,Fall 2025,Second quarter begins,quarter,registrar
+2025-11-11,Fall 2025,Veterans’ Day (observed) – No classes,holiday,registrar
+2025-11-12,Fall 2025,Tuesday Class schedule (Wed classes will not meet on 11/12),schedule_swap,registrar
+2025-11-26,Fall 2025,Thanksgiving Recess Begins at the close of Day classes on Wednesday (Evening classes will not meet on 11/26),thanksgiving_start,registrar
+2025-11-27,Fall 2025,Thanksgiving recess,thanksgiving,registrar
+2025-12-01,Fall 2025,Classes Resume,classes_resume,registrar
+2025-12-09,Fall 2025,Tuesday evening class final exam,evening_final,registrar
+2025-12-10,Fall 2025,Last Day of Instruction - Day Classes,classes_end,registrar
+2025-12-11,Fall 2025,Reading Day (day classes only),reading_day,registrar
+2025-12-11,Fall 2025,Thursday evening class final exam,evening_final,registrar
+2025-12-12,Fall 2025,Day class final examinations begin,finals_start,registrar
+2025-12-15,Fall 2025,Monday evening class final exam,evening_final,registrar
+2025-12-17,Fall 2025,Wednesday evening class final exam,evening_final,registrar
+2025-12-18,Fall 2025,Day class final examinations end,finals_end,registrar
+2025-12-19,Fall 2025,Snow Day final examinations (This is an extra day in the event of a snow day during finals week),snow_day,registrar
+2026-01-21,Spring 2026,First Day of Classes,classes_begin,registrar
+2026-02-16,Spring 2026,Presidents’ Day – No classes,holiday,registrar
+2026-02-18,Spring 2026,Monday schedule of classes (Wednesday classes will not meet on 2/18),schedule_swap,registrar
+2026-03-09,Spring 2026,Spring break begins,break_start,registrar
+2026-03-13,Spring 2026,Spring break ends,break_end,registrar
+2026-03-17,Spring 2026,Third quarter ends,quarter,registrar
+2026-03-18,Spring 2026,Fourth quarter begins,quarter,registrar
+2026-04-20,Spring 2026,Patriots’ Day – No classes,holiday,registrar
+2026-04-30,Spring 2026,Thursday evening class final exam,evening_final,registrar
+2026-05-04,Spring 2026,Last Day of Instruction - day classes,classes_end,registrar
+2026-05-05,Spring 2026,Reading Day (day classes only),reading_day,registrar
+2026-05-05,Spring 2026,Tuesday evening class final exam,evening_final,registrar
+2026-05-06,Spring 2026,Day class final examinations begin,finals_start,registrar
+2026-05-06,Spring 2026,Wednesday evening class final exam,evening_final,registrar
+2026-05-11,Spring 2026,Monday evening class final exam,evening_final,registrar
+2026-05-12,Spring 2026,Day class final examinations end,finals_end,registrar
+2026-05-14,Spring 2026,Graduate Commencement,commencement,registrar
+2026-05-15,Spring 2026,Undergraduate Commencement,commencement,registrar
+2026-05-26,Summer 2026,Summer Session I classes begin,summer_begin,registrar
+2026-06-19,Summer 2026,Juneteenth - no classes,holiday,registrar
+2026-06-29,Summer 2026,Summer Session I classes end,summer_end,registrar
+2026-07-13,Summer 2026,Summer Session II classes begin,summer_begin,registrar
+2026-08-14,Summer 2026,Summer Session II classes end,summer_end,registrar
+2026-08-29,,"First-year student move in, students will select a timeslot for move-in",move_in,residence-life
+2026-08-30,,"Morning: First-year student move in, students will select a timeslot for move-in. Afternoon: Returning student move in, students will select a timeslot for move-in",move_in,residence-life
+2026-08-31,,Returning student move in,move_in,residence-life
+2026-09-02,Fall 2026,Fall classes begin,classes_begin,registrar
+2026-09-07,Fall 2026,Labor Day – No classes,holiday,registrar
+2026-10-12,Fall 2026,Columbus Day/Indigenous Peoples Day – No classes,holiday,registrar
+2026-10-15,Fall 2026,Monday Class schedule (Thursday classes will not meet),schedule_swap,registrar
+2026-10-21,Fall 2026,First quarter ends,quarter,registrar
+2026-10-22,Fall 2026,Second quarter begins,quarter,registrar
+2026-11-11,Fall 2026,Veterans’ Day (observed) – No classes,holiday,registrar
+2026-11-25,Fall 2026,Thanksgiving Recess Begins at the close of Day classes (Evening classes will not meet on 11/25),thanksgiving_start,registrar
+2026-11-26,Fall 2026,Thanksgiving recess – No classes,thanksgiving,registrar
+2026-11-30,Fall 2026,Classes Resume,classes_resume,registrar
+2026-12-08,Fall 2026,Tuesday evening class final exam,evening_final,registrar
+2026-12-10,Fall 2026,Last Day of Instruction - Day Classes,classes_end,registrar
+2026-12-11,Fall 2026,Reading Day (day classes only),reading_day,registrar
+2026-12-14,Fall 2026,Monday evening class final exam,evening_final,registrar
+2026-12-14,Fall 2026,Day class final examinations begin,finals_start,registrar
+2026-12-16,Fall 2026,Wednesday evening class final exam,evening_final,registrar
+2026-12-17,Fall 2026,Thursday evening class final exam,evening_final,registrar
+2026-12-18,Fall 2026,Day class final examinations end,finals_end,registrar
+2026-12-19,,"Residence halls close at 5 p.m., Winter Break Begins",halls_close,residence-life
+2027-01-17,,Residence halls open at 1 p.m,halls_open,residence-life
+2027-01-20,Spring 2027,First Day of Classes,classes_begin,registrar
+2027-02-15,Spring 2027,Presidents’ Day – No classes,holiday,registrar
+2027-02-17,Spring 2027,Monday class schedule (Wednesday classes will not meet on 2/17),schedule_swap,registrar
+2027-03-05,,"Residence halls close at 5 p.m., Spring Break Begins",halls_close,residence-life
+2027-03-08,Spring 2027,Spring break begins,break_start,registrar
+2027-03-12,Spring 2027,Spring break ends,break_end,registrar
+2027-03-14,,Residence halls open at 1 p.m,halls_open,residence-life
+2027-03-16,Spring 2027,Third quarter ends,quarter,registrar
+2027-03-17,Spring 2027,Fourth quarter begins,quarter,registrar
+2027-04-19,Spring 2027,Patriots’ Day – No classes,holiday,registrar
+2027-04-29,Spring 2027,Thursday evening class final exam,evening_final,registrar
+2027-05-03,Spring 2027,Last Day of Instruction - day classes,classes_end,registrar
+2027-05-04,Spring 2027,Reading Day (day classes only),reading_day,registrar
+2027-05-04,Spring 2027,Tuesday evening class final exam,evening_final,registrar
+2027-05-05,Spring 2027,Wednesday evening class final exam,evening_final,registrar
+2027-05-05,Spring 2027,Day class final examinations begin,finals_start,registrar
+2027-05-10,Spring 2027,Monday evening class final exam,evening_final,registrar
+2027-05-11,Spring 2027,Day class final examinations end,finals_end,registrar
+2027-05-12,,"Residence halls close at 12 p.m., Summer Break Begins",halls_close,residence-life
+2027-05-13,Spring 2027,Graduate Commencement,commencement,registrar
+2027-05-14,Spring 2027,Undergraduate Commencement,commencement,registrar
+2027-05-24,Summer 2027,Summer Session I classes begin,summer_begin,registrar
+2027-05-31,Summer 2027,Memorial Day – No classes,holiday,registrar
+2027-06-18,Summer 2027,Juneteenth (observed) – No classes,holiday,registrar
+2027-06-28,Summer 2027,Summer Session I classes end,summer_end,registrar
+2027-07-12,Summer 2027,Summer Session II classes begin,summer_begin,registrar
+2027-08-13,Summer 2027,Summer Session II classes end,summer_end,registrar
+2027-09-01,Fall 2027,Fall classes begin,classes_begin,registrar
+2027-09-06,Fall 2027,Labor Day – No classes,holiday,registrar
+2027-09-08,Fall 2027,Monday class schedule (Wednesday classes will not meet),schedule_swap,registrar
+2027-10-11,Fall 2027,Columbus Day/Indigenous Peoples Day – No classes,holiday,registrar
+2027-10-20,Fall 2027,First quarter ends,quarter,registrar
+2027-10-21,Fall 2027,Second quarter begins,quarter,registrar
+2027-11-11,Fall 2027,Veterans’ Day (observed) – No classes,holiday,registrar
+2027-11-24,Fall 2027,Thanksgiving Recess Begins at the close of Day classes on Wednesday (Evening classes will not meet on 11/24),thanksgiving_start,registrar
+2027-11-25,Fall 2027,Thanksgiving recess – No classes,thanksgiving,registrar
+2027-11-29,Fall 2027,Classes Resume,classes_resume,registrar
+2027-12-07,Fall 2027,Tuesday evening class final exam,evening_final,registrar
+2027-12-09,Fall 2027,Last Day of Instruction - Day Classes,classes_end,registrar
+2027-12-10,Fall 2027,Reading Day (day classes only),reading_day,registrar
+2027-12-13,Fall 2027,Monday evening class final exam,evening_final,registrar
+2027-12-13,Fall 2027,Day class final examinations begin,finals_start,registrar
+2027-12-15,Fall 2027,Wednesday evening class final exam,evening_final,registrar
+2027-12-16,Fall 2027,Thursday evening class final exam,evening_final,registrar
+2027-12-17,Fall 2027,Day class final examinations end,finals_end,registrar
+2028-01-19,Spring 2028,First Day of Classes,classes_begin,registrar
+2028-02-21,Spring 2028,Presidents’ Day – No classes,holiday,registrar
+2028-02-23,Spring 2028,Monday class schedule (Wednesday classes will not meet),schedule_swap,registrar
+2028-03-06,Spring 2028,Spring break begins,break_start,registrar
+2028-03-10,Spring 2028,Spring break ends,break_end,registrar
+2028-03-14,Spring 2028,Third quarter ends,quarter,registrar
+2028-03-15,Spring 2028,Fourth quarter begins,quarter,registrar
+2028-04-17,Spring 2028,Patriots’ Day – No classes,holiday,registrar
+2028-04-27,Spring 2028,Thursday evening class final exam,evening_final,registrar
+2028-05-01,Spring 2028,Last Day of Instruction - day classes,classes_end,registrar
+2028-05-02,Spring 2028,Reading Day (day classes only),reading_day,registrar
+2028-05-02,Spring 2028,Tuesday evening class final exam,evening_final,registrar
+2028-05-03,Spring 2028,Day class final examinations begin,finals_start,registrar
+2028-05-03,Spring 2028,Wednesday evening class final exam,evening_final,registrar
+2028-05-08,Spring 2028,Monday evening class final exam,evening_final,registrar
+2028-05-09,Spring 2028,Day class final examinations end,finals_end,registrar
+2028-05-11,Spring 2028,Graduate Commencement,commencement,registrar
+2028-05-12,Spring 2028,Undergraduate Commencement,commencement,registrar
+2028-05-22,Summer 2028,Summer Session I classes begin,summer_begin,registrar
+2028-05-29,Summer 2028,Memorial Day – No classes,holiday,registrar
+2028-06-19,Summer 2028,Juneteenth – No classes,holiday,registrar
+2028-06-26,Summer 2028,Summer Session I classes end,summer_end,registrar
+2028-07-10,Summer 2028,Summer Session II classes begin,summer_begin,registrar
+2028-08-11,Summer 2028,Summer Session II classes end,summer_end,registrar
+2028-09-06,Fall 2028,Fall classes begin,classes_begin,registrar
+2028-10-09,Fall 2028,Columbus Day/Indigenous Peoples Day – No classes,holiday,registrar
+2028-10-11,Fall 2028,Monday class schedule (Wednesday classes will not meet),schedule_swap,registrar
+2028-10-18,Fall 2028,First quarter ends,quarter,registrar
+2028-10-19,Fall 2028,Second quarter begins,quarter,registrar
+2028-11-10,Fall 2028,Veterans’ Day (observed) – No classes,holiday,registrar
+2028-11-22,Fall 2028,Thanksgiving Recess Begins at the close of Day classes on Wednesday (Evening classes will not meet on 11/22),thanksgiving_start,registrar
+2028-11-23,Fall 2028,Thanksgiving recess – No classes,thanksgiving,registrar
+2028-11-27,Fall 2028,Classes Resume,classes_resume,registrar
+2028-12-12,Fall 2028,Tuesday evening class final exam,evening_final,registrar
+2028-12-13,Fall 2028,Last Day of Instruction - Day Classes,classes_end,registrar
+2028-12-14,Fall 2028,Reading Day (day classes only),reading_day,registrar
+2028-12-14,Fall 2028,Thursday evening class final exam,evening_final,registrar
+2028-12-15,Fall 2028,Day class final examinations begin,finals_start,registrar
+2028-12-18,Fall 2028,Monday evening class final exam,evening_final,registrar
+2028-12-20,Fall 2028,Wednesday evening class final exam,evening_final,registrar
+2028-12-21,Fall 2028,Day class final examinations end,finals_end,registrar
+2029-01-17,Spring 2029,First Day of Classes,classes_begin,registrar
+2029-02-19,Spring 2029,Presidents’ Day – No classes,holiday,registrar
+2029-02-21,Spring 2029,Monday class schedule (Wednesday classes will not meet),schedule_swap,registrar
+2029-03-05,Spring 2029,Spring break begins,break_start,registrar
+2029-03-09,Spring 2029,Spring break ends,break_end,registrar
+2029-03-13,Spring 2029,Third quarter ends,quarter,registrar
+2029-03-14,Spring 2029,Fourth quarter begins,quarter,registrar
+2029-04-16,Spring 2029,Patriots’ Day – No classes,holiday,registrar
+2029-04-26,Spring 2029,Thursday evening class final exam,evening_final,registrar
+2029-04-30,Spring 2029,Last Day of Instruction - day classes,classes_end,registrar
+2029-05-01,Spring 2029,Reading Day (day classes only),reading_day,registrar
+2029-05-01,Spring 2029,Tuesday evening class final exam,evening_final,registrar
+2029-05-02,Spring 2029,Day class final examinations begin,finals_start,registrar
+2029-05-02,Spring 2029,Wednesday evening class final exam,evening_final,registrar
+2029-05-07,Spring 2029,Monday evening class final exam,evening_final,registrar
+2029-05-08,Spring 2029,Day class final examinations end,finals_end,registrar
+2029-05-10,Spring 2029,Graduate Commencement,commencement,registrar
+2029-05-11,Spring 2029,Undergraduate Commencement,commencement,registrar
+2029-05-21,Summer 2029,Summer Session I classes begin,summer_begin,registrar
+2029-05-28,Summer 2029,Memorial Day – No classes,holiday,registrar
+2029-06-19,Summer 2029,Juneteenth – No classes,holiday,registrar
+2029-06-25,Summer 2029,Summer Session I classes end,summer_end,registrar
+2029-07-09,Summer 2029,Summer Session II classes begin,summer_begin,registrar
+2029-08-10,Summer 2029,Summer Session II classes end,summer_end,registrar

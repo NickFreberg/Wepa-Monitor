@@ -164,3 +164,34 @@ def demand_forecast(ds: M.Dataset, days: int = 30, ids=None) -> pd.DataFrame:
     burn = M.burn_rates(ds, start, ds.as_of, ids)
     burn["next_units"] = burn["per_day"] * days / 100
     return burn[["component", "label", "per_day", "next_units", "ok"]]
+
+
+def by_phase(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
+    """Reliability and demand by point in the academic year (classes, finals, breaks, ...)."""
+    from . import campus
+    c = campus.load()
+    if c.empty:
+        return pd.DataFrame()
+    daily = M.availability_daily(ds, start, end, ids)
+    if daily.empty:
+        return pd.DataFrame()
+    daily = daily.assign(date=daily["local_date"].dt.date)
+    daily["phase"] = daily["date"].map(c.days["phase"]).fillna("unknown")
+    red = M._in(ds.sev_inc, "start", start, end, ids)
+    red = red[red["severity"] == "red"]
+    red_days = red["start"].dt.tz_convert(config.LOCAL_TZ).dt.date.map(c.days["phase"]).value_counts()
+    faults = M.faults_in(ds, start, end, ids)
+    f_days = faults["start"].dt.tz_convert(config.LOCAL_TZ).dt.date.map(c.days["phase"]).value_counts()
+    use = M.usage_in(ds, start, end, ids)
+    use = use[use["component"] == "toner_k"]
+    u_days = use.groupby(use["scrape_ts"].dt.tz_convert(config.LOCAL_TZ).dt.date.map(c.days["phase"]))["used"].sum()
+    g = daily.groupby("phase").agg(days=("date", "size"), up_s=("up_s", "sum"), covered_s=("covered_s", "sum"))
+    g["availability"] = g["up_s"] / g["covered_s"] * 100
+    g["outages_per_day"] = red_days.reindex(g.index, fill_value=0) / g["days"]
+    g["faults_per_day"] = f_days.reindex(g.index, fill_value=0) / g["days"]
+    g["toner_k_per_day"] = u_days.reindex(g.index, fill_value=0) / 100 / g["days"]
+    g = g.reset_index()
+    g["label"] = g["phase"].map(campus.PHASES).fillna(g["phase"].str.replace("_", " ").str.capitalize())
+    order = list(campus.PHASES)
+    g["o"] = g["phase"].map({p: i for i, p in enumerate(order)}).fillna(99)
+    return g.sort_values("o").drop(columns=["o", "up_s", "covered_s"]).reset_index(drop=True)

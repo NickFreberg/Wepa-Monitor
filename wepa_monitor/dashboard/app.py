@@ -13,6 +13,7 @@ from urllib.parse import parse_qs
 
 import pandas as pd
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
+from dash.exceptions import PreventUpdate
 
 from .. import activity, config, geo, metrics as M
 from .charts import SECTION_ORDER
@@ -404,7 +405,12 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
 
     @app.callback(Output("kml-dl", "data"), Input("kml-btn", "n_clicks"),
                   State("scope-sections", "value"), State("scope-areas", "value"), prevent_initial_call=True)
-    def kml(_, sections, areas):
+    def kml(n_clicks, sections, areas):
+        # The button is re-created whenever the overview re-renders (every minute, on basemap
+        # switches, on navigation), and Dash fires this callback for each new copy. Only a real
+        # click (n_clicks >= 1 on the button that triggered) may start a download.
+        if not n_clicks or ctx.triggered_id != "kml-btn":
+            raise PreventUpdate
         ds = cache.get()
         ids = ds.ids(section=sections or None, area=areas or None) if (sections or areas) else None
         stamp = ds.as_of.tz_convert(config.LOCAL_TZ)

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from . import activity, config, metrics as M, models, support
+from . import activity, campus, config, metrics as M, models, support
 
 TZ = config.LOCAL_TZ
 
@@ -139,6 +139,98 @@ def overlapping(ds: M.Dataset, p: Period, ids=None) -> pd.DataFrame:
     return inc[(inc["start"] < p.end) & (finish >= p.start)]
 
 
+PHASE_SENTENCE = {
+    "finals": "It was finals, the heaviest printing of the term, so every outage cost more than usual.",
+    "reading": "It was a reading day before finals, when printing picks up.",
+    "move_in": "It was move-in, when residents arrive and printing restarts after the summer.",
+    "thanksgiving": "It was Thanksgiving recess, so demand was light.",
+    "spring_break": "It was spring break",
+    "winter_break": "It was winter break",
+    "summer": "It was the summer break",
+    "summer_session": "It was a summer session, with a fraction of the usual students on campus.",
+}
+
+
+def _local_date(ts: pd.Timestamp):
+    return ts.tz_convert(TZ).date()
+
+
+def calendar_context(ds: M.Dataset, p: Period, ids=None) -> list:
+    """Where the period sits in the academic year, notable days in it, and how much of the
+    downtime happened while the building was closed or empty."""
+    c = campus.load()
+    if c.empty:
+        return []
+    start, end = _local_date(p.start), _local_date(p.end - pd.Timedelta(seconds=1))
+    days = c.range(start, end)
+    if days.empty:
+        return []
+    seg: list = []
+    main = days["phase"].value_counts().index[0]
+    if main in PHASE_SENTENCE and (days["phase"] == main).mean() >= 0.5:
+        line = PHASE_SENTENCE[main]
+        st = ds.stations if ids is None else ds.stations[ds.stations["station_id"].isin(ids)]
+        if not line.endswith("."):
+            halls_shut = (~days["halls_open"]).mean() >= 0.5 and (st["station_type"] == "residence").any()
+            line += (", with the residence halls closed, so the hall printers sat mostly idle." if halls_shut
+                     else ", so demand was light.")
+        seg.append(line + " ")
+    holidays = c.events[(c.events["kind"] == "holiday") & (c.events["date"] >= start) & (c.events["date"] <= end)]
+    if len(holidays) and main != "summer":
+        h = holidays.iloc[0]
+        name = h["event"].split("–")[0].split(" - ")[0].strip()
+        when_ = "today" if h["date"] == _local_date(ds.as_of) else f"{pd.Timestamp(h['date']):%A, %b %-d}"
+        seg.append(f"{when_[:1].upper() + when_[1:]} was {name}, with no classes and the support desks closed. ")
+    # Exposure: downtime while nobody could have used the printer.
+    inc = overlapping(ds, p, ids)
+    red = inc[inc["severity"] == "red"]
+    if len(red) and "in_use_s" in red:
+        finish = red["end"].fillna(ds.as_of)
+        total = (finish.clip(upper=p.end) - red["start"].clip(lower=p.start)).dt.total_seconds().clip(lower=0).sum()
+        idle = red["start"].count() and max(0.0, total - red["in_use_s"].sum())
+        if total > 0 and idle / total >= 0.1:
+            seg.append(f"About {idle / total:.0%} of the downtime came while the building was closed or empty "
+                       "(residence halls closed, or the library shut), so fewer students felt it than the "
+                       "hours suggest. ")
+    return seg
+
+
+KEY_EVENTS = {"finals_start": "finals begin", "reading_day": "reading day", "holiday": None,
+              "thanksgiving_start": "Thanksgiving recess begins", "break_start": "spring break begins",
+              "halls_close": "residence halls close", "move_in": "move-in begins", "classes_begin": "classes begin",
+              "commencement": None}
+
+
+def coming_up(ds: M.Dataset, eol: pd.DataFrame, ids=None) -> list:
+    """The next calendar event worth preparing for, and the parts that will run out before it."""
+    c = campus.load()
+    if c.empty:
+        return []
+    today = _local_date(ds.as_of)
+    up = c.upcoming(today, days=28)
+    up = up[up["kind"].isin(KEY_EVENTS)]
+    if up.empty:
+        return []
+    e = up.iloc[0]
+    name = KEY_EVENTS[e["kind"]] or e["event"].split("–")[0].split(" - ")[0].strip()
+    days = (e["date"] - today).days
+    seg = ["Coming up: ", ("b", f"{name[:1].upper() + name[1:]}"),
+           f" on {pd.Timestamp(e['date']):%a %b %-d} (in {plural(days, 'day')})."]
+    if e["kind"] in ("finals_start", "reading_day", "move_in", "classes_begin"):
+        before = eol[eol["days"].notna() & (eol["days"] <= days + 5)]
+        if len(before):
+            seg.append(f" {plural(len(before), 'part')} {'is' if len(before) == 1 else 'are'} projected to reach end "
+                       "of life before or during it; replacing them ahead of time avoids outages at the busiest "
+                       "moment.")
+        else:
+            seg.append(" No parts are projected to run out before then.")
+    elif e["kind"] in ("holiday", "thanksgiving_start", "break_start", "halls_close"):
+        seg.append(" Both desks will be closed; a quick check of paper and parts the day before keeps stations "
+                   "printing through it." if e["kind"] in ("holiday", "thanksgiving_start") else
+                   " Hall printers will go quiet: a good window for maintenance.")
+    return seg
+
+
 def coverage(ds: M.Dataset, p: Period, red: pd.DataFrame, ids=None) -> list:
     """One paragraph on outages vs each owner's desk hours, plus who is open right now."""
     seg: list = []
@@ -224,6 +316,9 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
     lead.append(". ")
     down_h = a.extra.get("down_h", 0)
     lead += ["Altogether that's about ", ("b", f"{down_h:,.0f} printer-hours"), " when a station couldn't print."]
+    ctx = calendar_context(ds, p, ids)
+    if ctx:
+        lead += [" "] + ctx
     paras.append(lead)
 
     # 2. What went wrong: outages, the longest, the most frequent.
@@ -303,13 +398,17 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
     if p.partial:
         eol = models.eol_forecast(ds, ids)
         due = eol[eol["days"] <= 7].sort_values("days")
+        seg = []
         if len(due):
             first = due.iloc[0]
             when_txt = "now" if first["days"] == 0 else f"in about {first['days']:.0f} day{'s' if round(first['days']) != 1 else ''}"
-            paras.append(["Looking ahead: ", ("b", plural(len(due), "consumable")),
-                          f" {'is' if len(due) == 1 else 'are'} at or within a week of end of life, most urgently ",
-                          ("st", first["station_id"], nm.get(first["station_id"], first["station_id"])),
-                          f"'s {first['label']} ({when_txt})."])
+            seg += ["Looking ahead: ", ("b", plural(len(due), "consumable")),
+                    f" {'is' if len(due) == 1 else 'are'} at or within a week of end of life, most urgently ",
+                    ("st", first["station_id"], nm.get(first["station_id"], first["station_id"])),
+                    f"'s {first['label']} ({when_txt}). "]
+        seg += coming_up(ds, eol, ids)
+        if seg:
+            paras.append(seg)
 
     # 6. Data caveat, only when it matters.
     dq = M.data_quality(ds, p.start, p.end)

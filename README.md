@@ -180,6 +180,33 @@ drives:
 also includes the wait. The ownership mapping, hours and closed dates (holidays and breaks) are in
 `config.py` (`SUPPORT_TEAMS`, `SECTION_OWNER`, `SUPPORT_CLOSED_DATES`).
 
+## Campus context (bridgew.edu)
+
+Printer data means more next to what campus was doing at the time, so the platform reads four
+public BSU pages:
+- the **academic calendar**, refreshed yearly;
+- Residence Life's **move-in and closing dates** and **residents per hall**;
+- **Maxwell Library hours**, refreshed weekly.
+
+The results are stored in `reference/` as CSV files, so everything works offline. With them, the
+platform:
+- labels every day as classes, finals, reading day, holiday, Thanksgiving, spring or winter break,
+  move-in or summer;
+- treats university and state holidays as days both support desks are closed;
+- measures how much downtime came while the building was in use. Hall printers count only while
+  the halls are open, and library printers only during library hours;
+- shades breaks and finals on the daily charts;
+- compares outages across the academic year;
+- shows residents per printer for each hall;
+- puts the period in context in every story, and flags what's coming up ("Finals begin Mon Dec 14
+  (in 12 days). 4 parts are projected to reach end of life right around then.").
+
+Ask the data answers "When are finals?", "Is the library open?" and "Which hall has the most
+residents per printer?". It also understands periods like "How did finals go?". Run
+`python -m wepa_monitor campus` to refresh (the collector also does this daily, and only when
+something is due). Sources, assumptions and what was left out:
+[docs/campus-intelligence.md](docs/campus-intelligence.md).
+
 ## Forecasts and statistical models
 
 `wepa_monitor/models.py`, shown on **Analytics → Forecasts & statistics** and on each station page:
@@ -274,7 +301,8 @@ rules and are left out when the evidence is thin.
 `python -m wepa_monitor demo` writes **synthetic** data in exactly the live format, for the real 31
 stations, so the whole pipeline and dashboard run unchanged. The simulation includes:
 
-- printing driven by hall/lab schedules, weekends and the academic calendar (quiet summer, busy finals);
+- printing driven by hall/lab schedules, weekends and BSU's real academic calendar and residence-hall
+  schedule (quiet summer, busy finals, hall printers idle while the halls are closed);
 - paper draining Tray1 then Tray2, refilled on staff rounds;
 - toner, drums, belt and fuser depleting at realistic yields and replaced near their thresholds
   (occasionally early, which leaves stranded toner);
@@ -355,12 +383,14 @@ wepa_monitor/
   support.py       ownership, desk hours, and desk-hours vs after-hours splits of downtime
   narrative.py     plain-language stories for any period
   ask.py           "Ask the data": a rule-based question interpreter (no AI model)
+  campus.py        bridgew.edu parsers (academic calendar, residence halls, library hours) and day phases
   synth.py         demo-data simulator
   dashboard/       Dash app shell (app.py), views/ (one module per page), charts, stylesheet,
                    explain.py (the click-to-explain panels)
 reference/stations.csv   station → building / area
 reference/buildings.csv  building coordinates (OpenStreetMap), short names, campus
-tests/                   parser, replacement rule, incident logic, desk hours, stories and Ask
+reference/academic_calendar.csv, residence_halls.csv, library_hours.csv   campus context from bridgew.edu
+tests/                   parsers (Wepa page and bridgew.edu fixtures), replacement rule, incidents, desk hours, calendar, stories, Ask
 legacy/                  the original v1 terminal script
 ```
 

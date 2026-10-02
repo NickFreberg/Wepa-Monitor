@@ -7,6 +7,7 @@
     python -m wepa_monitor dashboard [--demo]  run the web dashboard
     python -m wepa_monitor kml [--demo]        building pins with current status, for Google Earth
     python -m wepa_monitor start               collect + dashboard together, opens your browser
+    python -m wepa_monitor campus [--force]    refresh calendar, hall and library data from bridgew.edu
 """
 from __future__ import annotations
 
@@ -33,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--archive-html", action="store_true",
                        help="also keep a gzipped copy of each raw page (about 7 MB/day)")
     sub.add_parser("compact", help="compact finished days to parquet")
+    camp = sub.add_parser("campus", help="refresh academic calendar, residence-hall and library data from bridgew.edu")
+    camp.add_argument("--force", action="store_true", help="refresh even if the files are recent")
     demo = sub.add_parser("demo", help="generate synthetic demo history")
     demo.add_argument("--days", type=int, default=120)
     demo.add_argument("--seed", type=int, default=7)
@@ -81,6 +84,13 @@ def main(argv: list[str] | None = None) -> int:
             pass
         print("stopped")
         return 0
+
+    if args.cmd == "campus":
+        from . import campus
+        result = campus.refresh(force=args.force)
+        for name, outcome in result.items():
+            print(f"{name}: {'up to date' if outcome == 'fresh' else outcome}")
+        return 1 if any(v.startswith("failed") for v in result.values()) else 0
 
     if args.cmd == "compact":
         from . import store

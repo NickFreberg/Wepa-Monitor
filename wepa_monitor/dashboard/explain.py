@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from .. import config, metrics as M, models, narrative as N, support
+from .. import campus, config, metrics as M, models, narrative as N, support
 
 TZ = config.LOCAL_TZ
 
@@ -112,7 +112,12 @@ def avail_daily(ds, point, ctx: Context) -> Explanation:
             tells.append(".")
             nxt = [(f"Open {_station(ds, sid)}", f"/station/{sid}") for sid in lost.head(2).index]
         if day.dayofweek >= 5:
-            tells.append(" It was a weekend, when desks have shorter hours.")
+            tells.append(" It was a weekend, when neither support desk is staffed.")
+    cal = campus.load().on(day.date())
+    if cal is not None:
+        what = cal["event"].split(";")[0] if cal["event"] else campus.PHASES.get(cal["phase"], "")
+        tells += [" On the academic calendar: ", ("b", what or cal["label"]),
+                  "" if cal["halls_open"] else " (residence halls closed)", "."]
     matters = ["Each lost printer-hour is time students at that building had to find another printer. A dip "
                "concentrated in one station points to a fault; a dip spread across many suggests a staffing or "
                "supply issue that day."]
@@ -404,7 +409,41 @@ def owner_hours(ds, point, ctx: Context) -> Explanation:
     return Explanation("Desk hours", title, tells, matters, [("Ask about after-hours outages", "/insights")])
 
 
+def phases(ds, point, ctx: Context) -> Explanation:
+    phase = _cd(point, 0, "classes")
+    days, avail, toner = int(_cd(point, 1, 0)), float(_cd(point, 2, 0)), float(_cd(point, 3, 0))
+    label = campus.PHASES.get(phase, phase)
+    title = f"During {label.lower()}, there were {float(point['x']):.1f} outages a day."
+    tells = [f"That's across {N.plural(days, 'day')} {ctx.period_label}; stations were available ",
+             ("b", f"{avail:.1f}%"), f" of the time and used {toner:.2f} black toners' worth a day."]
+    matters = {"finals": "Finals are when a dead printer hurts most: stock paper and swap near-empty parts in "
+                         "the week before.",
+               "classes": "This is the baseline to compare other parts of the year against.",
+               "move_in": "Move-in restarts printing after the summer; parts that sat idle all summer fail "
+                          "here first.",
+               }.get(phase, "Quiet stretches are the best time for maintenance and part swaps.")
+    return Explanation("Academic calendar", title, tells, [matters])
+
+
+def residents(ds, point, ctx: Context) -> Explanation:
+    hall, res, printers, est = _cd(point, 0, ""), float(_cd(point, 1, 0)), int(_cd(point, 2, 1)), _cd(point, 3, False)
+    per = float(point["x"])
+    title = f"About {per:.0f} residents of {hall} share each of its {N.plural(printers, 'printer')}."
+    tells = [f"{res:.0f} students live there" + (" (an estimate; Residence Life doesn't list this hall's count)"
+                                                  if str(est).lower() == "true" else "") + ". "]
+    ids = ds.stations.loc[ds.stations["building"] == hall, "station_id"].tolist()
+    a = M.availability(ds, ctx.start, ctx.end, ids)
+    if a.value is not None:
+        tells += ["Its printers were available ", ("b", f"{a.value:.1f}%"), f" of the time {ctx.period_label}."]
+    matters = ["When one of these printers is down, every resident here walks to another building. The more "
+               "residents per printer, the more an outage costs and the sooner paper runs out; a second "
+               "printer or a bigger tray helps most at the top of this chart."]
+    nxt = [(f"Open {N.names(ds).get(sid, sid)}", f"/station/{sid}") for sid in ids[:2]]
+    return Explanation("Residents per printer", title, tells, matters, nxt)
+
+
 EXPLAINERS = {
+    "phases": phases, "residents": residents,
     "owner_hours": owner_hours,
     "avail_daily": avail_daily, "building_cov": building_cov, "fault_types": fault_types,
     "faults_building": faults_building, "heatmap": heatmap, "cum_toner": cumulative, "cum_drum": cumulative,
