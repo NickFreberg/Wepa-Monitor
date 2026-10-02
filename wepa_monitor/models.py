@@ -19,6 +19,7 @@ a fit when the evidence is thin.
 """
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -26,6 +27,18 @@ import pandas as pd
 from scipy import stats
 
 from . import config, metrics as M
+
+def _memoized(fn):
+    """Run once per dataset and arguments (see metrics.memo): pages, stories and answers share it."""
+    def norm(v):
+        return M._ids_key(v) if isinstance(v, (list, tuple, set, pd.Index, np.ndarray)) else v
+
+    @functools.wraps(fn)
+    def wrapper(ds, *args, **kwargs):
+        key = (fn.__name__,) + tuple(norm(a) for a in args) + tuple(sorted((k, norm(v)) for k, v in kwargs.items()))
+        return M.memo(ds, key, lambda: fn(ds, *args, **kwargs))
+    return wrapper
+
 
 DAY_S = 86400.0
 MIN_POINTS_FOR_FIT = 4
@@ -77,6 +90,7 @@ def fit_series(ts: pd.Series, level: pd.Series, as_of: pd.Timestamp, floor: floa
             "r2": 1 - ss_res / ss_tot, "n": int(len(t)), "span_days": float(t.max() - t.min())}
 
 
+@_memoized
 def eol_forecast(ds: M.Dataset, ids=None) -> pd.DataFrame:
     """One row per station x part: projected days to the replacement point, with a 90% window.
     Falls back to the simple burn-rate estimate where a regression isn't possible."""
@@ -117,6 +131,7 @@ class ControlChart:
     signals: list[str] = field(default_factory=list)
 
 
+@_memoized
 def fault_control_chart(ds: M.Dataset, start, end, ids=None) -> ControlChart | None:
     f = M.faults_in(ds, start, end, ids)
     days = pd.date_range(start.tz_convert(config.LOCAL_TZ).normalize(), end.tz_convert(config.LOCAL_TZ).normalize(),
@@ -144,6 +159,7 @@ def fault_control_chart(ds: M.Dataset, start, end, ids=None) -> ControlChart | N
     return ControlChart(daily, center, ucl, lcl, signals)
 
 
+@_memoized
 def station_anomalies(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
     """Station-days with far more faults than that station's own daily average (Poisson tail, p < 0.001)."""
     f = M.faults_in(ds, start, end, ids)
@@ -208,6 +224,7 @@ class TimeToFix:
     p_value: float
 
 
+@_memoized
 def time_to_fix(ds: M.Dataset, start, end, ids=None) -> TimeToFix | None:
     inc = M._in(ds.sev_inc, "start", start, end, ids)
     inc = inc[(inc["severity"] == "red") & ~inc["censored_start"].astype(bool)]
@@ -248,6 +265,7 @@ class UsageFit:
     band: pd.DataFrame                  # x, lo, hi (95% confidence band for the mean)
 
 
+@_memoized
 def usage_vs_reliability(ds: M.Dataset, start, end, ids=None) -> UsageFit | None:
     days = M.observed_days(ds, start, end, ids)
     days = days[days >= config.MIN_DAYS_FOR_BURN_RATE]

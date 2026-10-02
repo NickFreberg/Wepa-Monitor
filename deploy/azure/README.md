@@ -116,8 +116,20 @@ They'll get an invitation email and then sign in with their BSU account.
   `wepa_monitor/wsgi.py` serves the dashboard and starts the collector thread. There is **one worker**,
   so there is one collector. A lock file stops a second copy during redeploys, and any duplicate
   minute is dropped when data loads.
-- **Memory:** finished days are rolled up once and cached under `/home/data/live/derived/`, so memory
-  stays flat as history grows rather than growing with it.
+- **Keeping it light:**
+  - Raw minute snapshots, about 44,000 rows a day, are stored compressed (about 140 KB a day, 51 MB
+    a year). Each finished day is rolled up once into small summaries (hourly availability,
+    status changes, consumable change points), cached under `/home/data/live/derived/`. Pages read
+    only those summaries, never the raw minutes.
+  - A background thread refreshes the dataset 15 seconds after each minute's snapshot. It
+    re-uses everything from finished days and recomputes only today. Page requests never wait
+    for it.
+  - Expensive results (part forecasts, statistical models) are computed once per refresh and
+    shared by every viewer and page.
+  - Measured with a full year of data: about 1.5 s of background work a minute, pages in
+    0.1–0.4 s (Executive about 0.9 s), about 140 MB of data in memory. The B1 plan (1.75 GB) has
+    room for about two years. Move to B2 when memory passes about 70% (Portal → web app →
+    Metrics → Memory working set).
 - **App settings:** `WEPA_DATA_DIR=/home/data/live`, `WEPA_CAMPUS_DIR=/home/data/campus`, `WEPA_COLLECT=1`,
   `SCM_DO_BUILD_DURING_DEPLOYMENT=true`.
 - **Campus data:** the collector refreshes the academic calendar (yearly) and Maxwell Library hours

@@ -176,6 +176,8 @@ class RollupStore:
         for k in KINDS:
             parts = [f for f in (self._combined[k], today[k]) if not f.empty]
             out[k] = pd.concat(parts, ignore_index=True) if parts else _empty(k)
+        # Callers that can work incrementally (consumable usage) use these instead of the concatenation.
+        self.history, self.today, self.history_key = self._combined, today, finished_days
         return out
 
     def _prune_old_versions(self) -> None:

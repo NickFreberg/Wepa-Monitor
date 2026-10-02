@@ -46,6 +46,10 @@ class Dataset:
     levels: pd.DataFrame
     log: pd.DataFrame
     data_start: pd.Timestamp | None
+    # Results of expensive computations on this dataset (forecasts, models), keyed by their
+    # arguments. A dataset never changes once loaded, so they stay valid until the next refresh
+    # replaces the whole dataset; every viewer and page then shares one computation.
+    memo: dict = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def empty(self) -> bool:
@@ -62,6 +66,18 @@ class Dataset:
         if building:
             s = s[s["building"].isin(building if isinstance(building, list) else [building])]
         return s["station_id"].tolist()
+
+
+def memo(ds: "Dataset", key: tuple, compute):
+    """Compute once per dataset; DataFrames are returned as copies so callers can't alter the cache."""
+    if key not in ds.memo:
+        ds.memo[key] = compute()
+    value = ds.memo[key]
+    return value.copy() if isinstance(value, pd.DataFrame) else value
+
+
+def _ids_key(ids) -> tuple | None:
+    return None if ids is None else tuple(sorted(ids))
 
 
 def _local(ts: pd.Series) -> pd.Series:
@@ -91,9 +107,7 @@ def load(data_dir: Path, now: datetime | None = None, rollups: "rollup.RollupSto
         status[col] = status[col].astype(str)
 
     latest = status.groupby("station_id", sort=False).tail(1).reset_index(drop=True).drop(columns="brk")
-    points = r["cons"].sort_values(["station_id", "component", "scrape_ts"], kind="stable", ignore_index=True)
-    cons, repl = consumables.usage(points)
-    levels = consumables.current_levels(points)
+    cons, repl, levels = _consumables(rollups)
 
     stations = station_table(status)
     ref = stations.set_index("station_id")
@@ -113,6 +127,30 @@ def load(data_dir: Path, now: datetime | None = None, rollups: "rollup.RollupSto
         cons=cons, repl=repl, levels=levels, log=log,
         data_start=status["scrape_ts"].min() if not status.empty else None,
     )
+
+
+def _consumables(rollups) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Usage, replacements and current levels. Finished days are processed once and kept on the
+    rollup store; each refresh only adds today's readings (consumables.usage_continued). Usage rows
+    are kept in time order so a date range is a binary search (usage_in)."""
+    order = ["station_id", "component", "scrape_ts"]
+    cache = getattr(rollups, "_usage_cache", None)
+    if cache is None or cache[0] != rollups.history_key:
+        hist_pts = rollups.history["cons"].sort_values(order, kind="stable", ignore_index=True)
+        h_cons, h_repl = consumables.usage(hist_pts)
+        h_last = hist_pts.groupby(["station_id", "component"], sort=False).tail(1)
+        cache = (rollups.history_key, h_cons, h_cons.sort_values("scrape_ts", kind="stable", ignore_index=True),
+                 h_repl, h_last, consumables.life_seed(h_cons))
+        rollups._usage_cache = cache
+    _, h_cons, h_cons_by_time, h_repl, h_last, seed = cache
+    today_pts = rollups.today["cons"]
+    t_cons, t_repl = consumables.usage_continued(h_cons, today_pts, seed)
+    parts = [f for f in (h_cons_by_time, t_cons.sort_values("scrape_ts", kind="stable")) if not f.empty]
+    cons = pd.concat(parts, ignore_index=True) if parts else t_cons
+    repl = pd.concat([f for f in (h_repl, t_repl) if not f.empty] or [t_repl], ignore_index=True)
+    last = pd.concat([f for f in (h_last, today_pts) if not f.empty] or [today_pts], ignore_index=True)
+    levels = consumables.current_levels(last.sort_values(order, kind="stable", ignore_index=True))
+    return cons, repl, levels
 
 
 def building_map() -> dict[str, str]:
@@ -278,7 +316,11 @@ def observed_days(ds: Dataset, start, end, ids=None) -> pd.Series:
 
 
 def usage_in(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
-    return _in(ds.cons, "scrape_ts", start, end, ids)
+    """Usage rows in [start, end). ds.cons is in time order, so this is a binary search, not a scan."""
+    ts = ds.cons["scrape_ts"]
+    lo, hi = ts.searchsorted(pd.Timestamp(start)), ts.searchsorted(pd.Timestamp(end))
+    out = ds.cons.iloc[lo:hi]
+    return out[out["station_id"].isin(ids)] if ids is not None else out
 
 
 def burn_rates(ds: Dataset, start, end, ids=None) -> pd.DataFrame:

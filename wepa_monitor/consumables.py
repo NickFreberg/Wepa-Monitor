@@ -71,3 +71,43 @@ def usage(points: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 def current_levels(points: pd.DataFrame) -> pd.DataFrame:
     last = points.groupby(["station_id", "component"], sort=False).tail(1)
     return last[["station_id", "component", "level", "scrape_ts"]].reset_index(drop=True)
+
+
+def life_seed(history: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
+    """From usage() output: each series' current life (its readings since the last replacement)
+    and life number. Depends only on history, so callers compute it once per finished day."""
+    cols = ["station_id", "scrape_ts", "level", "component"]
+    keys = ["station_id", "component"]
+    if history.empty:
+        return history.reindex(columns=cols + ["life"]), pd.Series(dtype=int, name="base_life")
+    last_life = history.groupby(keys, sort=False)["life"].transform("max")
+    seed = history.loc[history["life"] == last_life, cols + ["life"]].reset_index(drop=True)
+    return seed, seed.groupby(keys, sort=False)["life"].max().rename("base_life")
+
+
+def usage_continued(history: pd.DataFrame, new_points: pd.DataFrame,
+                    seed: tuple[pd.DataFrame, pd.Series] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """usage() for new points only, given usage() already computed on all earlier points.
+
+    Each series is seeded with its current life from history (the readings since its last
+    replacement), which is all the odometer rule needs: the life's first reading and running
+    minimum, and the previous level for spotting a replacement. Result rows match what usage()
+    on the full history would give for the new points."""
+    if new_points.empty:
+        return usage(new_points)
+    cols = ["station_id", "scrape_ts", "level", "component"]
+    if history.empty:
+        return usage(new_points.sort_values(["station_id", "component", "scrape_ts"], kind="stable",
+                                            ignore_index=True))
+    keys = ["station_id", "component"]
+    seed, base = seed if seed is not None else life_seed(history)
+    both = pd.concat([seed[cols].assign(_new=False), new_points[cols].assign(_new=True)], ignore_index=True)
+    both = both.sort_values(keys + ["scrape_ts"], kind="stable", ignore_index=True)
+    df, _ = usage(both.drop(columns="_new"))
+    df["_new"] = both["_new"].to_numpy()
+    df = df.merge(base, left_on=keys, right_index=True, how="left")
+    df["life"] = df["life"] + df["base_life"].fillna(0).astype(int)
+    out = df[df["_new"]].drop(columns=["_new", "base_life"]).reset_index(drop=True)
+    repl = out.loc[out["replaced"], ["station_id", "component", "scrape_ts", "prev_level", "level"]]
+    repl = repl.rename(columns={"scrape_ts": "ts", "prev_level": "level_before", "level": "level_after"})
+    return out, repl.reset_index(drop=True)

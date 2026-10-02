@@ -133,6 +133,18 @@ def grid(name: str) -> np.ndarray:
     return g
 
 
+_ANNOTATED: dict[tuple, tuple[bool, float, float]] = {}
+_ANNOTATED_FOR: list = [None]
+
+
+def _sync_cache() -> None:
+    """Forget cached classifications when the desk calendar (hours or closed days) changes."""
+    token = (id(closed_dates()), repr(config.SUPPORT_TEAMS))
+    if _ANNOTATED_FOR[0] != token:
+        _ANNOTATED.clear()
+        _ANNOTATED_FOR[0] = token
+
+
 def annotate(inc: pd.DataFrame, stations: pd.DataFrame, as_of: pd.Timestamp) -> pd.DataFrame:
     """Add owner, in_hours (began while the desk was open), wait_s (until the desk opened),
     staffed_s and after_s (downtime inside / outside desk hours) to an incident table."""
@@ -143,13 +155,23 @@ def annotate(inc: pd.DataFrame, stations: pd.DataFrame, as_of: pd.Timestamp) -> 
         for c, v in (("in_hours", False), ("wait_s", 0.0), ("staffed_s", 0.0), ("after_s", 0.0)):
             out[c] = pd.Series(dtype=type(v))
         return out
+    finished = out["end"].notna() if "end" in out else pd.Series(False, index=out.index)
     ends = out["end"].fillna(as_of) if "end" in out else pd.Series(as_of, index=out.index)
+    _sync_cache()
     in_hours, wait, staffed = [], [], []
-    for o, s, e in zip(out["owner"], out["start"], ends):
-        in_hours.append(is_open(o, s))
-        nxt = next_open(o, s)
-        wait.append(0.0 if nxt is None else max(0.0, min((nxt - s).total_seconds(), (e - s).total_seconds())))
-        staffed.append(staffed_seconds(o, s, e))
+    for o, s, e, done in zip(out["owner"], out["start"], ends, finished):
+        key = (o, s, e)
+        hit = _ANNOTATED.get(key) if done else None
+        if hit is None:
+            nxt = next_open(o, s)
+            hit = (is_open(o, s), 0.0 if nxt is None else max(0.0, min((nxt - s).total_seconds(),
+                                                                       (e - s).total_seconds())),
+                   staffed_seconds(o, s, e))
+            if done:                      # a finished incident never changes: classify it once
+                _ANNOTATED[key] = hit
+        in_hours.append(hit[0])
+        wait.append(hit[1])
+        staffed.append(hit[2])
     out["in_hours"] = in_hours
     out["wait_s"] = wait
     out["staffed_s"] = staffed

@@ -82,6 +82,19 @@ def _typed_log(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# Finished days are parquet and never change, so each is read from disk once per process
+# (keyed by path and modification time). Only today's CSV is re-read on every refresh.
+_PARQUET_CACHE: dict[Path, tuple[int, pd.DataFrame]] = {}
+
+
+def _read_parquet_cached(path: Path) -> pd.DataFrame:
+    mtime = path.stat().st_mtime_ns
+    hit = _PARQUET_CACHE.get(path)
+    if hit is None or hit[0] != mtime:
+        hit = _PARQUET_CACHE[path] = (mtime, pd.read_parquet(path))
+    return hit[1]
+
+
 def _read_partitions(folder: Path, str_cols: dict) -> pd.DataFrame | None:
     if not folder.exists():
         return None
@@ -90,7 +103,7 @@ def _read_partitions(folder: Path, str_cols: dict) -> pd.DataFrame | None:
     for day in days:
         pq, csv = folder / f"{day}.parquet", folder / f"{day}.csv"
         if pq.exists():
-            frames.append(pd.read_parquet(pq))
+            frames.append(_read_parquet_cached(pq))
         elif csv.exists():
             frames.append(pd.read_csv(csv, dtype=str_cols))
     if not frames:
@@ -140,11 +153,29 @@ def load_snapshots(data_dir: Path) -> pd.DataFrame:
     return df.sort_values(["station_id", "scrape_ts"], ignore_index=True)
 
 
+_LOG_CACHE: dict[Path, tuple[tuple, pd.DataFrame]] = {}
+
+
 def load_scrape_log(data_dir: Path) -> pd.DataFrame:
-    df = _read_partitions(data_dir / "scrape_log", {"error": str})
-    if df is None:
+    """The scrape log, typed and in time order. Finished (parquet) days are typed and combined once
+    per process; only today's CSV is read on each refresh."""
+    folder = data_dir / "scrape_log"
+    if not folder.exists():
         return pd.DataFrame(columns=LOG_COLUMNS)
-    return _typed_log(df).sort_values("attempt_ts", ignore_index=True)
+    finished = sorted(folder.glob("*.parquet"))
+    key = tuple((f.name, f.stat().st_mtime_ns) for f in finished)
+    hit = _LOG_CACHE.get(folder)
+    if hit is None or hit[0] != key:
+        frames = [pd.read_parquet(f) for f in finished]
+        hist = _typed_log(pd.concat(frames, ignore_index=True)) if frames else pd.DataFrame(columns=LOG_COLUMNS)
+        hit = _LOG_CACHE[folder] = (key, hist.sort_values("attempt_ts", ignore_index=True))
+    done = {f.stem for f in finished}
+    today = [pd.read_csv(f, dtype={"error": str}) for f in sorted(folder.glob("*.csv")) if f.stem not in done]
+    if not today:
+        return hit[1] if len(hit[1]) else pd.DataFrame(columns=LOG_COLUMNS)
+    new = _typed_log(pd.concat(today, ignore_index=True))
+    parts = [f for f in (hit[1], new) if len(f)]
+    return pd.concat(parts, ignore_index=True).sort_values("attempt_ts", kind="stable", ignore_index=True)
 
 
 def write_day(data_dir: Path, day: str, snapshots: pd.DataFrame, log: pd.DataFrame) -> None:

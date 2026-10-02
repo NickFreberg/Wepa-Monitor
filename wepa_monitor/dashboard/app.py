@@ -43,15 +43,24 @@ THEME_OPTIONS = [{"label": "Light", "value": "light"}, {"label": "Dark", "value"
 
 
 class DataCache:
-    """Loads the dataset once; in live mode re-loads when new snapshot files land (checked each minute)."""
+    """The dataset every page reads.
+
+    Live mode keeps it fresh in the background: shortly after each minute's snapshot, a
+    worker thread checks for new files, builds the next dataset (re-using finished days, which
+    are processed only once), pre-computes the shared forecasts, and swaps it in. Page requests
+    never wait for a reload; they always get the latest finished dataset instantly. Only the
+    very first request after startup waits for the initial load.
+    """
+
+    REFRESH_OFFSET_S = 15     # seconds after the minute: the collector has written by then
 
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
         self.ds: M.Dataset | None = None
         self.sig = None
-        self.checked = 0.0
-        self.lock = threading.Lock()
-        self.rollups = None   # kept across refreshes: finished days are processed only once
+        self.lock = threading.Lock()          # serializes loads (the rollup store isn't thread-safe)
+        self.rollups = None                   # kept across refreshes: finished days are processed only once
+        self.worker: threading.Thread | None = None
 
     def _signature(self):
         files = []
@@ -61,21 +70,37 @@ class DataCache:
                 files += [(p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in folder.iterdir()]
         return tuple(sorted(files))
 
-    def get(self) -> M.Dataset:
+    def refresh(self) -> bool:
+        """Load a new dataset if the data files changed. Returns True if it swapped one in."""
         with self.lock:
-            now = time.time()
-            stale = self.ds is None or (not self.ds.is_demo and now - self.checked >= config.EXPECTED_INTERVAL_S)
-            if stale:
-                self.checked = now
-                sig = self._signature()
-                if self.ds is None or sig != self.sig:
-                    from .. import rollup
-                    if self.rollups is None:
-                        self.rollups = rollup.RollupStore(self.data_dir, M.building_map())
-                    self.ds = M.load(self.data_dir, rollups=self.rollups)
-                    self.sig = sig
-            return self.ds
+            sig = self._signature()
+            if self.ds is not None and sig == self.sig:
+                return False
+            from .. import models, rollup
+            if self.rollups is None:
+                self.rollups = rollup.RollupStore(self.data_dir, M.building_map())
+            ds = M.load(self.data_dir, rollups=self.rollups)
+            if not ds.empty:
+                models.eol_forecast(ds)       # warm the one forecast nearly every page uses
+            self.ds, self.sig = ds, sig       # a single assignment: readers see old or new, never half
+            return True
 
+    def _loop(self):
+        while True:
+            time.sleep(config.EXPECTED_INTERVAL_S - (time.time() - self.REFRESH_OFFSET_S) % config.EXPECTED_INTERVAL_S)
+            try:
+                self.refresh()
+            except Exception as exc:  # noqa: BLE001 - keep serving the last good dataset
+                print(f"dashboard refresh failed: {type(exc).__name__}: {exc}", flush=True)
+
+    def get(self) -> M.Dataset:
+        if self.ds is None:
+            self.refresh()
+            with self.lock:
+                if not self.ds.is_demo and self.worker is None:
+                    self.worker = threading.Thread(target=self._loop, name="dashboard-refresh", daemon=True)
+                    self.worker.start()
+        return self.ds
 
 
 def _route(path: str | None) -> str:

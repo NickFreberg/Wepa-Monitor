@@ -530,12 +530,29 @@ def annotate_exposure(inc: pd.DataFrame, stations: pd.DataFrame, as_of: pd.Times
         out["in_use_s"] = pd.Series(dtype=float)
         return out
     c = load()
+    if _EXPOSURE_FOR[0] is not c:                 # campus data changed: recompute everything
+        _EXPOSURE.clear()
+        _EXPOSURE_FOR[0] = c
     ref = stations.set_index("station_id")
     b = out["station_id"].map(ref["building"]).fillna("")
     t = out["station_id"].map(ref["station_type"]).fillna("") if "station_type" in ref else pd.Series("", index=out.index)
+    finished = out["end"].notna() if "end" in out else pd.Series(False, index=out.index)
     ends = out["end"].fillna(as_of) if "end" in out else pd.Series(as_of, index=out.index)
-    out["in_use_s"] = [in_use_seconds(c, bb, tt, s_, e_) for bb, tt, s_, e_ in zip(b, t, out["start"], ends)]
+    vals = []
+    for bb, tt, s_, e_, done in zip(b, t, out["start"], ends, finished):
+        key = (bb, tt, s_, e_)
+        v = _EXPOSURE.get(key) if done else None
+        if v is None:
+            v = in_use_seconds(c, bb, tt, s_, e_)
+            if done:                              # finished incidents never change
+                _EXPOSURE[key] = v
+        vals.append(v)
+    out["in_use_s"] = vals
     return out
+
+
+_EXPOSURE: dict[tuple, float] = {}
+_EXPOSURE_FOR: list = [None]
 
 
 def residents_per_printer(c: Campus, stations: pd.DataFrame) -> pd.DataFrame:

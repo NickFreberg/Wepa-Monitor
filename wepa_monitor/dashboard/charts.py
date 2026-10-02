@@ -335,12 +335,15 @@ def status_timeline(theme: str, segments: pd.DataFrame, start=None, end=None, ow
     if owner and start is not None and end is not None:
         day = start.tz_convert(config.LOCAL_TZ).normalize()
         last = end.tz_convert(config.LOCAL_TZ)
+        shapes = []          # built in one batch: add_vrect per day re-validates the figure each time
         while day <= last:
             span = support._span(owner, day)
             if span:
-                fig.add_vrect(x0=span[0].tz_localize(None), x1=span[1].tz_localize(None), fillcolor=t["grid"],
-                              opacity=0.9, line_width=0, layer="below")
+                shapes.append(dict(type="rect", xref="x", yref="paper", x0=span[0].tz_localize(None),
+                                   x1=span[1].tz_localize(None), y0=0, y1=1, fillcolor=t["grid"], opacity=0.9,
+                                   line_width=0, layer="below"))
             day = (day + pd.Timedelta(days=1, hours=2)).normalize()
+        fig.update_layout(shapes=shapes)
         fig.add_scatter(x=[None], y=[None], mode="markers", name=f"{owner} desk hours", hoverinfo="skip",
                         marker=dict(symbol="square", size=11, color=t["grid"], line=dict(color=t["axis"], width=1)))
     for state, tone, label in TIMELINE_STATES:
@@ -546,18 +549,23 @@ def add_calendar(fig: go.Figure, theme: str, days: pd.DataFrame, start, end, min
         else:
             cur = [day, day, ph]
             runs.append(cur)
+    shapes, notes = list(fig.layout.shapes), list(fig.layout.annotations)     # one batch update at the end
     for r0, r1, ph in runs:
         if ph == "holiday":
-            fig.add_vline(x=pd.Timestamp(r0) + pd.Timedelta(hours=12), line=dict(color=t["axis"], width=1, dash="dot"),
-                          layer="below")
+            x = pd.Timestamp(r0) + pd.Timedelta(hours=12)
+            shapes.append(dict(type="line", xref="x", yref="paper", x0=x, x1=x, y0=0, y1=1, layer="below",
+                               line=dict(color=t["axis"], width=1, dash="dot")))
             continue
         if ph not in BAND_PHASES or (r1 - r0).days + 1 < min_days:
             continue
         tint = {"finals": t["series"][3], "move_in": t["series"][2]}.get(ph)
-        fig.add_vrect(x0=pd.Timestamp(r0), x1=pd.Timestamp(r1) + pd.Timedelta(days=1), layer="below", line_width=0,
-                      fillcolor=tint or t["grid"], opacity=0.18 if tint else 0.55,
-                      annotation_text=BAND_PHASES[ph], annotation_position="bottom left",
-                      annotation=dict(font=dict(size=10, color=t["muted"]), yshift=2))
+        shapes.append(dict(type="rect", xref="x", yref="paper", x0=pd.Timestamp(r0),
+                           x1=pd.Timestamp(r1) + pd.Timedelta(days=1), y0=0, y1=1, layer="below", line_width=0,
+                           fillcolor=tint or t["grid"], opacity=0.18 if tint else 0.55))
+        notes.append(dict(x=pd.Timestamp(r0), xref="x", y=0, yref="paper", text=BAND_PHASES[ph], showarrow=False,
+                          xanchor="left", yanchor="bottom", yshift=2, xshift=2,
+                          font=dict(size=10, color=t["muted"])))
+    fig.update_layout(shapes=shapes, annotations=notes)
     return fig
 
 
