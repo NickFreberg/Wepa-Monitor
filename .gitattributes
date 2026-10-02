@@ -1,0 +1,5 @@
+# Left out of `git archive`, which is what deploy/azure/deploy.sh uploads: the server doesn't need them.
+docs/ export-ignore
+tests/ export-ignore
+legacy/ export-ignore
+.github/ export-ignore

@@ -18,7 +18,9 @@ one. Azure is billed separately, pay as you go.
 
 1. Go to [portal.azure.com](https://portal.azure.com) and sign in with your Microsoft 365 admin account.
 2. Search for **Subscriptions**. If one is listed, you're set. If not, click **+ Add** and create a
-   **Pay-As-You-Go** subscription (it asks for a card).
+   **Pay-As-You-Go** subscription (it asks for a card). If **+ Add** isn't offered, start at
+   [azure.microsoft.com → Pay as you go](https://azure.microsoft.com/pricing/purchase-options/pay-as-you-go)
+   and sign in with the same account.
 
 > **Tip: set a spending alert.** Search **Cost Management → Budgets → + Add**, set the scope to your
 > subscription, and choose $20/month with an email alert. This app should cost about $13.
@@ -37,6 +39,7 @@ If you have more than one subscription, pick the right one:
 
 ```bash
 cd Wepa-Monitor
+git checkout master
 git pull
 ```
 
@@ -48,11 +51,12 @@ git pull
 
 The script:
 
+- registers the App Service provider on your subscription (needed once on new subscriptions);
 - creates a resource group `rg-resnet-print-ops` in **East US**, a B1 Linux plan, and the web app;
 - turns on **Always On** so the collector never sleeps, and enforces HTTPS;
 - sets the data folder (`WEPA_DATA_DIR=/home/data/live`) and the campus folder
   (`WEPA_CAMPUS_DIR=/home/data/campus`) where the bridgew.edu calendar and library hours are refreshed;
-- uploads the committed code, and Azure installs the Python packages.
+- uploads the committed code (not docs, tests or screenshots), and Azure installs the Python packages.
 
 The first run takes 5–10 minutes and finishes by printing your URL. Open it: the Overview page shows
 live status within a minute or two. The first load after a deploy can take ~30 seconds.
@@ -95,12 +99,19 @@ They'll get an invitation email and then sign in with their BSU account.
 | Update after new code | `git pull && ./deploy/azure/deploy.sh` (data is kept) |
 | Watch the live log | `az webapp log tail -g rg-resnet-print-ops -n <app-name>` |
 | Restart | `az webapp restart -g rg-resnet-print-ops -n <app-name>` |
-| Download a backup of the data | Portal → web app → **Advanced Tools (Kudu) → Go**, then open `https://<app-name>.scm.azurewebsites.net/api/zip/home/data/` to download a zip |
+| Download a backup of the data | Portal → web app → **Advanced Tools → Go** (opens Kudu, signed in), then in the same browser open `https://<app-name>.scm.azurewebsites.net/api/zip/data/` to download a zip of `/home/data` |
 | Check health | The dashboard header shows **LIVE**, the "As of" time, and the data quality score; Analytics → Data quality shows completeness and failed refreshes |
 | Remove everything (stops all charges) | `az group delete -n rg-resnet-print-ops` (also deletes the collected data; back it up first) |
 
 ## Troubleshooting
 
+- **"MissingSubscriptionRegistration" for Microsoft.Web:** run
+  `az provider register --namespace Microsoft.Web --wait`, then rerun the script. The script does
+  this itself, but registration can take a minute on a brand-new subscription.
+- **"Operation cannot be completed without additional quota" / "SubscriptionIsOverQuotaForSku":**
+  new Pay-As-You-Go subscriptions sometimes have no Basic-plan quota in a region. Try another
+  region (`LOCATION=eastus2 ./deploy/azure/deploy.sh`, or `centralus`), or request quota in the
+  portal (**Quotas → App Service**).
 - **"Application Error" page:** run the log-tail command above and look for a Python traceback. The
   first deploy needs a few minutes to install packages before it can start.
 - **Name already taken:** web app names are global across Azure. Run again with
@@ -109,6 +120,11 @@ They'll get an invitation email and then sign in with their BSU account.
   another process holds the lock, wait a minute after a redeploy; the old copy releases it when it stops.
 - **Python version:** the script asks for Python 3.12. To see what Azure offers:
   `az webapp list-runtimes --os linux | grep PYTHON`.
+
+## Keep it to one instance
+
+Don't scale the app out to 2 or more instances (**Scale out** in the portal): each instance would
+run its own collector. One B1 instance is the design. To get more headroom, scale **up** to B2 instead.
 
 ## How it's set up (for the curious)
 

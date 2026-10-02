@@ -39,6 +39,8 @@ echo "    App name:     $APP_NAME"
 
 if ! az webapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" -o none 2>/dev/null; then
   echo "==> First deployment: creating resources in $LOCATION"
+  # New subscriptions must register the App Service provider once (no-op if already registered).
+  az provider register --namespace Microsoft.Web --wait -o none
   az group create -n "$RESOURCE_GROUP" -l "$LOCATION" -o none
   az appservice plan create -g "$RESOURCE_GROUP" -n "$PLAN" -l "$LOCATION" --sku "$SKU" --is-linux -o none
   az webapp create -g "$RESOURCE_GROUP" -p "$PLAN" -n "$APP_NAME" --runtime "$RUNTIME" -o none
