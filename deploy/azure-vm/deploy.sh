@@ -44,6 +44,7 @@ if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
   fi
   ERR="$(mktemp)"
   CREATED=""
+  REASONS=""
   for LOCATION in $REGIONS; do
     for SIZE in $SIZES; do
       echo "    trying $SIZE in $LOCATION ..."
@@ -53,10 +54,15 @@ if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
           -o none 2>"$ERR"; then
         CREATED="$SIZE in $LOCATION"; break 2
       fi
-      if grep -qE "SkuNotAvailable|NotAvailableForSubscription|Capacity" "$ERR"; then
+      if grep -qE "NotAvailableForSubscription" "$ERR"; then
+        echo "      size restricted for this subscription (needs a support request, not quota); next option"
+        REASONS="$REASONS restricted"
+      elif grep -qE "SkuNotAvailable|Capacity" "$ERR"; then
         echo "      no capacity for this subscription; next option"
+        REASONS="$REASONS capacity"
       elif grep -qiE "quota" "$ERR"; then
-        echo "      no quota for this size here; next option"
+        echo "      no quota: $(grep -oiE "[A-Za-z ]*family[A-Za-z ]*(cores|vCPUs)[^.]*|Current Limit[^.]*" "$ERR" | head -1)"
+        REASONS="$REASONS quota"
       else
         echo "Azure couldn't create the VM:" >&2
         grep -E "Message:|Code:|ERROR" "$ERR" | head -6 >&2 || tail -20 "$ERR" >&2
@@ -73,9 +79,14 @@ if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
   if [ -z "$CREATED" ]; then
     cat >&2 <<NONE
 
-None of the regions/sizes tried had capacity or quota for this subscription. Request quota in the
-portal (Quotas -> Compute -> e.g. East US 2 -> "Standard BS Family vCPUs" -> 2; usually approved
-automatically), then rerun. You can pin a choice: LOCATION=eastus2 SIZE=Standard_B1ms $0
+None of the regions/sizes worked. Reasons seen:$(echo "$REASONS" | tr ' ' '\n' | sort | uniq -c | tr '\n' ' ')
+  quota      -> portal: Quotas -> Compute -> East US 2 -> "Standard BS Family vCPUs" -> request 2
+                (also "Total Regional vCPUs" if it is 0); usually approved automatically.
+  restricted -> Help + support -> Create a support request -> "Service and subscription limits
+                (quotas)" -> "Compute-VM (cores-vCPUs) subscription limit increases", and ask them to
+                enable Standard_B1ms (BS family) in East US 2 for this subscription.
+  capacity   -> temporary; try again later.
+Then rerun, pinned to the region you requested: LOCATION=eastus2 SIZE=Standard_B1ms $0
 NONE
     exit 1
   fi
