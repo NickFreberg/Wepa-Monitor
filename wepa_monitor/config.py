@@ -89,6 +89,9 @@ SUPPORT_CLOSED_DATES: set[str] = set()
 # --- Campus intelligence (bridgew.edu) ----------------------------------------------
 # The academic calendar is published years ahead, so a yearly refresh is enough; library
 # hours are published a few weeks ahead, so they are refreshed weekly and accumulated.
+# Where refreshed campus files are written. Defaults to reference/ (committed copies); on Azure it
+# is set to persistent storage so refreshes survive redeploys.
+CAMPUS_DIR = Path(os.environ.get("WEPA_CAMPUS_DIR", REFERENCE_DIR))
 CAMPUS_CALENDAR_REFRESH_DAYS = 365
 CAMPUS_LIBRARY_REFRESH_DAYS = 7
 # Treat university holidays (from the academic calendar, plus Massachusetts state holidays)

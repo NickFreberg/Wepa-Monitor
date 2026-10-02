@@ -53,6 +53,7 @@ az webapp config set -g "$RESOURCE_GROUP" -n "$APP_NAME" \
   -o none
 az webapp config appsettings set -g "$RESOURCE_GROUP" -n "$APP_NAME" -o none --settings \
   WEPA_DATA_DIR=/home/data/live \
+  WEPA_CAMPUS_DIR=/home/data/campus \
   WEPA_COLLECT=1 \
   SCM_DO_BUILD_DURING_DEPLOYMENT=true
 az webapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --https-only true -o none

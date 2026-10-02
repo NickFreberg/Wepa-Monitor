@@ -36,9 +36,16 @@ SOURCES = {
     "halls": "https://www.bridgew.edu/student-life/residence-life-housing/residence-halls",
     "library": "https://bridgew.libcal.com/hours",
 }
-CAL_PATH = config.REFERENCE_DIR / "academic_calendar.csv"
-HALLS_PATH = config.REFERENCE_DIR / "residence_halls.csv"
-LIBRARY_PATH = config.REFERENCE_DIR / "library_hours.csv"
+# Refreshed files are written to config.CAMPUS_DIR (on Azure, persistent storage beside the
+# collected data) and read from there first, falling back to the copies committed in reference/.
+CAL_PATH = config.CAMPUS_DIR / "academic_calendar.csv"
+HALLS_PATH = config.CAMPUS_DIR / "residence_halls.csv"
+LIBRARY_PATH = config.CAMPUS_DIR / "library_hours.csv"
+
+
+def _src(path: Path) -> Path:
+    """The file to read: the refreshed copy if there is one, else the committed reference copy."""
+    return path if path.exists() else config.REFERENCE_DIR / path.name
 
 MONTHS = {m: i for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
                                       "Nov", "Dec"], start=1)}
@@ -245,7 +252,8 @@ def refresh(force: bool = False, log=print) -> dict:
     def calendar():
         cal = parse_academic_calendar(_get(SOURCES["calendar"]))
         halls = parse_halls_schedule(_get(SOURCES["halls_schedule"]))
-        merged = pd.concat([_load_csv(CAL_PATH)[lambda d: d["source"] == "residence-life"] if CAL_PATH.exists()
+        prev = _src(CAL_PATH)
+        merged = pd.concat([_load_csv(prev)[lambda d: d["source"] == "residence-life"] if prev.exists()
                             else None, cal, halls]).drop_duplicates(["date", "event"], keep="last")
         merged = merged.sort_values("date", ignore_index=True)
         merged.to_csv(CAL_PATH, index=False)
@@ -258,13 +266,15 @@ def refresh(force: bool = False, log=print) -> dict:
 
     def library():
         new = parse_library_hours(_get(SOURCES["library"]), date.today())
-        old = _load_csv(LIBRARY_PATH) if LIBRARY_PATH.exists() else new.iloc[:0]
+        prev = _src(LIBRARY_PATH)
+        old = _load_csv(prev).drop(columns="fetched", errors="ignore") if prev.exists() else new.iloc[:0]
         # Keep past days as recorded; let the newest fetch win for today and later.
         keep = old[old["date"] < new["date"].min()]
         out = pd.concat([keep, new]).sort_values("date", ignore_index=True)
         out.assign(fetched=datetime.now(timezone.utc).date()).to_csv(LIBRARY_PATH, index=False)
         return f"{len(new)} days of hours ({new['date'].min()} to {new['date'].max()})"
 
+    config.CAMPUS_DIR.mkdir(parents=True, exist_ok=True)
     step("calendar", _age_days(CAL_PATH) > config.CAMPUS_CALENDAR_REFRESH_DAYS, calendar)
     step("halls", _age_days(HALLS_PATH) > config.CAMPUS_CALENDAR_REFRESH_DAYS, hall_sizes)
     step("library", _age_days(LIBRARY_PATH) > config.CAMPUS_LIBRARY_REFRESH_DAYS, library)
@@ -450,16 +460,18 @@ def build(events: pd.DataFrame, halls: pd.DataFrame | None = None, library: pd.D
 
 @lru_cache(maxsize=1)
 def _cached(stamp: tuple) -> Campus:
-    events = _load_csv(CAL_PATH) if CAL_PATH.exists() else pd.DataFrame(columns=["date", "term", "event", "kind",
+    cal, hall, lib = _src(CAL_PATH), _src(HALLS_PATH), _src(LIBRARY_PATH)
+    events = _load_csv(cal) if cal.exists() else pd.DataFrame(columns=["date", "term", "event", "kind",
                                                                                      "source"])
-    halls = pd.read_csv(HALLS_PATH) if HALLS_PATH.exists() else None
-    library = _load_csv(LIBRARY_PATH) if LIBRARY_PATH.exists() else None
+    halls = pd.read_csv(hall) if hall.exists() else None
+    library = _load_csv(lib) if lib.exists() else None
     return build(events, halls, library)
 
 
 def load() -> Campus:
     """The campus context, rebuilt only when one of the reference files changes."""
-    stamp = tuple(p.stat().st_mtime if p.exists() else 0 for p in (CAL_PATH, HALLS_PATH, LIBRARY_PATH))
+    stamp = tuple((str(p), p.stat().st_mtime) if p.exists() else (str(p), 0)
+                  for p in map(_src, (CAL_PATH, HALLS_PATH, LIBRARY_PATH)))
     return _cached(stamp)
 
 

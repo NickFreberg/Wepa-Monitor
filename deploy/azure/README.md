@@ -50,10 +50,11 @@ The script:
 
 - creates a resource group `rg-resnet-print-ops` in **East US**, a B1 Linux plan, and the web app;
 - turns on **Always On** so the collector never sleeps, and enforces HTTPS;
-- sets the data folder (`WEPA_DATA_DIR=/home/data/live`);
+- sets the data folder (`WEPA_DATA_DIR=/home/data/live`) and the campus folder
+  (`WEPA_CAMPUS_DIR=/home/data/campus`) where the bridgew.edu calendar and library hours are refreshed;
 - uploads the committed code, and Azure installs the Python packages.
 
-The first run takes 5–10 minutes and finishes by printing your URL. Open it: the Operations page shows
+The first run takes 5–10 minutes and finishes by printing your URL. Open it: the Overview page shows
 live status within a minute or two. The first load after a deploy can take ~30 seconds.
 
 To use a different region or name: `LOCATION=eastus2 APP_NAME=my-print-ops ./deploy/azure/deploy.sh`.
@@ -95,7 +96,7 @@ They'll get an invitation email and then sign in with their BSU account.
 | Watch the live log | `az webapp log tail -g rg-resnet-print-ops -n <app-name>` |
 | Restart | `az webapp restart -g rg-resnet-print-ops -n <app-name>` |
 | Download a backup of the data | Portal → web app → **Advanced Tools (Kudu) → Go**, then open `https://<app-name>.scm.azurewebsites.net/api/zip/home/data/` to download a zip |
-| Check health | The dashboard header shows **LIVE**, the "As of" time, and the data quality score; Management → Data quality shows completeness and failed refreshes |
+| Check health | The dashboard header shows **LIVE**, the "As of" time, and the data quality score; Analytics → Data quality shows completeness and failed refreshes |
 | Remove everything (stops all charges) | `az group delete -n rg-resnet-print-ops` (also deletes the collected data; back it up first) |
 
 ## Troubleshooting
@@ -117,4 +118,7 @@ They'll get an invitation email and then sign in with their BSU account.
   minute is dropped when data loads.
 - **Memory:** finished days are rolled up once and cached under `/home/data/live/derived/`, so memory
   stays flat as history grows rather than growing with it.
-- **App settings:** `WEPA_DATA_DIR=/home/data/live`, `WEPA_COLLECT=1`, `SCM_DO_BUILD_DURING_DEPLOYMENT=true`.
+- **App settings:** `WEPA_DATA_DIR=/home/data/live`, `WEPA_CAMPUS_DIR=/home/data/campus`, `WEPA_COLLECT=1`,
+  `SCM_DO_BUILD_DURING_DEPLOYMENT=true`.
+- **Campus data:** the collector refreshes the academic calendar (yearly) and Maxwell Library hours
+  (weekly) into `/home/data/campus`, falling back to the copies committed in `reference/`.

@@ -91,6 +91,7 @@ def eol_forecast(ds: M.Dataset, ids=None) -> pd.DataFrame:
     out = simple.copy()
     for col in ("days", "days_early", "days_late", "slope_per_day", "r2", "n", "method"):
         out[col] = reg[col] if col in reg else np.nan
+    out["method"] = out["method"].astype(object)      # all-NaN (numeric) until the first regression fit
     use_simple = out["days"].isna()
     out.loc[use_simple, "days"] = out.loc[use_simple, "days_to_replace"]
     out.loc[use_simple, "method"] = np.where(out.loc[use_simple, "days"].notna(), "burn rate", "not enough data")
