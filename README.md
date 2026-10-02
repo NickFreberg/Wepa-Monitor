@@ -58,7 +58,7 @@ Mac from sleeping while it runs. With the lid closed a Mac still sleeps unless i
 external display. Data is saved in `data/live/`, so stopping and restarting picks up where it left
 off; the gap simply shows as unobserved time.
 
-The Operations page and map are useful immediately. The Management and Executive pages fill in as
+The Overview, Rounds and map are useful immediately. Analytics, Insights and Executive fill in as
 history builds: about a day for meaningful numbers, a few days for trends.
 
 **Explore with demo data**: 120 days of realistic synthetic history. These are two separate steps:
@@ -360,12 +360,12 @@ current day is reprocessed each minute.
   labels (ECC, DMF, RSU, …), and its campus. New Bedford Flight School uses the New Bedford Regional
   Airport centroid and is marked approximate.
 
-The **campus map** on the Operations page shows each building at its worst station's status
+The **campus map** on the Overview page shows each building at its worst station's status
 (down / warning / no data / printing), sized by its number of printers. Hovering shows every station in
 the building. Switch between a street basemap (CARTO / OpenStreetMap) and **aerial imagery** (Esri World
 Imagery); neither needs an API key.
 
-**Google Earth:** the *Open in Google Earth (.kml)* button on the Operations page downloads the current
+**Google Earth:** the *Google Earth* button on the Overview map downloads the current
 pins, colored by status, with each station's detail in the pin balloon. The same file is available
 from the command line:
 
