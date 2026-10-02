@@ -9,6 +9,9 @@ is kept on the app's persistent storage (`/home/data/live`) and survives restart
 
 **Time needed:** about 20 minutes, most of it waiting for Azure.
 
+> **No App Service quota on your subscription?** Use the VM route instead:
+> [`deploy/azure-vm/README.md`](../azure-vm/README.md). Same app, about $21/month, one command.
+
 ---
 
 ## 1. Make sure you have an Azure subscription

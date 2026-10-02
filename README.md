@@ -339,14 +339,19 @@ brew install azure-cli && az login
 ./deploy/azure/deploy.sh
 ```
 
+**Azure VM (if App Service quota isn't available):** the same app on a small Ubuntu VM (~$21/month)
+with HTTPS and a dashboard password; one command creates and updates it. See
+[`deploy/azure-vm/README.md`](deploy/azure-vm/README.md): `./deploy/azure-vm/deploy.sh`.
+
 **Anywhere else:** run `gunicorn --workers 1 --threads 8 wepa_monitor.wsgi:server`. It serves the
 dashboard and collects every minute in the same process; set `WEPA_DATA_DIR` to a folder that
 persists. Or run `python -m wepa_monitor start` on an always-on Mac, PC or Raspberry Pi.
 
-**Scale:** about 45k snapshot rows per day (~16 million per year), stored as under 0.5 MB of Parquet
+**Scale:** about 45k snapshot rows per day (~16 million per year), stored as about 140 KB of Parquet
 per finished day. Each finished day is rolled up once into hourly tables and state changes
-(`wepa_monitor/rollup.py`), so the dashboard's memory stays roughly flat as history grows; only the
-current day is reprocessed each minute.
+(`wepa_monitor/rollup.py`); pages read only those, a background thread refreshes them each minute
+re-using finished days, and expensive results are computed once per refresh. With a year of data:
+pages in 0.1–0.4 s, about 140 MB of data in memory.
 
 ## Station reference data and the map
 
