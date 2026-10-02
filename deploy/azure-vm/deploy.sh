@@ -16,16 +16,19 @@ set -euo pipefail
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-resnet-print-ops}"
 VM_NAME="${VM_NAME:-vm-resnet-print-ops}"
 # Where to try creating the VM, in order, until Azure has capacity for your subscription. New
-# subscriptions are often turned away from busy regions/sizes ("SkuNotAvailable"). Sizes need
-# 2 GB+ of RAM:  B1ms 1 vCPU/2 GB ~$15/mo · B2als_v2 2 vCPU/4 GB ~$27/mo · B2s 2 vCPU/4 GB ~$30/mo.
+# subscriptions are often turned away from busy regions/sizes ("SkuNotAvailable"), sometimes for a
+# whole size family, so the list spans families. All have 2 GB+ of RAM (approx. Linux pay-as-you-go):
+#   B1ms (1 vCPU/2 GB) ~$15/mo · B2pls_v2 (Arm, 2 vCPU/4 GB) ~$22/mo · B2als_v2 (2/4) ~$27/mo
+#   D2as_v5 (2/8) ~$63/mo · A2_v2 (2/4, older) ~$66/mo
 # Set LOCATION and/or SIZE to pin one choice.
 REGIONS="${LOCATION:-eastus2 centralus northcentralus westus2 westus3 southcentralus eastus}"
-SIZES="${SIZE:-Standard_B1ms Standard_B2als_v2 Standard_B2s}"
+SIZES="${SIZE:-Standard_B1ms Standard_B2pls_v2 Standard_B2als_v2 Standard_D2as_v5 Standard_A2_v2}"
 # When a region is pinned, also try each availability zone: a zone often has room when the region
 # as a whole reports "Capacity Restrictions". ("any" = let Azure choose.)
 ZONES="${ZONES:-$([ -n "${LOCATION:-}" ] && echo "any 1 2 3" || echo "any")}"
 ADMIN="${ADMIN:-azureuser}"
-IMAGE="Canonical:ubuntu-24_04-lts:server:latest"
+IMAGE_X64="Canonical:ubuntu-24_04-lts:server:latest"
+IMAGE_ARM="Canonical:ubuntu-24_04-lts:server-arm64:latest"   # for Arm sizes (a "p" after the digits, e.g. B2pls_v2)
 
 cd "$(git rev-parse --show-toplevel)"
 command -v az >/dev/null 2>&1 || { echo "Install the Azure CLI first: brew install azure-cli" >&2; exit 1; }
@@ -52,6 +55,7 @@ if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
     for SIZE in $SIZES; do
     for ZONE in $ZONES; do
       ZONE_ARGS=(); [ "$ZONE" != any ] && ZONE_ARGS=(--zone "$ZONE")
+      IMAGE="$IMAGE_X64"; [[ "${SIZE#Standard_}" =~ ^[A-Z]+[0-9]+[a-z]*p ]] && IMAGE="$IMAGE_ARM"
       echo "    trying $SIZE in $LOCATION$([ "$ZONE" != any ] && echo " zone $ZONE") ..."
       if az vm create -g "$RESOURCE_GROUP" -n "$VM_NAME" -l "$LOCATION" --image "$IMAGE" --size "$SIZE" \
           --admin-username "$ADMIN" --generate-ssh-keys --public-ip-sku Standard \
@@ -85,7 +89,7 @@ if ! az vm show -g "$RESOURCE_GROUP" -n "$VM_NAME" -o none 2>/dev/null; then
   if [ -z "$CREATED" ]; then
     cat >&2 <<NONE
 
-None of the regions/sizes worked. Reasons seen:$(echo "$REASONS" | tr ' ' '\n' | sort | uniq -c | tr '\n' ' ')
+None of the regions/sizes worked. Reasons seen: $(for r in $REASONS; do echo "$r"; done | sort | uniq -c | awk '{printf "%s x%s  ", $2, $1}')
   quota      -> portal: Quotas -> Compute -> East US 2 -> "Standard BS Family vCPUs" -> request 2
                 (also "Total Regional vCPUs" if it is 0); usually approved automatically.
   restricted -> Help + support -> Create a support request -> "Service and subscription limits
