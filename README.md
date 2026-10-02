@@ -343,6 +343,11 @@ brew install azure-cli && az login
 with HTTPS and a dashboard password; one command creates and updates it. See
 [`deploy/azure-vm/README.md`](deploy/azure-vm/README.md): `./deploy/azure-vm/deploy.sh`.
 
+**Azure Container Apps (works when App Service and VM capacity are refused):** no quota-limited
+servers to rent; ~$20–55/month, HTTPS and a site password. See
+[`deploy/azure-containerapps/README.md`](deploy/azure-containerapps/README.md):
+`./deploy/azure-containerapps/deploy.sh`.
+
 **Anywhere else:** run `gunicorn --workers 1 --threads 8 wepa_monitor.wsgi:server`. It serves the
 dashboard and collects every minute in the same process; set `WEPA_DATA_DIR` to a folder that
 persists. Or run `python -m wepa_monitor start` on an always-on Mac, PC or Raspberry Pi.

@@ -201,6 +201,28 @@ def _shell(ds: M.Dataset):
     ])
 
 
+def _require_password(server) -> None:
+    """Optional site login (HTTP basic auth), for hosts without their own sign-in in front.
+
+    Set WEPA_BASIC_AUTH to "username:<hash>", where <hash> comes from
+    werkzeug.security.generate_password_hash(password). Unset, the site is open (local use)."""
+    import os
+    setting = os.environ.get("WEPA_BASIC_AUTH", "")
+    if not setting:
+        return
+    user, _, pw_hash = setting.partition(":")
+    from flask import Response, request
+    from werkzeug.security import check_password_hash
+
+    @server.before_request
+    def _check():
+        a = request.authorization
+        if a and a.username == user and a.password and check_password_hash(pw_hash, a.password):
+            return None
+        return Response("Sign in to view ResNet Print Ops.", 401,
+                        {"WWW-Authenticate": 'Basic realm="ResNet Print Ops", charset="UTF-8"'})
+
+
 def create_app(data_dir: Path, preload: bool = False) -> Dash:
     cache = DataCache(data_dir)
     if preload:
@@ -208,6 +230,7 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     app = Dash(__name__, title="ResNet Print Ops", suppress_callback_exceptions=True,
                update_title=None, assets_folder=str(Path(__file__).parent / "assets"))
     app.layout = lambda: _shell(cache.get())
+    _require_password(app.server)
 
     # --- theme: OS default on first visit, then the person's choice ---------------------------
     app.clientside_callback(
