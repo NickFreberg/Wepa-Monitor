@@ -65,6 +65,34 @@ The script updates the cloud app, packages `data/live`, and uploads it to `data/
 the share. The cloud merges it with its own data and drops duplicate minutes; its own files are
 never changed. Running it again replaces the earlier import.
 
+## Turn on AI summaries (optional)
+
+Insights can have answers and summaries written by AI. The AI only sees numbers the app has already
+computed about printers, and every answer shows the numbers behind it. Without this, the site uses
+its built-in, rule-written text.
+
+**GitHub Copilot** (needs a GitHub account with a Copilot license; create a fine-grained token with
+the "Copilot Requests" permission):
+
+```bash
+az containerapp secret set -g rg-resnet-print-ops -n resnet-print-ops --secrets copilot-token=<token>
+az containerapp update -g rg-resnet-print-ops -n resnet-print-ops \
+  --set-env-vars WEPA_AI_PROVIDER=copilot COPILOT_GITHUB_TOKEN=secretref:copilot-token
+```
+
+**Or an OpenAI-compatible endpoint** (OpenAI, or Azure OpenAI in your BSU subscription):
+
+```bash
+az containerapp secret set -g rg-resnet-print-ops -n resnet-print-ops --secrets ai-key=<key>
+az containerapp update -g rg-resnet-print-ops -n resnet-print-ops --set-env-vars WEPA_AI_PROVIDER=openai \
+  WEPA_AI_BASE_URL=https://<resource>.openai.azure.com/openai/deployments/<deployment>/chat/completions?api-version=2024-10-21 \
+  WEPA_AI_API_KEY=secretref:ai-key
+```
+
+Either rolls out a new revision with no downtime. The System page shows whether AI is on and
+whether its last request worked. `WEPA_AI_MAX_PER_HOUR` (default 120) caps the number of AI calls.
+To turn it off: `az containerapp update ... --remove-env-vars WEPA_AI_PROVIDER`.
+
 ## Troubleshooting
 
 - **The page doesn't answer for several minutes on first deploy:** check the log. It should show

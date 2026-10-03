@@ -730,3 +730,13 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .dash-table-container .dash-filter input::placeholder { color: var(--muted); }
 .dash-table-container a { color: var(--accent); font-weight: 600; }
 .dash-table-container p { margin: 0; }
+
+/* AI-written notes */
+.ai-note { margin: 4px 0 14px; padding: 12px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface)); border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
+.ai-note__head { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--accent); font-size: 13px; }
+.ai-note__head .icon { width: 16px; height: 16px; }
+.ai-note__by { color: var(--muted); font-weight: 500; font-size: 12px; }
+.ai-note__text p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
+.ai-note-slot:empty { display: none; }
+.ask__numbers { margin-top: 4px; }

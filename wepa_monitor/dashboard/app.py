@@ -491,6 +491,10 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     def story_body(key, sc, _):
         return insights_view.render_story(cache.get(), key, sc)
 
+    @app.callback(Output("story-ai", "children"), Input("story-period", "value"), scope)
+    def story_ai(key, sc):
+        return insights_view.render_story_ai(cache.get(), key, sc)
+
     @app.callback(Output("ask-q", "value"), Input({"type": "ask-ex", "q": ALL}, "n_clicks"), prevent_initial_call=True)
     def ask_example(clicks):
         if not ctx.triggered_id or not any(clicks or []):

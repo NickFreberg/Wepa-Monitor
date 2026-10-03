@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from dash import dcc, html
 
-from ... import config, metrics as M, security
+from ... import ai, config, metrics as M, security
 from .. import charts
 from ..components import chart_card, data_table, fmt_minutes, headline, icon, tile
 from .common import empty, needs_days
@@ -137,7 +137,8 @@ def render(ds: M.Dataset, theme: str, cache=None):
     return [hl, html.Div(className="grid", children=[how, terminal]),
             html.H2("Data quality", className="section-title"), *quality,
             html.H2("Who's using the site", className="section-title"), *_visits(),
-            html.H2("Security", className="section-title"), *_security()]
+            html.H2("Security", className="section-title"), *_security(),
+            html.H2("AI assistant", className="section-title"), _ai_status()]
 
 
 def terminal_lines(ds: M.Dataset, cache=None, n: int = 60) -> str:
@@ -219,3 +220,18 @@ def _security():
     else:
         out.append(html.P("Nothing to report: no failed sign-ins or exports recorded.", className="card__note"))
     return out
+
+
+def _ai_status():
+    st = ai.status()
+    if not st["enabled"]:
+        return headline("info", "AI summaries are off",
+                        "Insights use built-in, rule-written text. To turn on AI summaries and answers, set "
+                        "WEPA_AI_PROVIDER (copilot or openai) and its key; see the deployment guide.")
+    last = (f"last answer {_ago(time.time() - st['last_ok'])}" if st["last_ok"] else "no answers yet")
+    if st["last_error"]:
+        return headline("warning", f"AI summaries are on ({st['provider']}), but the last request failed",
+                        f"{st['last_error']}. Pages fall back to rule-written text until it recovers.")
+    return headline("good", f"AI summaries are on ({st['provider']}, model: {st['model']})",
+                    f"{st['calls']} answers since the app started; {last}. Only computed printer figures are sent; "
+                    "answers are cached for 15 minutes and limited per hour.")
