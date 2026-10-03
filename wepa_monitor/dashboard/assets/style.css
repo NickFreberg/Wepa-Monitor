@@ -875,3 +875,5 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .gate__item .icon { width: 15px; height: 15px; color: var(--muted); flex: none; }
 .gate__item.is-met { color: var(--ink); }
 .gate__item.is-met .icon { color: var(--good-text); }
+.result-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.result-signs { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }

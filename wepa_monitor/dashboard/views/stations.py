@@ -68,4 +68,9 @@ def render(ds: M.Dataset, scope, query: str = "", status: str = "all"):
             html.Div(className="board__grid", children=tiles),
         ]))
     shown = f"Showing {len(cur)} of {total} stations" if len(cur) != total else f"{total} stations"
-    return [html.P(shown, className="result-count"), html.Div(groups, className="board")]
+    signs = html.A([icon("printer"), html.Span("Printable QR signs for students")], href="/status/signs",
+                   target="_blank", className="link result-signs",
+                   title="One sign per printer: scanning it opens that printer's live status and the nearest "
+                         "working printers")
+    return [html.Div([html.P(shown, className="result-count"), signs], className="result-bar"),
+            html.Div(groups, className="board")]

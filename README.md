@@ -117,6 +117,11 @@ any chart, and every chart carries a one-line takeaway in plain words.
   it hasn't seen, retrains nightly, and logs every prediction to build a live track record. It stays
   in "learning" (and shows nothing on other pages) until it passes every check; once live, Overview
   gets a "Likely to go down in the next 24 hours" list. Run it by hand with `python -m wepa_monitor train-risk`.
+- **Student status pages** (`/status`, `/status/<printer>`): a fast phone page per printer showing
+  whether it works right now and the nearest working printers with walk times, opened from a QR sign
+  on the printer (print them from Stations → "Printable QR signs"). They stay behind the login unless
+  `WEPA_PUBLIC_STATUS=1`; turn that on only with Wepa's and BSU's written OK. Set `WEPA_PUBLIC_URL` to the
+  address the QR codes should open.
 - The **Assistant** button (top right, or Ctrl+I) opens a chat pane on any page. It suggests questions
   for the page you're on, remembers the conversation for follow-ups, and shows "The numbers behind
   it" under each reply. It uses the same answers as Ask the data, written by AI when one is connected.

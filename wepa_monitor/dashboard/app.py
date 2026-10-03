@@ -284,6 +284,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     app.layout = lambda: _shell(cache.get())
     app.server.config["WEPA_CACHE"] = cache
     security.install(app.server, data_dir)
+    from . import public
+    public.register(app.server, cache)
 
     # --- appearance: OS default until the person chooses; text size, spacing, motion, contrast ------
     app.clientside_callback(

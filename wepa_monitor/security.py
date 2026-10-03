@@ -189,6 +189,9 @@ def install(server, data_dir: Path | None = None) -> None:
     def _check():
         if not setting:
             return None
+        from .dashboard.public import is_public
+        if is_public(request.path):
+            return None
         ip = client_ip(request)
         net = truncate_ip(ip)
         if _is_locked(net):
