@@ -5,9 +5,20 @@
 
   // Escape closes whichever panel is open: a popover, notifications, or "What this means".
   document.addEventListener("keydown", function (e) {
+    // Ctrl/Cmd+I opens or closes the assistant.
+    if ((e.ctrlKey || e.metaKey) && (e.key === "i" || e.key === "I")) {
+      var a = document.getElementById("assist");
+      var b = document.getElementById(a && a.classList.contains("is-open") ? "assist-close" : "assist-open");
+      if (b) { e.preventDefault(); b.click(); }
+      return;
+    }
     if (e.key !== "Escape") { return; }
     var pops = openPopovers();
     if (pops.length) { pops.forEach(function (d) { d.open = false; d.querySelector("summary").focus(); }); return; }
+    var assist = document.getElementById("assist");
+    if (assist && assist.classList.contains("is-open")) {
+      document.getElementById("assist-close").click(); document.getElementById("assist-open").focus(); return;
+    }
     ["xdrawer-close", "drawer-close"].forEach(function (id) {
       var panel = document.getElementById(id === "xdrawer-close" ? "xdrawer" : "drawer");
       var btn = document.getElementById(id);
@@ -32,10 +43,12 @@
     }
   }, true);
 
-  // Keep the live log scrolled to the newest line unless the reader has scrolled up.
   var stick = new WeakMap();
-  function followLog() {
-    var t = document.getElementById("sy-log");
+  // Live logs (System page) and the assistant's conversation stay scrolled to the newest line,
+  // unless the reader has scrolled up to look at something.
+  function followLog() { ["sy-log", "assist-log"].forEach(follow); }
+  function follow(id) {
+    var t = document.getElementById(id);
     if (!t) { return; }
     if (!stick.has(t)) {
       stick.set(t, true);

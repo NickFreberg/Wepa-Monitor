@@ -107,3 +107,25 @@ def test_claude_can_look_things_up(monkeypatch):
                    tool=lambda q: asked.append(q) or "Library: 3 h")
     assert reply.text == "The Library was down 3 hours."
     assert asked == ["longest outage this week?"] and len(calls) == 2
+
+
+def test_assistant_pane_answers_with_and_without_ai(monkeypatch, ds):
+    """The header assistant answers from the data; with AI on it carries the conversation along."""
+    import json
+
+    from wepa_monitor.dashboard.views import assistant
+
+    monkeypatch.delenv("WEPA_AI_PROVIDER", raising=False)
+    m = assistant.reply(ds, "What's down right now?", None, "/", [])
+    assert m["role"] == "assistant" and not m["ai"] and m["text"]
+    json.dumps(m)                                   # lives in the browser's session store
+    assert assistant.render(ds, [], "/")            # welcome screen with suggestions
+    assert assistant.render(ds, [{"role": "user", "text": "hi"}, {"role": "pending"}, m], "/")
+
+    seen = []
+    monkeypatch.setenv("WEPA_AI_PROVIDER", "fake")
+    monkeypatch.setattr(ai, "_fake", lambda message: seen.append(message) or "Two stations are down.")
+    history = [{"role": "user", "text": "How was yesterday?"}, {"role": "assistant", "text": "Quiet."}]
+    m = assistant.reply(ds, "and today?", None, "/analytics", history)
+    assert m["ai"] and m["text"] == "Two stations are down."
+    assert "How was yesterday?" in seen[0] and "'/analytics' page" in seen[0]

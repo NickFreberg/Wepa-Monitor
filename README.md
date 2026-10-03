@@ -111,6 +111,9 @@ any chart, and every chart carries a one-line takeaway in plain words.
 - **"How to read this"** on a card is a two-line guide to the chart.
 - **"For nerds"** on a card holds the method: algorithm names, formulas, assumptions.
 - Every chart has a **Show data** table, and status is always an icon and a label as well as a color.
+- The **Assistant** button (top right, or Ctrl+I) opens a chat pane on any page. It suggests questions
+  for the page you're on, remembers the conversation for follow-ups, and shows "The numbers behind
+  it" under each reply. It uses the same answers as Ask the data, written by AI when one is connected.
 
 **Pages**
 

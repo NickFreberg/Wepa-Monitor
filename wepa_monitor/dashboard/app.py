@@ -19,6 +19,7 @@ from .. import activity, config, export, geo, metrics as M, routing, security
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
+from .views import assistant
 from .views import (activity_log, analytics, executive, insights_view, outcomes, overview, rounds, station,
                     stations, system)
 from .views.common import PERIODS, area_key
@@ -236,11 +237,13 @@ def _shell(ds: M.Dataset):
                     html.Button([icon("bell", "Notifications"), html.Span(id="bell-count", className="badge")],
                                 id="bell", className="topbar__icon-btn", title="Notifications"),
                     _appearance_panel(),
+                    assistant.button(),
                 ]),
             ]),
             html.Div(id="banner"),
             html.Main(id="content", className="content", tabIndex="-1"),
         ]),
+        assistant.pane(),
         dcc.Store(id="hints-off", storage_type="local"),
         html.Div(id="hint-sink", hidden=True),
         html.Div(id="xdrawer", className="drawer drawer--explain", children=[
@@ -603,6 +606,62 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return no_update, str(exc)
         security.audit("export", f"{what}.{fmt}")
         return dcc.send_bytes(data, filename, type=mime), f"Downloaded {filename}"
+
+    # --- assistant pane ------------------------------------------------------------------------------
+    app.clientside_callback(
+        """
+        function(open, close) {
+            var id = (dash_clientside.callback_context.triggered[0] || {}).prop_id || '';
+            var pane = document.getElementById('assist');
+            var isOpen = pane && pane.classList.contains('is-open');
+            if (id.indexOf('assist-open') === 0 && !isOpen) {
+                setTimeout(function () { var q = document.getElementById('assist-q'); if (q) { q.focus(); } }, 240);
+                return 'assist is-open';
+            }
+            return 'assist';
+        }
+        """,
+        Output("assist", "className"), Input("assist-open", "n_clicks"), Input("assist-close", "n_clicks"),
+        prevent_initial_call=True,
+    )
+
+    # Sending shows the question and a typing indicator at once; the answer replaces the indicator.
+    @app.callback(Output("assist-chat", "data", allow_duplicate=True), Output("assist-q", "value"),
+                  Input("assist-send", "n_clicks"), Input("assist-q", "value"),
+                  Input({"type": "assist-ex", "q": ALL}, "n_clicks"), State("assist-chat", "data"),
+                  prevent_initial_call=True)
+    def assist_send(_, typed, __, chat):
+        trig = ctx.triggered_id
+        if isinstance(trig, dict):
+            if not (ctx.triggered and ctx.triggered[0]["value"]):
+                raise PreventUpdate
+            question = trig["q"]
+        else:
+            question = (typed or "").strip()
+        chat = list(chat or [])
+        if not question or (chat and chat[-1].get("role") == "pending"):
+            raise PreventUpdate
+        chat = chat[-(assistant.MAX_MESSAGES - 2):] + [{"role": "user", "text": question[:400]}, {"role": "pending"}]
+        return chat, ""
+
+    @app.callback(Output("assist-chat", "data", allow_duplicate=True), Input("assist-chat", "data"),
+                  State("scope-store", "data"), State("url", "pathname"), prevent_initial_call=True)
+    def assist_answer(chat, sc, path):
+        if not chat or chat[-1].get("role") != "pending" or len(chat) < 2:
+            raise PreventUpdate
+        question = chat[-2].get("text", "")
+        return chat[:-1] + [assistant.reply(cache.get(), question, sc, path, chat[:-2])]
+
+    @app.callback(Output("assist-chat", "data", allow_duplicate=True), Input("assist-new", "n_clicks"),
+                  prevent_initial_call=True)
+    def assist_new(_):
+        return []
+
+    @app.callback(Output("assist-log", "children"), Output("assist-by", "children"),
+                  Output("assist-disclaimer", "children"), Input("assist-chat", "data"), Input("url", "pathname"))
+    def assist_log(chat, path):
+        return (assistant.render(cache.get(), chat or [], path), assistant.provider_line(),
+                assistant.disclaimer())
 
     # --- notifications ------------------------------------------------------------------------------
     app.clientside_callback(
