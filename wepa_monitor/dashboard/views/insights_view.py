@@ -110,7 +110,7 @@ def ai_card(text: str, provider: str, title: str = "In a nutshell", reply=None) 
     return html.Div(className="ai-note", role="note", children=[
         html.Div([icon("sparkle"), html.Span(title), html.Span(f"written by {provider} from the monitoring data",
                                                                className="ai-note__by")], className="ai-note__head"),
-        dcc.Markdown(text, className="ai-note__text"),
+        dcc.Markdown(ai.safe_markdown(text), className="ai-note__text"),
         check_line(reply) if reply is not None else None,
     ])
 

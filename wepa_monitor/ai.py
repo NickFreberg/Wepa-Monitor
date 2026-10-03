@@ -513,3 +513,21 @@ def facts(ds, ids=None, scope_text: str = "BSU print stations", period=None) -> 
         lines.append("Busiest printers (30 days): " + "; ".join(
             f"{r.description} {r.relative:.1f}x typical" for r in use.head(3).itertuples()))
     return "\n".join(lines)
+
+
+# --- safe display -----------------------------------------------------------------------------------
+
+_MD_IMAGE = re.compile(r"!\[([^\]]*)\]\((?:[^()]|\([^)]*\))*\)")
+_MD_LINK = re.compile(r"\[([^\]]+)\]\((?:[^()]|\([^)]*\))*\)")
+_MD_REF = re.compile(r"^\s*\[[^\]]+\]:\s*\S+.*$", re.M)
+_HTML = re.compile(r"<[^>]{1,200}>")
+
+
+def safe_markdown(text: str) -> str:
+    """AI text for display: keep bold, italics and lists, drop images, links and HTML. Model output can
+    echo text that came from outside (printer messages on Wepa's page), so nothing in it may load a
+    resource or send someone to another site."""
+    t = _MD_IMAGE.sub(lambda m: m.group(1), text or "")
+    t = _MD_LINK.sub(lambda m: m.group(1), t)
+    t = _MD_REF.sub("", t)
+    return _HTML.sub("", t)

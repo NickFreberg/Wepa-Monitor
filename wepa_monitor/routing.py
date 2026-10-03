@@ -19,7 +19,7 @@ import heapq
 import itertools
 import json
 import math
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET   # hardened parser: no entity expansion or external entities
 from dataclasses import dataclass, field
 from functools import lru_cache
 

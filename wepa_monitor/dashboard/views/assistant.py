@@ -152,7 +152,7 @@ def _avatar():
 
 
 def _bot(m: dict, last: bool):
-    body = [dcc.Markdown(m.get("text") or "", className="bubble__text")]
+    body = [dcc.Markdown(ai.safe_markdown(m.get("text") or ""), className="bubble__text")]
     if m.get("note"):
         body.insert(0, html.P(m["note"], className="bubble__note"))
     details = []

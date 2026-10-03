@@ -16,3 +16,4 @@ anthropic>=1.0
 scikit-learn>=1.5
 segno>=1.6
 pillow>=10
+defusedxml>=0.7

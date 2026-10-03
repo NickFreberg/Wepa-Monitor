@@ -103,7 +103,7 @@ if [ "$APP_EXISTS" = 0 ]; then
   ENV_ID="$(az containerapp env show -g "$RESOURCE_GROUP" -n "$ENV_NAME" --query id -o tsv)"
   AUTH="$AUTH" ENV_ID="$ENV_ID" LOC="$LOC" IMAGE="$IMAGE" "$PY" - > "$WORKDIR/app.yaml" <<'PYEOF'
 import json, os
-start = ("pip install --no-cache-dir --disable-pip-version-check -q -r /mnt/wepa/app/requirements.txt"
+start = ("pip install --no-cache-dir --disable-pip-version-check -q --require-hashes -r /mnt/wepa/app/requirements.lock"
          " && cd /mnt/wepa/app && exec gunicorn --bind=0.0.0.0:8000 --workers 1 --threads 8 --timeout 300"
          " wepa_monitor.wsgi:server")
 spec = {

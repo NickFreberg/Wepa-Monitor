@@ -3,6 +3,11 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: "17 9 * * *"          # daily: catch newly published vulnerabilities even without a push
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -13,11 +18,26 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install
+      - name: Install (exact, hash-checked versions)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt ruff
+          pip install --require-hashes -r requirements.lock
+          pip install ruff
       - name: Lint
         run: ruff check wepa_monitor tests scripts
       - name: Test
         run: pytest -q
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install scanners
+        run: pip install pip-audit bandit
+      - name: Known vulnerabilities in dependencies (OSV / PyPI advisory database)
+        run: pip-audit --disable-pip --require-hashes -r requirements.lock --vulnerability-service osv
+      - name: Static analysis of the app's own code
+        run: bandit -q -r wepa_monitor -ll

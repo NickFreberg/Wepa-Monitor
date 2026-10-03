@@ -201,7 +201,7 @@ def breached(pw: str) -> bool:
     """Have I Been Pwned range API (k-anonymity). False when unreachable: it's a best-effort extra."""
     try:
         import requests
-        h = hashlib.sha1(pw.encode()).hexdigest().upper()
+        h = hashlib.sha1(pw.encode(), usedforsecurity=False).hexdigest().upper()   # the HIBP range API is keyed by SHA-1
         r = requests.get(f"https://api.pwnedpasswords.com/range/{h[:5]}", timeout=3,
                          headers={"Add-Padding": "true", "User-Agent": "ResNet-Print-Ops"})
         if r.status_code != 200:
@@ -385,6 +385,8 @@ def remove_photo(username: str) -> dict:
 
 
 def photo_path(username: str) -> Path | None:
+    if not USERNAME.match(username or ""):
+        return None
     p = store_dir() / "avatars" / f"{username}.png" if store_dir() else None
     return p if p and p.exists() else None
 
@@ -516,7 +518,11 @@ def install_admin_api(server) -> None:
         a = request.authorization
         if not os.environ.get("WEPA_BASIC_AUTH") or not a or a.username != admin_name():
             return jsonify(error="only the administrator can manage accounts"), 403
+        ip = security.client_ip(request)
+        if security._is_locked(security.truncate_ip(ip)):
+            return jsonify(error="too many failed sign-ins from this network"), 429
         if authenticate(a.username, a.password or "") is None:
+            security._failed(security.truncate_ip(ip), a.username or "", ip, request.headers.get("User-Agent", ""))
             return jsonify(error="sign-in failed"), 401
         return None
 

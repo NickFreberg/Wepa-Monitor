@@ -296,6 +296,43 @@ def _shell(ds: M.Dataset):
     ])
 
 
+MAP_HOSTS = ("https://*.arcgisonline.com https://basemaps.cartocdn.com https://*.basemaps.cartocdn.com "
+             "https://*.openstreetmap.org")
+
+
+def _harden(app: Dash) -> None:
+    """Browser-side defenses: a Content Security Policy that only runs this app's own scripts (Dash's
+    inline bootstrap is allowed by hash, not by 'unsafe-inline'), no framing by other sites, no caching
+    of private pages, and a cap on request size."""
+    server = app.server
+    server.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024          # uploads (profile pictures) are capped at 5 MB
+    csp = {}
+
+    def policy() -> str:
+        if not csp:
+            csp["v"] = "; ".join([
+                "default-src 'self'",
+                "script-src 'self' " + " ".join(app.csp_hashes()),
+                "style-src 'self' 'unsafe-inline'",                    # Plotly sizes charts with inline styles
+                f"img-src 'self' data: blob: {MAP_HOSTS}",
+                f"connect-src 'self' {MAP_HOSTS}",
+                "font-src 'self' data:",
+                "worker-src 'self' blob:", "child-src 'self' blob:",
+                "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self'",
+            ])
+        return csp["v"]
+
+    @server.after_request
+    def _headers(resp):
+        from flask import request
+        resp.headers.setdefault("Content-Security-Policy", policy())
+        static = request.path.startswith(("/assets/", "/_dash-component-suites/", "/_favicon"))
+        if not static:
+            resp.headers["Cache-Control"] = "no-store"
+        resp.headers.pop("Server", None)
+        return resp
+
+
 def create_app(data_dir: Path, preload: bool = False) -> Dash:
     cache = DataCache(data_dir)
     if preload:
@@ -305,6 +342,7 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     app.layout = lambda: _shell(cache.get())
     app.server.config["WEPA_CACHE"] = cache
     security.install(app.server, data_dir)
+    _harden(app)
     from . import public
     public.register(app.server, cache)
 

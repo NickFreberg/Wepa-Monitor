@@ -6,7 +6,7 @@ beats "no data" beats green, so a building shows "down" if any printer in it is.
 """
 from __future__ import annotations
 
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape  # nosec B406 - escaping text for output, not parsing
 
 import pandas as pd
 

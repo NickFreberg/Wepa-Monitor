@@ -38,7 +38,7 @@ def _version_key() -> str:
     """Cached rollups are only valid for the rules and station map they were built with."""
     stations = (config.REFERENCE_DIR / "stations.csv").read_bytes()
     rules = f"{ROLLUP_VERSION}|{config.EXPECTED_INTERVAL_S}|{config.MAX_OBSERVED_GAP_S}|{config.MAX_INCIDENT_BRIDGE_S}"
-    return hashlib.sha1(rules.encode() + stations).hexdigest()[:12]
+    return hashlib.sha1(rules.encode() + stations, usedforsecurity=False).hexdigest()[:12]
 
 
 def _empty(kind: str) -> pd.DataFrame:

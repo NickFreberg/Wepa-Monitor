@@ -44,7 +44,7 @@ rm -rf "$APP/app.new" && mkdir -p "$APP/app.new"
 tar xzf "$ARCHIVE" -C "$APP/app.new"
 [ -d "$APP/venv" ] || python3 -m venv "$APP/venv"
 "$APP/venv/bin/pip" install -q --upgrade pip
-"$APP/venv/bin/pip" install -q -r "$APP/app.new/requirements.txt"
+"$APP/venv/bin/pip" install -q --require-hashes -r "$APP/app.new/requirements.lock"
 "$APP/venv/bin/python" -m compileall -q "$APP/app.new/wepa_monitor" >/dev/null || true   # faster starts
 rm -rf "$APP/app.old"; if [ -d "$APP/app" ]; then mv "$APP/app" "$APP/app.old"; fi
 mv "$APP/app.new" "$APP/app"

@@ -162,8 +162,8 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(f"Loading data from {data_dir} (this can take ~15 s for the 120-day demo) ...", flush=True)
         app = create_app(data_dir, preload=True)
-        url = f"http://127.0.0.1:{args.port}" if args.host in ("127.0.0.1", "0.0.0.0", "localhost") \
-            else f"http://{args.host}:{args.port}"
+        local = ("127.0.0.1", "0.0.0.0", "localhost")  # nosec B104 - comparing names, not binding
+        url = f"http://127.0.0.1:{args.port}" if args.host in local else f"http://{args.host}:{args.port}"
         print(f"\nDashboard ready: open {url} in your browser. Press Ctrl+C to stop.\n", flush=True)
         logging.getLogger("werkzeug").setLevel(logging.WARNING)
         if not args.no_browser and not args.debug:
