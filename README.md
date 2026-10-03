@@ -111,6 +111,12 @@ any chart, and every chart carries a one-line takeaway in plain words.
 - **"How to read this"** on a card is a two-line guide to the chart.
 - **"For nerds"** on a card holds the method: algorithm names, formulas, assumptions.
 - Every chart has a **Show data** table, and status is always an icon and a label as well as a color.
+- **Outage risk model** (Analytics → Forecasts & statistics): machine learning that predicts each
+  printer's chance of going down in the next 24 hours. It compares logistic regression, gradient-boosted
+  trees and a small neural network against a simple baseline (each printer's own track record) on weeks
+  it hasn't seen, retrains nightly, and logs every prediction to build a live track record. It stays
+  in "learning" (and shows nothing on other pages) until it passes every check; once live, Overview
+  gets a "Likely to go down in the next 24 hours" list. Run it by hand with `python -m wepa_monitor train-risk`.
 - The **Assistant** button (top right, or Ctrl+I) opens a chat pane on any page. It suggests questions
   for the page you're on, remembers the conversation for follow-ups, and shows "The numbers behind
   it" under each reply. It uses the same answers as Ask the data, written by AI when one is connected.
@@ -391,6 +397,7 @@ wepa_monitor/
   narrative.py     plain-language stories for any period
   ask.py           "Ask the data": a rule-based question interpreter (no AI model)
   analyst.py       the AI analyst's read-only tools over all the data (used only when AI is on)
+  risk.py          outage-risk machine learning: features, walk-forward test vs a baseline, go-live gate
   campus.py        bridgew.edu parsers (academic calendar, residence halls, library hours) and day phases
   routing.py       Rounds planner: campus graph from OpenStreetMap, Dijkstra, stop ordering, van parking
   synth.py         demo-data simulator

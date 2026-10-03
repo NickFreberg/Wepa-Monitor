@@ -36,6 +36,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--archive-html", action="store_true",
                        help="also keep a gzipped copy of each raw page (about 7 MB/day)")
     sub.add_parser("compact", help="compact finished days to parquet")
+    sub.add_parser("train-risk", help="train and evaluate the outage-risk model now")
     sub.add_parser("network", help="rebuild the campus walking/driving network from OpenStreetMap")
     exp = sub.add_parser("export", help="package local data as import files for another collector's data folder")
     exp.add_argument("--tag", default="import", help="letters/digits naming this source, e.g. mac")
@@ -117,6 +118,15 @@ def main(argv: list[str] | None = None) -> int:
         from . import store
         done = store.compact(args.data_dir or config.LIVE_DATA_DIR)
         print(f"compacted {len(done)} file(s)")
+        return 0
+
+    if args.cmd == "train-risk":
+        from . import metrics, risk
+        card = risk.train_and_save(metrics.load(args.data_dir or config.LIVE_DATA_DIR))
+        for name, m in card.get("models", {}).items():
+            if "brier" in m:
+                print(f"  {risk.MODEL_NAMES.get(name, name):<42} Brier {m['brier']:.4f}  AUC {m['auc']:.3f}"
+                      + (f"  skill {m['skill']:+.1%}" if "skill" in m else ""))
         return 0
 
     if args.cmd == "demo":

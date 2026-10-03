@@ -868,3 +868,10 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .fact-check .icon { width: 13px; height: 13px; }
 .ai-note__text p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
 .ai-note__text ul, .ai-note__text ol { margin: 6px 0 0; padding-left: 20px; }
+
+/* ---------- outage-risk model: go-live checklist ---------- */
+.gate { list-style: none; padding: 0; margin: 10px 0 14px; display: grid; gap: 6px; }
+.gate__item { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
+.gate__item .icon { width: 15px; height: 15px; color: var(--muted); flex: none; }
+.gate__item.is-met { color: var(--ink); }
+.gate__item.is-met .icon { color: var(--good-text); }

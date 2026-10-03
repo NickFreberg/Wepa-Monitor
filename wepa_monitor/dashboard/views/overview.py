@@ -154,8 +154,19 @@ def render(ds: M.Dataset, theme: str, scope, basemap: str = "street"):
         explore_hint(),
         tiles,
         html.Div(className="grid grid--2-1", children=[attention, recent]),
+        _risk(ds, scope),
         html.Div(className="grid", children=[map_card, parts]),
     ]
+
+
+def _risk(ds, scope):
+    from .common import scope_ids
+    from .risk_view import overview_card
+    try:
+        c = overview_card(ds, scope_ids(ds, scope))
+    except Exception:  # noqa: BLE001 - the model must never break the overview
+        return None
+    return html.Div(className="grid", children=[c]) if c is not None else None
 
 
 SEV_ICON = {"critical": "x", "warning": "alert", "good": "check", "info": "info"}

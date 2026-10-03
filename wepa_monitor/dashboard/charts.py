@@ -804,3 +804,61 @@ def classes_printing(theme: str, hours: pd.DataFrame) -> go.Figure:
     fig.update_layout(**layout(theme, 300, hovermode="x unified",
                                yaxis=dict(title=dict(text="vs its own average (100)"), rangemode="tozero")))
     return fig
+
+
+def calibration(theme: str, rows: list[dict]) -> go.Figure:
+    """Predicted chance vs how often it really happened, per band of predictions; the diagonal is perfect."""
+    t = TOKENS[theme]
+    d = pd.DataFrame(rows)
+    top = float(max(d["predicted"].max(), d["actual"].max(), 0.05)) * 1.1
+    fig = go.Figure([
+        go.Scatter(x=[0, top], y=[0, top], mode="lines", line=dict(color=t["axis"], dash="dot", width=1.5),
+                   hoverinfo="skip", name="Perfectly calibrated"),
+        go.Scatter(x=d["predicted"], y=d["actual"], mode="lines+markers", name="The model",
+                   line=dict(color=t["series"][0], width=2), marker=dict(size=8 + 0 * d["n"]),
+                   customdata=d["n"],
+                   hovertemplate="Predicted %{x:.0%}<br>Actually went down %{y:.0%}<br>%{customdata:,} predictions"
+                                 "<extra></extra>")])
+    fig.update_layout(**layout(theme, 280, showlegend=False,
+                               xaxis=dict(title=dict(text="predicted chance of going down"), tickformat=".0%",
+                                          range=[0, top], showgrid=True),
+                               yaxis=dict(title=dict(text="how often it really did"), tickformat=".0%",
+                                          range=[0, top])))
+    return fig
+
+
+def model_skill(theme: str, models: dict, names: dict, champion: str | None) -> go.Figure:
+    """Each candidate's improvement over the baseline (Brier skill); right of zero = better than baseline."""
+    t = TOKENS[theme]
+    d = pd.DataFrame([{"key": k, "name": names.get(k, k), "skill": v["skill"], "auc": v.get("auc", np.nan)}
+                      for k, v in models.items() if k != "baseline" and "skill" in v]).iloc[::-1]
+    if d.empty:
+        return blank()
+    color = [t["series"][2] if s > 0 else STATUS["critical"] for s in d["skill"]]
+    fig = go.Figure(go.Bar(
+        y=d["name"] + np.where(d["key"] == champion, "  ★", ""), x=d["skill"], orientation="h",
+        marker=dict(color=color), text=[f"{s:+.1%}" for s in d["skill"]], textposition="outside", cliponaxis=False,
+        textfont=dict(color=t["secondary"], size=11), customdata=d["auc"],
+        hovertemplate="<b>%{y}</b><br>%{x:+.1%} vs the baseline (Brier skill)<br>AUC %{customdata:.2f}<extra></extra>"))
+    lim = float(max(abs(d["skill"]).max(), 0.05)) * 1.35
+    fig.update_layout(**layout(theme, max(170, 44 * len(d) + 50), margin=dict(r=70, l=10),
+                               xaxis=dict(showgrid=True, zeroline=True, zerolinecolor=t["secondary"], tickformat="+.0%",
+                                          range=[-lim, lim], title=dict(text="better than the baseline →")),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
+    return fig
+
+
+def importance_bars(theme: str, rows: list[dict], n: int = 7) -> go.Figure:
+    t = TOKENS[theme]
+    d = pd.DataFrame(rows)
+    d = d[d["importance"] > 0].head(n).iloc[::-1]
+    if d.empty:
+        return blank()
+    rel = d["importance"] / d["importance"].max()
+    fig = go.Figure(go.Bar(y=d["label"], x=rel, orientation="h", marker=dict(color=t["series"][0]),
+                           hovertemplate="<b>%{y}</b><br>relative importance %{x:.0%}<extra></extra>"))
+    fig.update_layout(**layout(theme, max(170, 30 * len(d) + 40), margin=dict(l=10),
+                               xaxis=dict(showgrid=True, tickformat=".0%", range=[0, 1.05],
+                                          title=dict(text="how much the prediction relies on it")),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
+    return fig

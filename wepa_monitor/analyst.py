@@ -199,6 +199,10 @@ class Toolkit:
                                                       "coverage_gaps", "staffing_whatif", "by_phase",
                                                       "downtime_drivers"]},
                   "period": P, "stations": S}, self.statistics, ["kind"]),
+            Tool("outage_risk", "The machine-learning outage-risk model: whether it is live (has proven itself "
+                 "against a simple baseline on held-out weeks), its test scores and track record, and, if live, each "
+                 "printer's chance of going down in the next 24 hours with the main reasons.",
+                 {"stations": S}, self.outage_risk),
             Tool("ask_dashboard", "The dashboard's own built-in answer to a plain-English question (a quick "
                  "cross-check, or for things like hall support contacts).",
                  {"question": {"type": "string"}}, self.ask_dashboard, ["question"]),
@@ -582,6 +586,37 @@ class Toolkit:
                                                                       "outages": "outages", "pct": "% of downtime"},
                                       n=8, title=f"Downtime by {k}:") for k, v in d.items())
         return f"Unknown kind '{kind}'."
+
+    def outage_risk(self, stations=None) -> str:
+        from . import risk
+        card = risk.load_card(self.ds)
+        if not card:
+            return "The outage-risk model hasn't been trained yet."
+        champ = card.get("champion")
+        m = card.get("models", {}).get(champ or "", {})
+        lines = [f"Status: {card['status'].upper()}" + (" (not reliable enough to use yet: " + " ".join(card.get(
+                     "reasons", [])) + ")" if card["status"] != "live" else ""),
+                 f"Trained {card['trained_at'][:16]} UTC on {card.get('rows', 0):,} printer-hours with "
+                 f"{card.get('positives', 0):,} outage starts" + (" (DEMO data)" if card.get("demo") else "") + "."]
+        if m:
+            lines.append(f"Best model: {risk.MODEL_NAMES.get(champ, champ)}; on held-out weeks: Brier {_num(m.get('brier'))}, "
+                         f"skill vs baseline {_num((m.get('skill') or 0) * 100)}%, AUC {_num(m.get('auc'))}, "
+                         f"top-3 hit rate {_num((m.get('top3_hit') or 0) * 100)}% vs base rate "
+                         f"{_num((card.get('base_rate') or 0) * 100)}%.")
+        tr = risk.track_record(self.ds)
+        if tr:
+            lines.append(f"Live track record: {tr['predictions']} predictions checked; riskiest fifth went down "
+                         f"{_num(tr['top20_rate'] * 100)}% of the time vs {_num(tr['base_rate'] * 100)}% overall.")
+        if card["status"] != "live":
+            lines.append("Do not quote individual printer risks while the model is learning.")
+            return "\n".join(lines)
+        ids, _ = self._ids(stations)
+        f = risk.predict_now(self.ds, ids)
+        t = f.table.assign(pct=f.table["p"] * 100) if len(f.table) else f.table
+        lines.append(_table(t, {"label": "station", "pct": "chance of an outage in 24 h %", "relative": "vs typical (x)",
+                                "band": "band", "reasons": "mostly because of"}, n=15,
+                            title="Current risk (printers that are up):"))
+        return "\n".join(lines)
 
     def ask_dashboard(self, question) -> str:
         from . import ask, narrative as N

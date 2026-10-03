@@ -666,7 +666,8 @@ def _stats(ds, theme, ids, start, end, plabel, _):
                                ("r2", "Fit R²", lambda v: "—" if pd.isna(v) else f"{v:.2f}"),
                                ("method", "Method", None)], link_col=("station", "station_id"))))
 
-    from . import planning
+    from . import planning, risk_view
+    cards = risk_view.model_card(ds, theme) + cards
     cards += planning.stats_extras(ds, theme, ids, start, end, plabel)
     caveat = html.P("Statistical results describe the selected period and scope. On demo data the models mostly "
                     "rediscover patterns built into the simulator; on live data they become genuine findings as "

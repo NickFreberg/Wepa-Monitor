@@ -140,7 +140,7 @@ def test_analyst_tools_run_on_live_data(ds):
              ("availability", {"group_by": "hour_of_day", "period": "today"}), ("incidents", {"kind": "outage"}),
              ("incidents", {"kind": "fault", "group_by": "cause"}), ("repair_times", {}), ("supplies", {}),
              ("usage", {"group_by": "building"}), ("report_card", {}), ("compare_periods", {"a": "today", "b": "all"}),
-             ("campus_context", {}), ("ask_dashboard", {"question": "What's down right now?"}),
+             ("campus_context", {}), ("outage_risk", {}), ("ask_dashboard", {"question": "What's down right now?"}),
              ("availability", {"stations": "no such hall"}), ("nonsense", {})]
     calls += [("statistics", {"kind": k}) for k in ("failure_rates", "warning_to_outage", "recent_changes",
                                                      "coverage_gaps", "staffing_whatif", "by_phase", "downtime_drivers")]
@@ -149,7 +149,7 @@ def test_analyst_tools_run_on_live_data(ds):
     for name, args in calls:
         out = tk.run(name, args)
         assert isinstance(out, str) and out and " failed (" not in out, (name, out)
-    assert "No station, building or area matches" in tk.outputs[13]
+    assert "No station, building or area matches" in tk.outputs[14]
     assert len(tk.outputs) == len(calls) and len(tk.specs()) == len(tk.tools)
     s, e, label = analyst.parse_period(ds, "2026-10-01..2026-10-02")
     assert s >= ds.data_start and e <= ds.as_of and label

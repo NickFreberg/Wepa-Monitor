@@ -204,7 +204,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
         html.Nav([dcc.Link("Stations", href="/stations", className="link link--quiet"), " / ",
                   dcc.Link(row["building"], href=f"/stations?q={row['building']}", className="link link--quiet")],
                  className="breadcrumb", **{"aria-label": "Breadcrumb"}),
-        header, hl, explore_hint(), tiles,
+        header, hl, _risk_line(ds, station_id), explore_hint(), tiles,
         html.Div(className="grid", children=[timeline]),
         html.H2("Consumables", className="section-title"),
         html.Div(className="grid", children=consumables),
@@ -254,3 +254,11 @@ def eol_figure(ds: M.Dataset, theme: str, station_id: str, comp: str):
             f"(the trend fits {fit['r2']:.0%} of the ups and downs; {fit['n']} readings)." if when not in ("—", "now")
             else f"{label} is at its replacement point now.")
     return fig, note
+
+
+def _risk_line(ds, station_id):
+    from .risk_view import station_line
+    try:
+        return station_line(ds, station_id)
+    except Exception:  # noqa: BLE001 - the model must never break the page
+        return None
