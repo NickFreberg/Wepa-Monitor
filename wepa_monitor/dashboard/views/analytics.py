@@ -46,8 +46,35 @@ def render(ds: M.Dataset, theme: str, scope, period, tab: str, burn_unit: str = 
           "report": _report, "planning": _planning, "stats": _stats}.get(tab, _reliability)
     out = fn(ds, theme, ids, start, end, plabel, {"burn": burn_unit, "mttr": mttr_unit})
     if fn is _reliability and isinstance(out, list):
-        out.append(html.Div(className="grid", children=[_shared_outages(ds, ids, start, end, plabel)]))
+        out.append(html.Div(className="grid", children=[_busy_downtime(ds, theme, ids, start, end, plabel),
+                                                        _shared_outages(ds, ids, start, end, plabel)]))
     return out
+
+
+def _busy_downtime(ds, theme, ids, start, end, plabel):
+    """Downtime weighted by how busy each printer usually is at that hour of the week."""
+    from ... import impact
+    t = impact.by_station(ds, start, end, ids)
+    if t.empty:
+        return chart_card("Which downtime cost the most printing?", f"Last {plabel}.",
+                          body=empty("No downtime to weigh yet.", big=False))
+    return chart_card(
+        "Which downtime cost the most printing?", f"Hours down, and the same hours weighted by how busy that "
+        f"printer usually is at that time of the week, last {plabel}.", charts.impact_bars(theme, t),
+        graph_id="busy-downtime", story=[impact.summary(t)], icon_name=("clock", "crimson"),
+        table=data_table(t, [("label", "Printer", None), ("down_h", "Hours down", lambda v: f"{v:,.1f}"),
+                             ("weighted_h", "Busy-weighted hours", lambda v: f"{v:,.1f}"),
+                             ("rank_plain", "Rank (plain)", None), ("rank_busy", "Rank (weighted)", None)],
+                         link_col=("label", "station_id")),
+        explain=["An hour down at noon on a busy printer costs students more printing than an hour down at 3 AM "
+                 "on a quiet one. The colored bar weighs each down hour by how much that printer usually prints at "
+                 "that hour of the week; gray is plain hours.",
+                 "1 busy-weighted hour = an hour down for a typical printer at an average time. It estimates "
+                 "lost printing from usage patterns; it is not a count of people."],
+        nerd="weight = campus hour-of-week shape (toner used per printer-hour in each of 168 weekly hours, "
+             "divided by the mean) × printer scale (its toner use per observed hour ÷ the median printer's), "
+             "from the last 56 days. Down hours come from minute-level availability. A multiplicative model is "
+             "used because one printer's hour-of-week cells are too sparse to estimate alone.")
 
 
 def _shared_outages(ds, ids, start, end, plabel):

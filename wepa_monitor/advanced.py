@@ -16,6 +16,7 @@ data before it says anything:
 from __future__ import annotations
 
 import math
+import os
 
 import numpy as np
 import pandas as pd
@@ -94,6 +95,14 @@ def _daily_use(ds: M.Dataset, days_back: int, ids=None) -> pd.DataFrame:
     u = M.usage_in(ds, start, end, ids)
     u = u.assign(day=u["scrape_ts"].dt.tz_convert(TZ).dt.date)
     return u.groupby(["station_id", "component", "day"])["used"].sum().reset_index()
+
+
+def lead_days() -> int:
+    """Days an order of supplies takes to arrive (WEPA_SUPPLY_LEAD_DAYS; an assumption until set)."""
+    try:
+        return max(1, int(os.environ.get("WEPA_SUPPLY_LEAD_DAYS", "7")))
+    except ValueError:
+        return 7
 
 
 def supplies_monte_carlo(ds: M.Dataset, horizon_days: int = 30, ids=None, sims: int = 2000,

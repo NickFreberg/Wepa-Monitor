@@ -3,6 +3,7 @@ printer would help, and how printing follows the class schedule."""
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 from dash import html
 
 from ... import advanced as A, courses, metrics as M
@@ -27,8 +28,13 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
 
     # --- supplies to stock (Monte Carlo) ------------------------------------------------------------
     mc = _m(ds, "mc", lambda d, i: A.supplies_monte_carlo(d, 30, i), ids)
+    lead = A.lead_days()
+    mc_lead = _m(ds, "mc_lead", lambda d, i, n: A.supplies_monte_carlo(d, n, i), ids, lead)
     if mc is not None and len(mc["table"]):
         t = mc["table"]
+        if mc_lead is not None and len(mc_lead["table"]):
+            t = t.merge(mc_lead["table"][["component", "p95"]].rename(columns={"p95": "reorder"}), on="component",
+                        how="left")
         k = t.set_index("component").loc["toner_k"] if "toner_k" in set(t["component"]) else None
         story = (["For the next 30 days, plan on about ", ("b", f"{k['p50']:.0f} black toners"),
                   "; stocking ", ("b", f"{k['p95']:.0f}"), " covers 19 months out of 20."] if k is not None else None)
@@ -38,9 +44,14 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
             body=data_table(t, [("label", "Part", None), ("p50", "Typical month", lambda v: f"{v:.0f}"),
                                 ("p90", "Busy month (90%)", lambda v: f"{v:.0f}"),
                                 ("p95", "To be safe (95%)", lambda v: f"{v:.0f}"),
-                                ("max", "Worst case seen", lambda v: f"{v:.0f}")]),
+                                ("max", "Worst case seen", lambda v: f"{v:.0f}"),
+                                ("reorder", f"Reorder below ({lead}-day delivery)",
+                                 lambda v: "—" if pd.isna(v) else f"{max(v, 1):.0f}")]),
             explain=["'Typical' is what a normal month needs. 'To be safe' is enough to run out only about one "
                      "month in twenty. The gap between them is the price of certainty.",
+                     f"'Reorder below': when fewer than this many are left on the shelf, order more. It covers what "
+                     f"printers would use while waiting {lead} days for delivery, 19 times out of 20. The delivery "
+                     "time is an assumption: set WEPA_SUPPLY_LEAD_DAYS to the real one.",
                      "It starts from each part's level today, so a printer about to run out counts right away."],
             nerd=[f"Monte Carlo: {mc['sims']:,} simulated months. For each printer and part, {mc['horizon']} days of "
                   f"use are drawn with replacement from its own last {mc['history_days']} observed days (a "

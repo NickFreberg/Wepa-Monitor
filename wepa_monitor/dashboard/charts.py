@@ -862,3 +862,20 @@ def importance_bars(theme: str, rows: list[dict], n: int = 7) -> go.Figure:
                                           title=dict(text="how much the prediction relies on it")),
                                yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
     return fig
+
+
+def impact_bars(theme: str, t: pd.DataFrame, n: int = 8) -> go.Figure:
+    """Plain down hours vs busy-weighted hours per printer, top n by weighted."""
+    tk = TOKENS[theme]
+    d = t.head(n).iloc[::-1]
+    fig = go.Figure([
+        go.Bar(y=d["label"], x=d["down_h"], orientation="h", name="Hours down", marker=dict(color=tk["neutral_bar"]),
+               hovertemplate="<b>%{y}</b><br>%{x:,.0f} hours down<extra></extra>"),
+        go.Bar(y=d["label"], x=d["weighted_h"], orientation="h", name="Busy-weighted hours",
+               marker=dict(color=tk["series"][0]),
+               hovertemplate="<b>%{y}</b><br>%{x:,.0f} busy-weighted hours<extra></extra>")])
+    fig.update_layout(**layout(theme, max(240, 46 * len(d) + 70), barmode="group", bargap=0.25,
+                               legend=dict(orientation="h", y=1.08, x=0),
+                               xaxis=dict(showgrid=True, title=dict(text="hours"), rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=tk["secondary"]))))
+    return fig
