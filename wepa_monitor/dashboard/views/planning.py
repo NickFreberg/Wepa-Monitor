@@ -15,11 +15,18 @@ def _bullet(seg):
     return html.Li(prose([seg], className="prose prose--inline"))
 
 
+def _m(ds, name, fn, *args, **kw):
+    """Compute once per dataset refresh (simulations and walking matrices are the slow part)."""
+    key = ("planning", name, tuple(sorted(args[0])) if args and args[0] is not None else None, args[1:],
+           tuple(sorted(kw.items())))
+    return M.memo(ds, key, lambda: fn(ds, *args, **kw))
+
+
 def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
     blocks = []
 
     # --- supplies to stock (Monte Carlo) ------------------------------------------------------------
-    mc = A.supplies_monte_carlo(ds, 30, ids)
+    mc = _m(ds, "mc", lambda d, i: A.supplies_monte_carlo(d, 30, i), ids)
     if mc is not None and len(mc["table"]):
         t = mc["table"]
         k = t.set_index("component").loc["toner_k"] if "toner_k" in set(t["component"]) else None
@@ -49,7 +56,7 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
     # --- staffing what-ifs ------------------------------------------------------------------------------
     cards = []
     for key in A.SCENARIOS:
-        r = A.staffing_whatif(ds, start, end, ids, scenario=key)
+        r = _m(ds, "staff", lambda d, i, s0, e0, sc: A.staffing_whatif(d, s0, e0, i, scenario=sc), ids, start, end, key)
         if r is None:
             continue
         lo, mid, hi = r["saved_h"]
@@ -73,7 +80,7 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
              "bootstrap runs resample both the outages and the fix times; the range is the 10th–90th percentile."))
 
     # --- coverage gaps & placement ------------------------------------------------------------------------
-    cov = A.coverage(ds, start, end, ids)
+    cov = _m(ds, "cov", lambda d, i, s0, e0: A.coverage(d, s0, e0, i), ids, start, end)
     if len(cov) and A.routing_ok():
         gaps = cov[cov["gap"]]
         story = ([("b", f"{len(gaps)} printer{'s are' if len(gaps) != 1 else ' is'}"),
@@ -92,7 +99,7 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
                                    ("walk_min", "Walk (min)", lambda v: fmt_num(v, 1)),
                                    ("down_h", f"Down, {plabel} (h)", lambda v: fmt_num(v, 1))],
                              link_col=("label", "station_id"))))
-        pl = A.placement(ds, start, end, ids)
+        pl = _m(ds, "place", lambda d, i, s0, e0: A.placement(d, s0, e0, i), ids, start, end)
         if len(pl):
             best = pl.iloc[0]
             blocks.append(chart_card(
@@ -112,7 +119,7 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
                      "down × relative usage, per week of the period."))
 
     # --- classes vs printing --------------------------------------------------------------------------------
-    cvp = courses.class_vs_printing(ds, start, end, ids)
+    cvp = _m(ds, "cvp", lambda d, i, s0, e0: courses.class_vs_printing(d, s0, e0, i), ids, start, end)
     if cvp is not None:
         rho = cvp["rho"]
         b = cvp["buildings"]
@@ -150,7 +157,7 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
 def stats_extras(ds: M.Dataset, theme: str, ids, start, end, plabel: str) -> list:
     """Bayesian rates, warnings that turn into outages, recent changes, and before/after studies."""
     cards = []
-    b = A.bayes_rates(ds, start, end, ids)
+    b = _m(ds, "bayes", lambda d, i, s0, e0: A.bayes_rates(d, s0, e0, i), ids, start, end)
     if len(b):
         camp = b.attrs.get("campus", np.nan)
         above = b[b["above_campus"]]
@@ -170,7 +177,7 @@ def stats_extras(ds: M.Dataset, theme: str, ids, start, end, plabel: str) -> lis
                   f"α, β fitted by the method of moments across printers (α = {b.attrs['alpha']:.2f}, "
                   f"β = {b.attrs['beta']:.2f}). Posterior Gamma(α + n, β + weeks); intervals are its 5th–95th "
                   "percentiles."]))
-    w = A.warning_to_outage(ds, start, end, ids)
+    w = _m(ds, "w2o", lambda d, i, s0, e0: A.warning_to_outage(d, s0, e0, i), ids, start, end)
     if w is not None:
         lo, hi = w["ci"]
         cards.append(chart_card(
@@ -186,7 +193,7 @@ def stats_extras(ds: M.Dataset, theme: str, ids, start, end, plabel: str) -> lis
                     "rarely leads anywhere can wait for the next round.",
             nerd="A two-step Markov view of each printer's states (warning → down within 24 h). The range is a 90% "
                  "Beta(1 + hits, 1 + misses) credible interval."))
-    ch = A.recent_changes(ds, ids)
+    ch = _m(ds, "chg", lambda d, i: A.recent_changes(d, i), ids)
     cards.append(chart_card(
         "What changed recently?", "Printers whose problem rate in the last two weeks clearly differs from their own "
         "earlier rate.",
