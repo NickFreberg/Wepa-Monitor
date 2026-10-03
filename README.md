@@ -1,5 +1,10 @@
 # ResNet Print Ops — Wepa Print Station Monitor
 
+[![CI](https://github.com/NickFreberg/Wepa-Monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/NickFreberg/Wepa-Monitor/actions/workflows/ci.yml)
+
+**[Read the case study](docs/CASE_STUDY.md)**: the problem, the architecture, the decisions behind it,
+and what's real vs demo data.
+
 A monitoring and analytics dashboard for the Wepa print stations at Bridgewater State University.
 It was first written as a terminal script for ResNet Support Representatives (see `legacy/`). This
 version adds minute-by-minute data capture, documented KPI/KRI definitions, and a styled web dashboard
@@ -14,13 +19,17 @@ Satellite Campuses (1).
 |---|---|---|
 | ![Overview](docs/screenshots/overview.png) | ![Overview in the BSU theme](docs/screenshots/overview-bsu.png) | ![Station detail](docs/screenshots/station-detail.png) |
 
-| Analytics (BSU) | Forecasts & statistics (BSU) | Executive summary (dark) |
+| Analytics (BSU) | Forecasts & statistics, with the outage-risk model (BSU) | Executive summary (dark) |
 |---|---|---|
 | ![Analytics](docs/screenshots/analytics.png) | ![Forecasts and statistics](docs/screenshots/forecasts.png) | ![Executive](docs/screenshots/executive.png) |
 
 | Insights: the story of the week, and Ask the data | Click any point: what it means |
 |---|---|
 | ![Insights](docs/screenshots/insights.png) | ![Explain panel](docs/screenshots/explain.png) |
+
+| The Assistant pane | Student status page (phone) |
+|---|---|
+| ![Assistant](docs/screenshots/assistant.png) | <img src="docs/screenshots/student-status.png" alt="Student status page" width="260"> |
 
 ![Campus map, aerial view](docs/screenshots/campus-map-aerial.png)
 
