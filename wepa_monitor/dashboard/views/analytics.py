@@ -44,7 +44,40 @@ def render(ds: M.Dataset, theme: str, scope, period, tab: str, burn_unit: str = 
     plabel = period_label(period)
     fn = {"reliability": _reliability, "faults": _faults, "consumables": _consumables, "usage": _usage,
           "report": _report, "planning": _planning, "stats": _stats}.get(tab, _reliability)
-    return fn(ds, theme, ids, start, end, plabel, {"burn": burn_unit, "mttr": mttr_unit})
+    out = fn(ds, theme, ids, start, end, plabel, {"burn": burn_unit, "mttr": mttr_unit})
+    if fn is _reliability and isinstance(out, list):
+        out.append(html.Div(className="grid", children=[_shared_outages(ds, ids, start, end, plabel)]))
+    return out
+
+
+def _shared_outages(ds, ids, start, end, plabel):
+    """Several printers going down together: one shared cause (network, Wepa, a building) or chance?"""
+    from ... import correlated as C
+    c = C.clusters(ds, start, end, ids)
+    story = [C.summary(c)]
+    body = (data_table(c, [("start", "Started", lambda t: f"{t.tz_convert(config.LOCAL_TZ):%a %b %-d, %-I:%M %p}"), ("stations", "Printers", None),
+                           ("building_list", "Buildings", None), ("causes", "What they reported", None),
+                           ("kind", "Likely cause", None),
+                           ("together", "Came back together", lambda v: "Yes" if v else "No"),
+                           ("verdict", "Verdict", None)], max_rows=15)
+            if len(c) else empty("Nothing to show: no group of printers went down within "
+                                 f"{C.WINDOW_MIN} minutes of each other.", big=False))
+    return chart_card(
+        "Did several printers go down together?", f"Groups of {C.MIN_STATIONS}+ printers going down within "
+        f"{C.WINDOW_MIN} minutes of each other, last {plabel}.", body=body, story=story, wide=True,
+        icon_name=("pulse", "crimson"),
+        explain=["When printers in different buildings drop off at the same moment, the cause is usually shared "
+                 "(the campus network, Wepa's service, a building's power), not each printer. Those are worth "
+                 "reporting to Network Services or Wepa rather than visiting each printer.",
+                 "Timing alone isn't proof: a group whose printers reported unrelated problems (one jam, one out "
+                 "of paper) is listed as a busy moment, not a shared cause."],
+        nerd=[f"Outage starts are grouped when they fall within {C.WINDOW_MIN} minutes of the group's first start. "
+              "Chance check: if outages started independently, starts per window would be Poisson at the rate "
+              "seen for that hour (weekdays and weekends separately). The expected number of windows in the "
+              "period with at least this many starts by coincidence is summed over every window; under 0.05 is "
+              "'very unlikely to be coincidence'. Labels come from what the printers reported (mostly 'not "
+              f"reachable' = network or Wepa) and whether they recovered within {C.WINDOW_MIN} minutes of each "
+              "other."])
 
 
 def _n_note(m, word="incidents"):

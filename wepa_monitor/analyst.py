@@ -193,11 +193,12 @@ class Toolkit:
                  "dates, support desk hours, library hours, residence halls and residents, and how printing tracks "
                  "class schedules.", {"period": P}, self.campus_context),
             Tool("statistics", "Deeper analysis: which stations fail more than chance explains (Bayesian rates), "
-                 "how often warnings turn into outages, recent significant changes, coverage gaps when a station is "
+                 "how often warnings turn into outages, recent significant changes, times several printers went "
+                 "down together (shared network/Wepa/building causes), coverage gaps when a station is "
                  "down, what evening staffing would save, and availability by academic phase.",
                  {"kind": {"type": "string", "enum": ["failure_rates", "warning_to_outage", "recent_changes",
                                                       "coverage_gaps", "staffing_whatif", "by_phase",
-                                                      "downtime_drivers"]},
+                                                      "downtime_drivers", "shared_outages"]},
                   "period": P, "stations": S}, self.statistics, ["kind"]),
             Tool("outage_risk", "The machine-learning outage-risk model: whether it is live (has proven itself "
                  "against a simple baseline on held-out weeks), its test scores and track record, and, if live, each "
@@ -580,6 +581,13 @@ class Toolkit:
             return _table(p, {"label": "academic phase", "days": "days", "availability": "availability %",
                               "outages_per_day": "outages per day", "faults_per_day": "faults per day",
                               "toner_k_per_day": "black cartridges used per day"}, title=head)
+        if kind == "shared_outages":
+            from . import correlated as C
+            c = C.clusters(self.ds, start, end, ids)
+            return head + " " + C.summary(c) + "\n" + _table(c, {
+                "start": "started", "stations": "printers", "building_list": "buildings", "causes": "reported",
+                "kind": "likely cause", "together": "recovered together", "chance_windows":
+                "windows this size expected by chance in the period", "verdict": "verdict"}, n=15)
         if kind == "downtime_drivers":
             d = insights.downtime_drivers(self.ds, start, end, ids)
             return "\n\n".join(_table(v.assign(pct=v["share"] * 100), {"label": k, "down_h": "hours down",
