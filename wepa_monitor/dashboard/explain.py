@@ -425,25 +425,8 @@ def phases(ds, point, ctx: Context) -> Explanation:
     return Explanation("Academic calendar", title, tells, [matters])
 
 
-def residents(ds, point, ctx: Context) -> Explanation:
-    hall, res, printers, est = _cd(point, 0, ""), float(_cd(point, 1, 0)), int(_cd(point, 2, 1)), _cd(point, 3, False)
-    per = float(point["x"])
-    title = f"About {per:.0f} residents of {hall} share each of its {N.plural(printers, 'printer')}."
-    tells = [f"{res:.0f} students live there" + (" (an estimate; Residence Life doesn't list this hall's count)"
-                                                  if str(est).lower() == "true" else "") + ". "]
-    ids = ds.stations.loc[ds.stations["building"] == hall, "station_id"].tolist()
-    a = M.availability(ds, ctx.start, ctx.end, ids)
-    if a.value is not None:
-        tells += ["Its printers were available ", ("b", f"{a.value:.1f}%"), f" of the time {ctx.period_label}."]
-    matters = ["When one of these printers is down, every resident here walks to another building. The more "
-               "residents per printer, the more an outage costs and the sooner paper runs out; a second "
-               "printer or a bigger tray helps most at the top of this chart."]
-    nxt = [(f"Open {N.names(ds).get(sid, sid)}", f"/station/{sid}") for sid in ids[:2]]
-    return Explanation("Residents per printer", title, tells, matters, nxt)
-
-
 EXPLAINERS = {
-    "phases": phases, "residents": residents,
+    "phases": phases,
     "owner_hours": owner_hours,
     "avail_daily": avail_daily, "building_cov": building_cov, "fault_types": fault_types,
     "faults_building": faults_building, "heatmap": heatmap, "cum_toner": cumulative, "cum_drum": cumulative,

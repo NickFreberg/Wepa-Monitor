@@ -353,6 +353,8 @@ a.feed__title:hover { text-decoration: underline; }
 .neighbour { display: flex; justify-content: space-between; align-items: center; padding: 8px 0;
   border-bottom: 1px solid var(--hairline); }
 .neighbour:last-child { border-bottom: 0; }
+.neighbour > a { flex: 1; min-width: 0; }
+.neighbour__dist { color: var(--muted); font-size: 12.5px; margin: 0 10px; white-space: nowrap; }
 
 ._dash-loading { opacity: .6; }
 

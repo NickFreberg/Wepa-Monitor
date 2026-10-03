@@ -19,8 +19,7 @@ STATE_LABEL = {"red": "Down", "yellow": "Warning", "stale": "No data", "green": 
 
 
 def _station_line(r) -> str:
-    issues = [rules.code_label(c) for c in str(r["status_codes"]).split(",") if c]
-    issues += [m for m in str(r["printer_text"]).split(" | ") if m]
+    issues = rules.describe(r["status_codes"], r["printer_text"])
     text = f"{r['description']} (#{r['station_id']}): {STATE_LABEL.get(r['state'], r['state'])}"
     return text + (f" - {'; '.join(issues)}" if issues else "")
 

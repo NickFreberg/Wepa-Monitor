@@ -299,7 +299,7 @@ def faults_in(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
 
 def paper_refill_time(ds: Dataset, start, end, ids=None) -> Metric:
     f = _in(ds.fault_inc, "start", start, end, ids)
-    return _gate_mean(_resolved(f[f["code"] == "paper_out_error"])["duration_s"])
+    return _gate_mean(_resolved(f[f["code"] == "paper_out"])["duration_s"])
 
 
 def tray_empty_time(ds: Dataset, start, end, ids=None) -> Metric:
@@ -343,6 +343,32 @@ def burn_rates(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
             "ok": len(valid) > 0,
         })
     return pd.DataFrame(rows)
+
+
+def usage_by_station(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
+    """How much each printer is used, from the toner it burns (Wepa doesn't publish page counts).
+
+    usage_per_day: black-toner points per observed day (nearly every page uses black, so this
+    tracks pages printed); color_per_day: cyan+magenta+yellow points per day; relative: usage vs
+    the median printer in scope (2.0 = twice as busy). Printers observed for less than
+    MIN_DAYS_FOR_BURN_RATE days get no rate."""
+    u = usage_in(ds, start, end, ids)
+    days = observed_days(ds, start, end, ids)
+    per = u.groupby(["station_id", "component"])["used"].sum().unstack(fill_value=0.0)
+    per = per.reindex(columns=config.COMPONENTS, fill_value=0.0)
+    st = ds.stations if ids is None else ds.stations[ds.stations["station_id"].isin(ids)]
+    out = st[["station_id", "label", "description", "building", "area", "section", "owner", "station_type"]].copy()
+    out["observed_days"] = out["station_id"].map(days).fillna(0.0)
+    ok = out["observed_days"] >= config.MIN_DAYS_FOR_BURN_RATE
+    k = out["station_id"].map(per["toner_k"]).fillna(0.0)
+    color = out["station_id"].map(per[["toner_c", "toner_m", "toner_y"]].sum(axis=1)).fillna(0.0)
+    out["usage_per_day"] = np.where(ok, k / out["observed_days"].replace(0, np.nan), np.nan)
+    out["color_per_day"] = np.where(ok, color / out["observed_days"].replace(0, np.nan), np.nan)
+    out["cartridges_per_month"] = out["usage_per_day"] * 30.44 / 100
+    med = float(np.nanmedian(out["usage_per_day"])) if out["usage_per_day"].notna().any() else np.nan
+    out["relative"] = out["usage_per_day"] / med if med and np.isfinite(med) and med > 0 else np.nan
+    out["printers_in_building"] = out["building"].map(ds.stations.groupby("building")["station_id"].nunique())
+    return out.sort_values("usage_per_day", ascending=False, na_position="last").reset_index(drop=True)
 
 
 def cumulative_usage(ds: Dataset, start, end, ids=None) -> pd.DataFrame:

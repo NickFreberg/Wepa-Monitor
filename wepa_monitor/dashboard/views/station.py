@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, campus, config, metrics as M, models, ops, support
+from ... import activity, campus, config, metrics as M, models, nearby, ops, support
 from .. import charts
 from ..components import (chart_card, data_table, desk_line, explore_hint, fmt_hours, fmt_minutes, headline,
                           level_bar, station_link, status_pill, tile)
@@ -82,7 +82,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
         tile("Availability", f"{a.value:.1f}%" if a.value is not None else "—", f"last {plabel}",
              compare=vs(a.value, fleet.value, lambda x: f"{x:.1f}%"), ok=a.ok),
         tile("Times down", str(red_n), (f"{after_n} began after desk hours" if red_n else f"red incidents, last {plabel}")),
-        tile("Time to fix (MTTR)", fmt_minutes(mttr.value) if mttr.value is not None else "—",
+        tile("Mean time to repair (MTTR)", fmt_minutes(mttr.value) if mttr.value is not None else "—",
              mttr.note or f"mean of {mttr.n} incidents",
              compare=vs(mttr.value, fleet_mttr.value, fmt_minutes), ok=mttr.ok),
         tile("Time between failures", fmt_hours(mtbf.value) if mtbf.value is not None else "—",
@@ -181,11 +181,23 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
 
     # --- neighbours & activity ----------------------------------------------------------------
     same = cur_all[(cur_all["building"] == row["building"]) & (cur_all["station_id"] != station_id)]
-    neighbours = html.Ul([html.Li([station_link(r["station_id"], f"{r['description']} #{r['station_id']}"),
-                                   status_pill(r["state"])], className="neighbour")
-                          for _, r in same.iterrows()], className="neighbours") if len(same) else \
-        html.P("This is the only print station in the building, so when it's down students there have no "
-               "nearby backup.", className="card__note")
+    alt = nearby.backups(cur_all, station_id, limit=3)
+    alt_public = alt[alt["kind"] == "open to everyone"] if len(alt) else alt
+    items = [html.Li([station_link(r["station_id"], f"{r['description']} #{r['station_id']}"),
+                      html.Span("same building", className="neighbour__dist"), status_pill(r["state"])],
+                     className="neighbour") for _, r in same.iterrows()]
+    items += [html.Li([station_link(r["station_id"], f"{r['description']}"),
+                       html.Span(f"{nearby.fmt_distance(r['meters'])} · {nearby.fmt_walk(r['seconds'])}",
+                                 className="neighbour__dist"), status_pill(r["state"])], className="neighbour")
+              for _, r in alt_public.iterrows()]
+    if len(same):
+        backup_sub = (f"{row['building']} has {len(same)} other printer{'s' if len(same) != 1 else ''}; below "
+                      "them, the nearest working printers anyone can walk into.")
+    else:
+        backup_sub = ("The nearest working printers anyone can walk into (residence halls are card access, so "
+                      "they're left out). Distances follow campus walkways.")
+    neighbours = html.Ul(items, className="neighbours") if items else html.P(
+        "No working printer nearby right now.", className="card__note")
     ev_all = activity.events(ds, since=start, ids=ids)
     ev = ev_all.head(10)
 
@@ -200,8 +212,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
         html.H2("Faults and incidents", className="section-title"),
         html.Div(className="grid", children=fault_cards),
         html.Div(className="grid", children=[
-            chart_card(f"Other printers in {row['building']}", "Backups for students if this one is down.",
-                       body=neighbours),
+            chart_card("If this printer is down", backup_sub, body=neighbours),
             chart_card("Recent activity", f"The latest {len(ev)} of {len(ev_all)} events in the last {plabel}.",
                        body=activity_list(ev, show_date=True) if len(ev) else empty("No activity.", big=False),
                        action=dcc.Link("View all", href=f"/activity?q={station_id}", className="link link--quiet")),
@@ -210,26 +221,10 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
 
 
 def building_line(ds: M.Dataset, row) -> html.Div | None:
-    """Who depends on this printer: hall residents per printer, or library opening hours."""
+    """Library opening hours, for the library printers (outages while it's closed strand no one)."""
     c = campus.load()
     if c.empty:
         return None
-    if row.get("station_type") == "residence":
-        h = campus.residents_per_printer(c, ds.stations)
-        h = h[h["building"] == row["building"]]
-        if h.empty:
-            return None
-        r = h.iloc[0]
-        today = c.on(ds.as_of.tz_convert(config.LOCAL_TZ).date())
-        closed = today is not None and not today["halls_open"]
-        est = " (estimated)" if str(r["estimated"]).lower() == "true" else ""
-        return html.Div([html.Span(className="desk__cal", **{"aria-hidden": "true"}),
-                         html.Span([f"About {r['per_printer']:.0f} residents per printer{est} ",
-                                    html.Span(f"{r['residents']} {str(r['who']).split(',')[0].lower()} residents, "
-                                              f"{r['printers']} printer{'s' if r['printers'] != 1 else ''}",
-                                              className="desk__status")]),
-                         html.Span("Residence halls are closed right now", className="desk__status") if closed
-                         else None], className="desk desk--campus")
     if row.get("building") == campus.LIBRARY_BUILDING:
         today = c.on(ds.as_of.tz_convert(config.LOCAL_TZ).date())
         if today is None or not today.get("library_known", False):

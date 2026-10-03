@@ -57,8 +57,9 @@ def events(ds: Dataset, since: pd.Timestamp | None = None, ids=None) -> pd.DataF
                      "title": title, "detail": detail})
 
     # What each red incident was about: the fault codes that opened with it.
-    faults = ds.fault_inc[["station_id", "start", "label"]]
-    cause = faults.groupby(["station_id", "start"])["label"].agg(lambda s: ", ".join(sorted(set(s))))
+    faults = ds.fault_inc[["station_id", "start", "label", "detail"]]
+    faults = faults.assign(what=faults["label"] + faults["detail"].fillna("").map(lambda d: f" ({d})" if d else ""))
+    cause = faults.groupby(["station_id", "start"])["what"].agg(lambda s: "; ".join(sorted(set(s))))
 
     inc = ds.sev_inc
     if ids is not None:

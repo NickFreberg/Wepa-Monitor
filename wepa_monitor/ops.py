@@ -20,7 +20,7 @@ BASE = {"red": 100, "yellow": 40, "tray": 20, "consumable_now": 30, "consumable_
 def current_status(ds: Dataset, ids=None) -> pd.DataFrame:
     """Latest snapshot per station, plus 'stale' when the station has gone quiet."""
     cur = ds.latest if ids is None else ds.latest[ds.latest["station_id"].isin(ids)]
-    cur = cur.merge(ds.stations[["station_id", "label", "building", "area", "station_type", "owner"]],
+    cur = cur.merge(ds.stations[["station_id", "label", "building", "area", "station_type", "owner", "campus"]],
                     on="station_id", how="left")
     age = (ds.as_of - cur["scrape_ts"]).dt.total_seconds()
     cur["stale"] = age > config.MAX_OBSERVED_GAP_S
@@ -47,11 +47,12 @@ def work_queue(ds: Dataset, ids=None) -> pd.DataFrame:
 
     open_faults = ds.fault_inc[ds.fault_inc["status"] == "open"]
     for _, f in open_faults[open_faults["station_id"].isin(cur.index)].iterrows():
-        sev = rules.STATUS_CODES.get(f["code"], ("", "red", "", False))[1]
+        sev = rules.issue_severity(f["code"])
         sid = f["station_id"]
         if sev == "red" and cur.loc[sid, "row_status"] != "red":
             sev = cur.loc[sid, "row_status"] if cur.loc[sid, "row_status"] != "green" else "yellow"
-        add(sid, sev, f["label"], rules.FIX_CATEGORIES[f["fix_category"]], f["start"], f["censored_start"])
+        label = f["label"] + (f" ({f['detail']})" if f.get("detail") else "")
+        add(sid, sev, label, rules.FIX_CATEGORIES[f["fix_category"]], f["start"], f["censored_start"])
 
     flagged = {r["station_id"] for r in rows}
     open_sev = ds.sev_inc[(ds.sev_inc["status"] == "open") & ds.sev_inc["station_id"].isin(cur.index)]

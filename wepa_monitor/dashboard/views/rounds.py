@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dash import dcc, html
 
-from ... import metrics as M, ops, reference, routing, support
+from ... import metrics as M, nearby, ops, reference, routing, support
 from .. import charts
 from ..components import chart_card, headline, segmented, station_link
 from .common import empty
@@ -52,7 +52,7 @@ def start_options(team: str) -> list[dict]:
 
 
 def _fmt_m(m: float) -> str:
-    return f"{m:,.0f} m" if m < 1000 else f"{m / 1609.34:.1f} mi"
+    return nearby.fmt_distance(m)
 
 
 def _fmt_s(s: float) -> str:

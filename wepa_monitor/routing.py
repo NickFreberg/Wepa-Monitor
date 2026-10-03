@@ -437,7 +437,8 @@ def _leg(g: Graph, nodes: list[int], to: str, mode: str, seconds: float) -> Leg:
 def supplies(p: Plan) -> list[str]:
     """What to bring, from the issues on the route."""
     paper = sum(1 for s in p.order for it in s.items
-                if it["kind"] == "tray" or "paper out" in str(it["issue"]).lower())
+                if it["kind"] == "tray" or "out of paper" in str(it["issue"]).lower()
+                or "paper out" in str(it["issue"]).lower())
     parts: dict[str, int] = {}
     for s in p.order:
         for it in s.items:

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from . import activity, campus, config, metrics as M, models, support
+from . import activity, campus, config, metrics as M, models, nearby, ops, rules, support
 
 TZ = config.LOCAL_TZ
 
@@ -126,10 +126,62 @@ class Story:
     moments: pd.DataFrame | None = None
 
 
+# "Usual" needs history: a norm from a day or two of monitoring would make ordinary days look
+# "better than usual" (or worse) by chance. No norm until a week has been recorded.
+MIN_HISTORY_FOR_NORM_DAYS = 7
+
+
+def history_days(ds: M.Dataset, at: pd.Timestamp | None = None) -> float:
+    """Days of monitoring recorded before `at` (default: now)."""
+    if ds.data_start is None:
+        return 0.0
+    return max(0.0, ((at or ds.as_of) - ds.data_start).total_seconds() / 86400)
+
+
 def _baseline(ds, p: Period, ids) -> float | None:
-    """'Usual' availability: the 30 days before the period."""
+    """'Usual' availability: the 30 days before the period, once at least a week is recorded."""
+    if history_days(ds, p.start) < MIN_HISTORY_FOR_NORM_DAYS:
+        return None
     b = M.availability(ds, p.start - pd.Timedelta(days=30), p.start, ids)
-    return b.value if b.value is not None and b.extra.get("coverage", 0) > 0.3 else None
+    return b.value if b.value is not None and b.extra.get("coverage", 0) > 0.5 else None
+
+
+def _comparable_prev(ds, p: Period, ids) -> M.Metric:
+    """The previous period, only when the monitor actually covered most of it."""
+    prev = M.availability(ds, p.prev_start, p.prev_end, ids)
+    full = (p.prev_end - p.prev_start).total_seconds()
+    covered = prev.extra.get("observed_h", 0) * 3600 / max(1, len(ids) if ids is not None else len(ds.stations))
+    if prev.value is None or full <= 0 or covered / full < 0.8:
+        return M.Metric(None, 0, False, "the previous period wasn't fully monitored")
+    return prev
+
+
+def availability_tone(value: float | None, norm: float | None = None) -> str:
+    """One rule for every availability headline (stories, analytics, executive):
+    good unless availability is low in absolute terms or clearly below its own norm.
+    One printer out of ~30 down for a whole day is about 96.7%: worth a mention, not a warning."""
+    if value is None:
+        return "info"
+    if norm is None:
+        return "critical" if value < 90 else "warning" if value < 95 else "good"
+    if value < 80 or value < norm - 4:
+        return "critical"
+    if value < 85 or value < norm - 1.5:
+        return "warning"
+    return "good"
+
+
+def history_note(ds: M.Dataset, p: Period) -> str:
+    """'Monitoring began Thu Oct 1 at 9:43 PM, so there's no "usual" to compare with yet.'"""
+    if ds.data_start is None or history_days(ds, p.end) >= MIN_HISTORY_FOR_NORM_DAYS:
+        return ""
+    began = ds.data_start.tz_convert(TZ)
+    covered = dur((p.end - p.start).total_seconds())
+    if p.start <= ds.data_start + pd.Timedelta(minutes=5):
+        return (f"Monitoring began {began:%a %b %-d at %-I:%M %p}, so this covers only the {covered} since, "
+                "and there's no 'usual' to compare with until a week has been recorded.")
+    return ("There's no 'usual' to compare with yet: monitoring began "
+            f"{began:%a %b %-d}, and a norm needs at least a week of history.")
 
 
 def overlapping(ds: M.Dataset, p: Period, ids=None) -> pd.DataFrame:
@@ -271,6 +323,118 @@ def coverage(ds: M.Dataset, p: Period, red: pd.DataFrame, ids=None) -> list:
     return seg
 
 
+def outage_causes(ds: M.Dataset, station_id: str, start: pd.Timestamp) -> list[tuple[str, str]]:
+    """(issue, detail) for the problems that opened with an outage, most specific first."""
+    f = ds.fault_inc[ds.fault_inc["station_id"] == station_id]
+    if f.empty:
+        return []
+    end = f["end"].fillna(ds.as_of)
+    hit = f[((f["start"] - start).abs() <= pd.Timedelta(minutes=3)) | ((f["start"] <= start) & (end > start))]
+    hit = hit[hit["severity"] == "red"] if (hit["severity"] == "red").any() else hit
+    order = list(rules.ISSUES)
+    hit = hit.assign(o=hit["code"].map(lambda c: order.index(c) if c in order else 99)).sort_values("o")
+    return list(dict.fromkeys(zip(hit["code"], hit["detail"].fillna(""))))
+
+
+def cause_phrase(causes: list[tuple[str, str]]) -> str:
+    """'jammed (paper feed, duplex unit)' / 'ran out of paper and had a paper tray pulled out'."""
+    parts = [rules.issue_phrase(c) + (f" ({d})" if d else "") for c, d in causes[:2]]
+    return " and ".join(parts)
+
+
+def outage_sentence(ds: M.Dataset, r, p: Period, nm: dict) -> list:
+    """One outage, told as what happened and what it meant:
+    'Stonehouse Hall jammed (paper feed) at 9:14 PM Tue, after ResNet's desk had closed; it waited
+    12.8 hours for the desk to open and was printing again 13.5 hours later.'"""
+    sid = r["station_id"]
+    causes = outage_causes(ds, sid, r["start"])
+    what = cause_phrase(causes) or "stopped printing"
+    owner = r.get("owner") or config.DEFAULT_OWNER
+    started_before = r["start"] < p.start
+    seg: list = [("st", sid, nm.get(sid, sid)), f" {what} "]
+    local = r["start"].tz_convert(TZ)
+    same_day = (p.end - p.start) <= pd.Timedelta(days=1, hours=1) and not started_before
+    seg.append(f"at {local:%-I:%M %p}" if same_day else f"on {local:%a %b %-d} at {local:%-I:%M %p}")
+    if not started_before:
+        if bool(r.get("in_hours", False)):
+            seg.append(f", while the {owner} desk was open")
+        else:
+            seg.append(f", after the {owner} desk had closed")
+    status = r["status"]
+    took = r["duration_s"]
+    if status == "open":
+        seg += ["; it's ", ("b", f"still down after {dur(took)}")]
+    elif status == "resolved" and np.isfinite(took):
+        wait = r.get("wait_s", 0) or 0
+        if not bool(r.get("in_hours", False)) and wait >= 1800 and wait < took:
+            seg.append(f"; it waited {dur(wait)} for the desk to open and was printing again {dur(took)} later")
+        else:
+            seg.append(f"; it was printing again {dur(took)} later")
+    else:
+        seg.append("; the monitor lost sight of it before it cleared")
+    seg.append(". ")
+    return seg
+
+
+def backup_sentence(ds: M.Dataset, sid: str, nm: dict) -> str:
+    """Where students could print instead, in plain words with US distances."""
+    st = ds.stations.set_index("station_id")
+    if sid not in st.index:
+        return ""
+    building = st.loc[sid, "building"]
+    others = st[(st["building"] == building) & (st.index != sid)]
+    if len(others):
+        return f"{building} has {plural(len(others), 'other printer')}, so students there weren't stranded. "
+    cur = ops.current_status(ds)
+    alt = nearby.backups(cur.assign(state="green"), sid, limit=1)
+    alt = alt[alt["kind"] == "open to everyone"]
+    if alt.empty:
+        return f"It's the only printer in {building}. "
+    a = alt.iloc[0]
+    return (f"It's the only printer in {building}; the nearest one anyone can use is in {a['building']}, "
+            f"{nearby.fmt_distance(a['meters'])} away. ")
+
+
+def outages_paragraph(ds: M.Dataset, red: pd.DataFrame, p: Period, nm: dict) -> list:
+    """The outages that cost students most (long, and in buildings without a backup), told one
+    by one; the rest summarized."""
+    single = ds.stations.groupby("building")["station_id"].transform("size").eq(1)
+    alone = set(ds.stations.loc[single, "station_id"])
+    took = red["duration_s"].fillna(0).clip(lower=0)
+    weight = took * np.where(red["station_id"].isin(alone), 1.5, 1.0)
+    red = red.assign(_w=weight.to_numpy()).sort_values("_w", ascending=False)
+    n = len(red)
+    carried = int((red["start"] < p.start).sum())
+    seg: list = [("b", plural(n, "outage")),
+                 f" {'touched' if carried else 'happened'} {during(p)}"
+                 + (f" ({carried} already under way when it began)" if carried else "") + ". "]
+    top = red[red["_w"] >= max(15 * 60, red["_w"].iloc[0] * 0.2)].head(3) if n > 1 else red
+    for i, (_, r) in enumerate(top.iterrows()):
+        if i == 0 and n > 1:
+            seg.append("The one that mattered most: " if len(top) == 1 else "The ones that mattered most: ")
+        seg += outage_sentence(ds, r, p, nm)
+        if i == 0:
+            b = backup_sentence(ds, r["station_id"], nm)
+            if b:
+                seg.append(b)
+    rest = red.drop(top.index)
+    if len(rest):
+        res = M._resolved(rest)
+        seg.append(f"The other {plural(len(rest), 'outage')} "
+                   + (f"were short: typically fixed in {dur(res['duration_s'].median())}." if len(res) >= 2 and
+                      res["duration_s"].median() < 3600 else
+                      f"took a median {dur(res['duration_s'].median())} to fix." if len(res) >= 2 else
+                      "were smaller."))
+    by_st = red.groupby("station_id").size().sort_values(ascending=False)
+    if len(by_st) and by_st.iloc[0] >= 3:
+        sid = by_st.index[0]
+        causes = outage_causes(ds, sid, red[red["station_id"] == sid]["start"].iloc[0])
+        seg += [" ", ("st", sid, nm.get(sid, sid)), f" went down {by_st.iloc[0]} times"
+                + (f", usually because it {rules.issue_phrase(causes[0][0])}" if causes else "")
+                + ": worth a closer look than another quick fix."]
+    return seg
+
+
 def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stations",
           singular: bool = False) -> Story:
     nm = names(ds)
@@ -279,36 +443,24 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
         return Story(p.title, "info", f"No data for {p.label} yet.",
                      [["The monitor hasn't recorded anything for this period. Once snapshots arrive, the story "
                        "writes itself."]])
-    prev = M.availability(ds, p.prev_start, p.prev_end, ids)
+    prev = _comparable_prev(ds, p, ids)
     base = _baseline(ds, p, ids)
     so_far = " so far" if p.partial and p.key not in ("this_month",) else ""
     paras: list[list] = []
 
-    # 1. Lead: how did it go, compared with usual and with the previous period?
-    ref = base if base is not None else prev.value
-    if ref is not None:
-        d = a.value - ref
-        verdict = "better than usual" if d >= 0.5 else ("about typical" if d > -0.5 else
-                                                        "rougher than usual" if d > -2 else "a rough stretch")
-    else:
-        verdict = None
-    # Tone follows the comparison with normal, with absolute floors so a bad norm can't look "good".
-    if a.value < 85 or verdict == "a rough stretch":
-        tone = "critical"
-    elif a.value < 90 or verdict == "rougher than usual":
-        tone = "warning"
-    elif verdict is None:
-        tone = "good" if a.value >= 97 else "warning"
-    else:
-        tone = "good"
+    # 1. Lead: how did it go, compared with this time's own norm (once there is one)?
+    verdict = None
+    if base is not None:
+        d = a.value - base
+        verdict = ("better than usual" if d >= 0.5 else "about typical" if d > -0.5 else
+                   "rougher than usual" if d > -2 else "a rough stretch")
+    tone = availability_tone(a.value, base)
     headline = f"{p.title}{so_far}: {scope_label} could print {a.value:.1f}% of the time"
     were, their = ("was", "its") if singular else ("were", "their")
     lead = [f"{p.title}{so_far}, {scope_label} {were} available ",
             ("b", f"{a.value:.1f}%"), " of the time"]
     if verdict:
-        lead += [", which is ", ("b", verdict)]
-        if base is not None:
-            lead.append(f" ({their} 30-day norm is {base:.1f}%)")
+        lead += [", which is ", ("b", verdict), f" ({their} 30-day norm is {base:.1f}%)"]
     if prev.value is not None:
         d = a.value - prev.value
         if abs(d) >= 0.1:
@@ -316,42 +468,23 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
     lead.append(". ")
     down_h = a.extra.get("down_h", 0)
     lead += ["Altogether that's about ", ("b", f"{down_h:,.0f} printer-hours"), " when a station couldn't print."]
+    note = history_note(ds, p)
+    if note:
+        lead += [" " + note]
     ctx = calendar_context(ds, p, ids)
     if ctx:
         lead += [" "] + ctx
     paras.append(lead)
 
-    # 2. What went wrong: outages, the longest, the most frequent.
+    # 2. What went wrong: the outages that mattered most, each told as what happened to whom.
     inc = overlapping(ds, p, ids)
     red = inc[inc["severity"] == "red"]
-    carried = int((red["start"] < p.start).sum())
     faults = M.faults_in(ds, p.start, p.end, ids)
-    cause = faults.groupby(["station_id", "start"])["label"].agg(lambda s: ", ".join(sorted(set(s))).lower())
     if red.empty:
         paras.append(["No station went down. ", "Any time lost came from monitoring gaps or warnings, "
                       "not outages." if down_h > 0.5 else "Every station that reported could print throughout."])
     else:
-        dur_s = red["duration_s"].fillna(0)
-        longest = red.loc[dur_s.idxmax()]
-        why = cause.get((longest["station_id"], longest["start"]), "")
-        still = longest["status"] == "open"
-        carried_txt = (f" (including {carried} that began before {during(p)} started)" if carried > 1 else
-                       " (it began before the period started)" if carried == 1 and len(red) == 1 else
-                       " (including one that began before the period)" if carried == 1 else "")
-        seg = [("b", plural(len(red), "outage")), carried_txt,
-               (" in total. The longest was " if len(red) > 1 else ": "),
-               ("st", longest["station_id"], nm.get(longest["station_id"], longest["station_id"])),
-                f", {'down for ' + dur(longest['duration_s']) + ' and still not fixed' if still else 'down for ' + dur(longest['duration_s'])}"
-                f" from {when(longest['start'], p)}" + (f" ({why})" if why else "") + "."]
-        by_st = red.groupby("station_id").size().sort_values(ascending=False)
-        if len(by_st) and by_st.iloc[0] >= 3 and by_st.index[0] != longest["station_id"]:
-            seg += [" ", ("st", by_st.index[0], nm.get(by_st.index[0], by_st.index[0])),
-                    f" went down most often ({by_st.iloc[0]} times)."]
-        resolved = M._resolved(red)
-        if len(resolved) >= 3:
-            seg += [f" Outages took a median {dur(resolved['duration_s'].median())} to fix."]
-        paras.append(seg)
-
+        paras.append(outages_paragraph(ds, red, p, nm))
     # 3. Patterns: what kind of problem, and when.
     if len(faults) >= 3:
         top = faults["label"].value_counts()

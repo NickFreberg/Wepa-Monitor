@@ -124,14 +124,22 @@ def _membership(column: pd.Series, extract) -> tuple[np.ndarray, list[str], dict
 
 
 def fault_incidents(snap: pd.DataFrame, as_of: pd.Timestamp) -> pd.DataFrame:
-    """One incident per (station, status code) episode."""
-    # Re-normalize so rows stored before a code was made canonical still group together.
-    codes, items, lookup = _membership(snap["status_codes"],
-                                       lambda u: [rules.normalize_code(c) for c in str(u).split(",") if c])
+    """One incident per (station, issue) episode. Issues combine Wepa's status codes with the
+    printer's own messages (rules.diagnose), so a 'printer down' caused by a jam counts as a jam."""
+    key = snap["status_codes"].astype(str) + "\x1f" + snap["printer_text"].astype(str)
+    codes, items, lookup = _membership(key, lambda u: list(rules.diagnose(*u.split("\x1f", 1))))
     flags = {c: pd.Series(lookup[c][codes], index=snap.index) for c in items}
     inc = _flag_incidents(snap, flags, as_of, "code")
-    inc["label"] = inc["code"].map(rules.code_label)
-    inc["fix_category"] = inc["code"].map(rules.code_fix_category)
+    inc["label"] = inc["code"].map(rules.issue_label)
+    inc["fix_category"] = inc["code"].map(rules.issue_fix_category)
+    inc["severity"] = inc["code"].map(rules.issue_severity)
+    # Details (which color, which tray, where the jam is) from the snapshot that opened it.
+    at_start = snap.set_index(["station_id", "scrape_ts"])[["status_codes", "printer_text"]]
+    at_start = at_start[~at_start.index.duplicated()]
+    idx = pd.MultiIndex.from_arrays([inc["station_id"], inc["start"]])
+    first = at_start.reindex(idx)
+    inc["detail"] = [", ".join(rules.diagnose(c, t).get(code, [])) if isinstance(c, str) else ""
+                     for code, c, t in zip(inc["code"], first["status_codes"], first["printer_text"])]
     return inc
 
 

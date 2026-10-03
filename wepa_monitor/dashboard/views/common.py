@@ -41,8 +41,8 @@ def area_key(area: str) -> int:
 
 
 def station_messages(row) -> list[str]:
-    msgs = [rules.code_label(c) for c in str(row["status_codes"]).split(",") if c]
-    return msgs + [m for m in str(row["printer_text"]).split(" | ") if m]
+    """What's wrong, in plain words: 'Paper jam (paper feed)', 'Tray 2 empty'."""
+    return rules.describe(row["status_codes"], row["printer_text"])
 
 
 def station_card(row, levels: dict) -> dcc.Link:

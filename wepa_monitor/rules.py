@@ -96,6 +96,12 @@ def split_printer_text(text: str) -> list[str]:
     return messages
 
 
+def tray_label(tray: str) -> str:
+    """'Tray1' -> 'Tray 1', 'MPTray' -> 'MP tray'."""
+    m = re.match(r"tray\s*(\d+)$", tray, re.IGNORECASE)
+    return f"Tray {m.group(1)}" if m else tray.replace("MPTray", "MP tray")
+
+
 def empty_trays(messages: list[str]) -> list[str]:
     """Tray names reported empty, e.g. ['Tray1', 'Tray2']."""
     trays = []
@@ -104,3 +110,141 @@ def empty_trays(messages: list[str]) -> list[str]:
         if m:
             trays.append(m.group(1).replace(" ", ""))
     return trays
+
+
+# --- issues: what is actually wrong, in plain words ----------------------------------------------
+# Wepa's codes say *that* a station is down ("printer_down"); the printer's own messages often say
+# *why* ("Paper Feed Jam"). Issues combine both into one clean list of problem types, so fault
+# counts read "Paper jam: 14" instead of "Printer down: 14", and every type has a plain-language
+# phrase for stories ("jammed") and a fix.
+#
+# key -> (label, what happened (verb phrase), severity, fix category)
+ISSUES: dict[str, tuple[str, str, str, str]] = {
+    "paper_out": ("Out of paper", "ran out of paper", "red", "paper"),
+    "paper_jam": ("Paper jam", "jammed", "red", "jam"),
+    "tray_missing": ("Paper tray out", "had a paper tray pulled out or not seated", "red", "paper"),
+    "toner_empty": ("Toner empty", "ran out of toner", "red", "consumable"),
+    "drum_end": ("Drum at end of life", "needed a new drum", "red", "consumable"),
+    "cover_open": ("Cover or door open", "had a cover or door open", "red", "hardware"),
+    "service_call": ("Needs service", "reported an error that needs a service call", "red", "power_cycle"),
+    "fatal_error": ("Printer error", "hit a printer error and needed a restart", "red", "power_cycle"),
+    "not_reachable": ("Offline (network)", "dropped off the network", "red", "network"),
+    "offline": ("Printer not responding", "stopped responding to Wepa", "red", "hardware"),
+    "paper_low": ("Paper low", "was running low on paper", "yellow", "paper"),
+    "toner_low": ("Toner low", "was running low on toner", "yellow", "consumable"),
+    "drum_low": ("Drum wearing out", "had a drum nearing the end of its life", "yellow", "consumable"),
+    "wrong_paper": ("Wrong paper size", "had the wrong paper size in a tray", "yellow", "paper"),
+}
+_CODE_ISSUE = {
+    "paper_out_error": "paper_out", "paper_jam": "paper_jam", "tray_missing": "tray_missing",
+    "toner_critical": "toner_empty", "toner_sensor_error": "toner_empty", "drum_critical": "drum_end",
+    "cover_open": "cover_open", "service_call": "service_call", "fatal_error": "fatal_error",
+    "not_reachable": "not_reachable", "printer_down": "offline", "paper_low": "paper_low",
+    "toner_low": "toner_low", "incorrect_tray_size": "wrong_paper",
+}
+_COLOR = {"k": "black", "c": "cyan", "m": "magenta", "y": "yellow"}
+_MESSAGE_ISSUES = [
+    (re.compile(r"jam", re.I), "paper_jam"),
+    (re.compile(r"\btray\s*\d*\s*(is\s*)?(missing|open|not (set|installed))", re.I), "tray_missing"),
+    (re.compile(r"(cover|door).*open|open.*(cover|door)", re.I), "cover_open"),
+    (re.compile(r"drum (life )?(end|replace|expired)", re.I), "drum_end"),
+    (re.compile(r"drum life warning|drum (near|low)", re.I), "drum_low"),
+    (re.compile(r"toner (empty|out|end)|replace toner|no toner", re.I), "toner_empty"),
+    (re.compile(r"toner (low|near)", re.I), "toner_low"),
+    (re.compile(r"service call|call service|SC\d{3}", re.I), "service_call"),
+]
+# A generic "printer down" is only the issue when nothing more specific explains it.
+_EXPLAINS_DOWN = {"paper_out", "paper_jam", "tray_missing", "toner_empty", "drum_end", "cover_open",
+                  "service_call", "fatal_error", "not_reachable"}
+
+
+def code_issue(code: str) -> str | None:
+    """'printer_critical_toner_magenta' -> 'toner_empty'; unknown codes -> None."""
+    if code in _CODE_ISSUE:
+        return _CODE_ISSUE[code]
+    if re.search(r"critical_toner|toner_(empty|out)", code):
+        return "toner_empty"
+    if re.search(r"critical_drum|drum_(end|out)", code):
+        return "drum_end"
+    if "jam" in code:
+        return "paper_jam"
+    return None
+
+
+def diagnose(status_codes: str, printer_text: str) -> dict[str, list[str]]:
+    """Issues present in one snapshot, each with its details (colors, trays, jam locations).
+
+    >>> diagnose("printer_down", "Paper Feed Jam | Paper Jam for Duplex Unit")
+    {'paper_jam': ['paper feed', 'duplex unit']}
+    """
+    found: dict[str, list[str]] = {}
+
+    def add(issue, detail=None):
+        lst = found.setdefault(issue, [])
+        if detail and detail not in lst:
+            lst.append(detail)
+
+    for raw in str(status_codes or "").split(","):
+        code = normalize_code(raw) if raw else ""
+        if not code:
+            continue
+        issue = code_issue(code)
+        if issue is None:
+            add("other:" + code)
+            continue
+        color = re.search(r"_(black|cyan|magenta|yellow)$", code)
+        add(issue, color.group(1) if color else None)
+    for msg in split_printer_text(str(printer_text or "").replace(" | ", "\n")):
+        if _TRAY_EMPTY.search(msg):
+            continue            # one empty tray while others print: a tray incident, not a fault
+        for pattern, issue in _MESSAGE_ISSUES:
+            if pattern.search(msg):
+                detail = None
+                if issue == "paper_jam":
+                    m = re.search(r"jam (?:for|in|at) (?:the )?(.+)$", msg, re.I)
+                    detail = (m.group(1) if m else re.sub(r"\s*jam\s*", " ", msg, flags=re.I)).strip().lower()
+                elif issue in ("drum_low", "drum_end", "toner_low", "toner_empty"):
+                    m = re.search(r"(black|cyan|magenta|yellow)", msg, re.I)
+                    detail = m.group(1).lower() if m else None
+                elif issue == "tray_missing":
+                    m = re.search(r"tray\s*(\d+)", msg, re.I)
+                    detail = f"tray {m.group(1)}" if m else None
+                add(issue, detail)
+                break
+    if "offline" in found and _EXPLAINS_DOWN & set(found):
+        del found["offline"]
+    return found
+
+
+def issue_label(issue: str) -> str:
+    if issue.startswith("other:"):
+        return code_label(issue.split(":", 1)[1])
+    return ISSUES.get(issue, (issue.replace("_", " ").capitalize(),))[0]
+
+
+def issue_phrase(issue: str) -> str:
+    """What happened, as a verb phrase: 'ran out of paper'."""
+    if issue in ISSUES:
+        return ISSUES[issue][1]
+    return "reported " + issue_label(issue).lower()
+
+
+def issue_severity(issue: str) -> str:
+    return ISSUES.get(issue, ("", "", "red", ""))[2]
+
+
+def issue_fix_category(issue: str) -> str:
+    return ISSUES.get(issue, ("", "", "", "other"))[3]
+
+
+def describe(status_codes: str, printer_text: str) -> list[str]:
+    """Short human lines for a station card: ['Paper jam (paper feed, duplex unit)', 'Tray 2 empty']."""
+    out = []
+    for issue, details in diagnose(status_codes, printer_text).items():
+        label = issue_label(issue)
+        out.append(f"{label} ({', '.join(details)})" if details else label)
+    for msg in split_printer_text(str(printer_text or "").replace(" | ", "\n")):
+        m = _TRAY_EMPTY.search(msg)
+        if m:
+            out.append(f"{tray_label(m.group(1).replace(' ', ''))} empty")
+    return list(dict.fromkeys(out))

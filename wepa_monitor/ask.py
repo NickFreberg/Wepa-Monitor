@@ -40,8 +40,8 @@ COMPONENT_WORDS = {"toner": "toner", "drum": "drum", "belt": "belt", "fuser": "f
 EXAMPLES = [
     "How was yesterday?",
     "What's coming up on the calendar?",
-    "Which hall has the most residents per printer?",
     "Which station was down the longest last week?",
+    "Which printers get used the most?",
     "How is Weygand doing this month?",
     "When do jams happen most?",
     "What toner will run out next?",
@@ -172,8 +172,9 @@ def intent(q: str) -> str:
                      r"(finals?|break|classes|move[- ]?in|commencement|graduation|holiday|halls? (close|open)|"
                      r"semester|thanksgiving)|coming up|upcoming|next (holiday|break|day off)|academic calendar|"
                      r"no classes)\b"),
-        ("capacity", r"\b(residents? per printer|students? per printer|most crowded|how many (students|residents)|"
-                     r"crowded|capacity)\b"),
+        ("usage", r"\b(busiest (printer|station|building|hall)s?|most used|least used|used (the )?(most|least)|"
+                  r"usage|volume|how busy|popular|underused|under-used|idle|residents? per printer|"
+                  r"students? per printer|crowded|capacity|add (a|another) printer|relocat|remove (a )?printer)\b"),
         ("compare", r"\b(compare|compared|vs\.?|versus|better or worse|difference between)\b"),
         ("forecast", r"\b(run out|running out|next|end of life|forecast|predict|due|need(s)? replac|about to)\b"),
         ("now", r"\b(right now|currently|at the moment|is .* down|what'?s down|down now|broken now)\b"),
@@ -206,7 +207,7 @@ def answer(ds: M.Dataset, question: str, scope_ids=None) -> Answer:
                   or re.search(r"\b(how|doing|going|summary|overview|story|status|what happened)\b", q))
     handler = {"compare": _compare, "forecast": _forecast, "now": _now, "time_to_fix": _time_to_fix,
                "paper": _paper, "consumables": _consumables, "when": _when, "ranking": _ranking,
-               "faults": _faults, "support": _support, "calendar": _calendar, "capacity": _capacity,
+               "faults": _faults, "support": _support, "calendar": _calendar, "usage": _usage,
                "overview": _overview}[kind]
     ans = handler(ds, p, subj, q)
     ans.understood = understood if kind != "now" else f"Looking at {subj.label}, right now"
@@ -365,7 +366,7 @@ def _faults(ds, p, subj, q):
 def _paper(ds, p, subj, q):
     t = M._in(ds.tray_inc, "start", p.start, p.end, subj.ids)
     outs = M._in(ds.fault_inc, "start", p.start, p.end, subj.ids)
-    outs = outs[outs["code"] == "paper_out_error"]
+    outs = outs[outs["code"] == "paper_out"]
     if t.empty and outs.empty:
         return Answer("", [[f"No paper trays ran empty at {subj.label.replace('the printers at ', '').replace('the printer at ', '')} {N.during(p)}."]], tone="good")
     by_b = (t.merge(ds.stations[["station_id", "building"]], on="station_id")
@@ -583,24 +584,37 @@ def _calendar(ds, p, subj, q):
                   followups=["How did the last finals go?", "Is the library open?", "When are finals?"])
 
 
-def _capacity(ds, p, subj, q):
-    c = campus.load()
-    st = ds.stations if subj.ids is None else ds.stations[ds.stations["station_id"].isin(subj.ids)]
-    h = campus.residents_per_printer(c, st)
-    if h.empty:
-        return Answer("", [["No residence-hall figures for these stations."]])
-    top = h.iloc[0]
-    para = [("b", top["building"]), f" is the most crowded: about {top['residents']} residents share "
-            f"{plural(int(top['printers']), 'printer')}, roughly ", ("b", f"{top['per_printer']:.0f} per printer"),
-            ". " + (f"{h.iloc[1]['building']} is next at {h.iloc[1]['per_printer']:.0f}. " if len(h) > 1 else "") +
-            "These halls feel an outage most, and their paper runs out fastest."]
-    tot = h["residents"].sum()
-    paras = [para, [f"Altogether about {tot:,} students live in these halls. Figures are from Residence Life"
-                    + ("; halls it doesn't list are estimated." if h["estimated"].astype(bool).any() else ".")]]
-    tbl = h.assign(per=h["per_printer"].map(lambda v: f"{v:.0f}"),
-                   note=h["estimated"].map(lambda e: "estimated" if str(e).lower() == "true" else ""))
-    return Answer("", paras, table=tbl, table_cols=[("building", "Hall"), ("residents", "Residents"),
-                                                     ("printers", "Printers"), ("per", "Per printer"),
-                                                     ("note", "")],
-                  followups=[f"How is {top['building'].replace(' Hall', '')} doing this month?",
-                             "Which station was down the longest last week?"])
+def _usage(ds, p, subj, q):
+    """Which printers are used most and least: toner burned per day, a stand-in for pages."""
+    u = M.usage_by_station(ds, p.start, p.end, subj.ids)
+    u = u[u["usage_per_day"].notna()]
+    if u.empty:
+        return Answer("", [["Not enough history yet: usage needs at least "
+                            f"{config.MIN_DAYS_FOR_BURN_RATE} days of toner readings per printer."]])
+    top, low = u.head(3), u.tail(3).iloc[::-1]
+    para = ["Busiest: "]
+    for i, r in enumerate(top.itertuples()):
+        para += [("st", r.station_id, r.description), f" ({r.relative:.1f}× the typical printer)",
+                 ", " if i < len(top) - 2 else (" and " if i == len(top) - 2 else ". ")]
+    para += ["Quietest: "]
+    for i, r in enumerate(low.itertuples()):
+        para += [("st", r.station_id, r.description), f" ({r.relative:.1f}×)",
+                 ", " if i < len(low) - 2 else (" and " if i == len(low) - 2 else ". ")]
+    paras = [para]
+    lone_busy = top[top["printers_in_building"] == 1]
+    if len(lone_busy):
+        r = lone_busy.iloc[0]
+        paras.append([f"{r['building']} is among the busiest and has only one printer: a second printer there "
+                      "would cut both the queue and the impact of an outage."])
+    quiet_pairs = low[low["printers_in_building"] > 1]
+    if len(quiet_pairs):
+        r = quiet_pairs.iloc[0]
+        paras.append([f"{r['description']} is one of the quietest and shares {r['building']} with another "
+                      "printer: a candidate to move somewhere busier."])
+    paras.append(["Usage here is black toner burned per day (Wepa doesn't publish page counts), so treat it as a "
+                  "relative measure: good for ranking, not for exact page totals."])
+    tbl = u.assign(rel=u["relative"].map(lambda v: f"{v:.1f}×"),
+                   month=u["cartridges_per_month"].map(lambda v: f"{v:.2f}"))
+    return Answer("", paras, table=tbl, table_cols=[("label", "Station"), ("rel", "vs typical"),
+                                                     ("month", "Black cartridges / month")],
+                  followups=["Which station was down the longest last week?", "What toner will run out next?"])

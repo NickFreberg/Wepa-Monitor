@@ -70,11 +70,11 @@ def render(ds: M.Dataset, theme: str, month_idx, sections, areas):
     rows = [
         ("Availability", "availability", lambda v: fmt_num(v, 2, "%"), True, True),
         ("Red incidents", "red_incidents", lambda v: fmt_num(v, 0), False, False),
-        ("MTTR · red", "mttr_red", fmt_minutes, False, False),
-        ("MTTR · yellow", "mttr_yellow", fmt_minutes, False, False),
+        ("Mean time to repair (MTTR) · down", "mttr_red", fmt_minutes, False, False),
+        ("Mean time to clear · warnings", "mttr_yellow", fmt_minutes, False, False),
         ("Outages begun after desk hours", "after_hours", lambda v: fmt_num(v, 0, "%"), False, True),
         ("Desk time to fix (median)", "desk_fix", fmt_minutes, False, False),
-        ("MTBF", "mtbf", fmt_hours, True, False),
+        ("Mean time between failures (MTBF)", "mtbf", fmt_hours, True, False),
         ("Paper refill time", "paper", fmt_minutes, False, False),
         ("Data quality score", "dq", lambda v: fmt_num(v, 0, " / 100"), True, True),
     ]
@@ -128,7 +128,7 @@ def render(ds: M.Dataset, theme: str, month_idx, sections, areas):
         if a_prev is not None:
             d = a_cur - a_prev
             change = f", {'up' if d >= 0 else 'down'} {abs(d):.1f} pts from {prev.label.split(' (')[0]}"
-        hl = headline("good" if a_cur >= 97 else "warning",
+        hl = headline(N.availability_tone(a_cur),
                       f"{cur.label.replace(' (to date)', ' so far')}: printers were available {a_cur:.1f}% "
                       f"of the time{change}",
                       obs[1] if len(obs) > 1 else "")

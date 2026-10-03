@@ -587,25 +587,6 @@ def phase_bars(theme: str, g: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def residents_bars(theme: str, h: pd.DataFrame) -> go.Figure:
-    """Residents per printer in each hall; estimated counts are drawn lighter."""
-    t = TOKENS[theme]
-    h = h.iloc[::-1]
-    est = h["estimated"].astype(bool)
-    fig = go.Figure(go.Bar(
-        y=h["building"], x=h["per_printer"], orientation="h",
-        marker=dict(color=t["series"][0], opacity=[0.45 if e else 1 for e in est]),
-        text=[f"{v:.0f}" + (" (est.)" if e else "") for v, e in zip(h["per_printer"], est)], textposition="outside",
-        cliponaxis=False, textfont=dict(color=t["secondary"], size=11),
-        customdata=np.stack([h["building"], h["residents"].astype(float), h["printers"], est], axis=1),
-        hovertemplate="<b>%{y}</b><br>%{customdata[1]:.0f} residents · %{customdata[2]} printer(s)"
-                      "<br>%{x:.0f} residents per printer<extra></extra>"))
-    fig.update_layout(**layout(theme, max(220, 28 * len(h) + 50), margin=dict(r=70),
-                               xaxis=dict(showgrid=True, title=dict(text="residents per printer"), rangemode="tozero"),
-                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
-    return fig
-
-
 def route_map(theme: str, plan, start_xy: tuple[float, float]) -> go.Figure:
     """The planned round: walking legs solid, van legs dashed, numbered stops, the start as a square."""
     t = TOKENS[theme]

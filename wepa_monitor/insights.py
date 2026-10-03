@@ -31,7 +31,9 @@ def months(ds: M.Dataset) -> list[Period]:
     for p in pd.period_range(first, last, freq="M"):
         start = max(p.start_time.tz_localize(tz).tz_convert("UTC"), ds.data_start)
         end = min((p + 1).start_time.tz_localize(tz).tz_convert("UTC"), ds.as_of)
-        label = p.strftime("%B %Y") + (" (to date)" if end == ds.as_of else "")
+        label = p.strftime("%B %Y") + (" (to date)" if end == ds.as_of else
+                                         f" (from {start.tz_convert(tz):%b %-d})" if start == ds.data_start
+                                         and start.tz_convert(tz).day > 1 else "")
         out.append(Period(label, start, end))
     return out
 

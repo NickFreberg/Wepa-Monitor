@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from dash import html
 
-from ... import campus, config, insights, metrics as M, models, support
+from ... import campus, config, insights, metrics as M, models, narrative as N, support
 from .. import charts
 from ..components import (chart_card, data_table, explore_hint, fmt_hours, fmt_minutes, fmt_num, headline, metric_tile,
                           segmented, tile)
@@ -66,7 +66,7 @@ def _reliability(ds, theme, ids, start, end, plabel, _):
             detail.append(f"red incidents took a median {fmt_minutes(mttr_r.extra['median'])} to clear")
         if len(worst) and avail.value - worst.iloc[0]["availability"] >= 2:
             detail.append(f"lowest was {worst.iloc[0]['label']} at {worst.iloc[0]['availability']:.1f}%")
-        hl = headline("good" if avail.value >= 97 else "warning",
+        hl = headline(N.availability_tone(avail.value),
                       f"Printers were available {avail.value:.1f}% of the time over the last {plabel}",
                       _sentence("; ".join(detail)) if detail else "")
     else:
@@ -76,9 +76,9 @@ def _reliability(ds, theme, ids, start, end, plabel, _):
         metric_tile("Availability", avail, lambda v: f"{v:.2f}%",
                     "Observed printer-minutes not in red ÷ all observed printer-minutes. Unobserved time is excluded.",
                     unit_note=f"{avail.extra.get('down_h', 0):,.0f} printer-hours down" if avail.value else ""),
-        metric_tile("Time to fix · down", mttr_r, fmt_minutes, "Mean time from a red status appearing to clearing.",
+        metric_tile("Mean time to repair (MTTR) · down", mttr_r, fmt_minutes, "Mean time from a red status appearing to clearing.",
                     _n_note(mttr_r)),
-        metric_tile("Time to fix · warning", mttr_y, fmt_minutes,
+        metric_tile("Mean time to clear · warnings", mttr_y, fmt_minutes,
                     "Mean time from a yellow status appearing to clearing.", _n_note(mttr_y)),
         metric_tile("Time between failures", mtbf, fmt_hours, "Printer-hours of uptime per red incident.",
                     f"{mtbf.n:,} failures"),
@@ -142,21 +142,6 @@ def _reliability(ds, theme, ids, start, end, plabel, _):
                                   ("faults_per_day", "Faults a day", lambda v: f"{v:.1f}"),
                                   ("toner_k_per_day", "Black toners a day", lambda v: f"{v:.2f}")])
         if len(phases) else None)
-    rpp = campus.residents_per_printer(cal, ds.stations if ids is None else
-                                       ds.stations[ds.stations["station_id"].isin(ids)])
-    res_card = chart_card(
-        "Residents per printer", "Students living in each hall ÷ the Wepa printers in it (Residence Life figures).",
-        charts.residents_bars(theme, rpp) if len(rpp) else None, graph_id={"type": "xg", "chart": "residents"},
-        body=None if len(rpp) else empty("No residence halls in this scope.", big=False),
-        note=("Lighter bars are estimates: Residence Life doesn't list those halls' counts, so they share the "
-              "rest of its ~3,300 total." if len(rpp) and rpp["estimated"].astype(bool).any() else ""),
-        explain=["Longer bars mean more students depend on each printer, so an outage there strands more people "
-                 "and paper runs out faster.", "Use it to decide where a second printer, a bigger paper "
-                 "tray or an extra round pays off most."],
-        table=data_table(rpp, [("building", "Hall", None), ("residents", "Residents", None),
-                               ("printers", "Printers", None), ("per_printer", "Per printer", lambda v: f"{v:.0f}"),
-                               ("who", "Who lives there", None)]) if len(rpp) else None)
-
     return [hl, explore_hint(), tiles, html.Div(className="grid", children=[
         chart_card("Daily availability", "Share of each day with the station able to print.",
                    *needs_days(fleet, lambda: charts.add_calendar(charts.availability_daily(theme, fleet, by_sec),
@@ -186,12 +171,11 @@ def _reliability(ds, theme, ids, start, end, plabel, _):
                                              ("mean_min", "Mean", fmt_minutes), ("n", "Incidents", None)])),
         desk_card,
         phase_card,
-        res_card,
         chart_card("Station scorecard", "Worst availability first. Click a station for its full history.",
                    wide=True, body=data_table(sc, [
                        ("label", "Station", None), ("area", "Area", None), ("owner", "Supported by", None),
                        ("availability", "Availability", lambda v: fmt_num(v, 2, "%")),
-                       ("red_incidents", "Times down", None), ("mttr_red_min", "Time to fix", fmt_minutes),
+                       ("red_incidents", "Times down", None), ("mttr_red_min", "MTTR", fmt_minutes),
                        ("mtbf_h", "Between failures", fmt_hours), ("top_fault", "Most common fault", None)],
                        link_col=("label", "station_id"))),
     ])]
