@@ -100,75 +100,54 @@ Run the tests with `pytest`.
 
 ## Using the dashboard
 
-The sidebar has six sections. Each page opens with a **one-sentence summary** (green, amber or red),
-so the main point comes before any chart.
+Every page opens with a **one-sentence summary** (green, amber or red), so the main point comes before
+any chart, and every chart carries a one-line takeaway in plain words.
 
-**Explore the data to understand more.** The detail is there when you want it, without crowding the
-page:
+**Explore the data to understand more**, without crowding the page:
 
-- **Click any point** on a chart (a day on the availability line, a fault bar, a square on the
-  heatmap, a stretch of a station's timeline, a curve on the survival chart) and a side panel explains
-  it in plain words: *what it is*, *what it tells you*, *why it matters*, and where to look next.
-  Hover still gives the exact numbers. Esc closes the panel.
-- **"ⓘ How to read this"** on a card opens a two-line guide to that chart.
-- A **tip line** at the top of each page says so; dismiss it once and it stays hidden.
+- **Click any point** on a chart and a side panel explains it: *what it is*, *what it tells you*,
+  *why it matters*, and where to look next. On charts with several lines, it compares every line at
+  that point. Esc closes the panel.
+- **"How to read this"** on a card is a two-line guide to the chart.
+- **"For nerds"** on a card holds the method: algorithm names, formulas, assumptions.
+- Every chart has a **Show data** table, and status is always an icon and a label as well as a color.
 
-- **Overview:** what needs attention now. Live counts, a ranked "Needs attention" list, recent
-  activity, the campus map (street or aerial; click a building to open it; export to Google Earth),
-  and the **Consumable End-of-Life Watch** (parts at or nearing their replacement point within 7 days).
-  Refreshes every minute.
-- **Insights:** the **story** of today, yesterday, this week, last week, this month or last month,
-  written as a short narrative with key figures and key moments. It covers how the period compared
-  with normal, what went down and for how long, patterns, whether problems started while a support
-  desk was open, supplies, and what's coming up. Below it, **Ask the data**: type a question such as
-  "Which station was down the longest last week?", "How is Weygand doing this month?", "How many
-  outages start after hours?" or "Is the ResNet desk open?" and get an answer computed from the data.
-  It is rule-based (time phrases, station / building / area / owner names and a few dozen intent
-  keywords), so it uses **no AI model and no tokens**, and it says what it understood ("Looking at
-  Weygand Hall, last week") so a misreading is obvious.
-- **Rounds:** the fastest route for whoever is on shift. Pick the team (ResNet or IT Service Center),
-  where you're starting from (the ResNet office in ECC, the IT Service Center in Maxwell, an RSR
-  desk at Shea/Durgin, Crimson or Scott, or any building), **On foot** or **Transit van**, and what
-  to visit (down printers, warnings, empty trays, parts due).
-  - **Output:** a map of the route, the stops in order with what's wrong at each, travel and
-    on-site time, and what to bring (paper, which toners and drums).
-  - **How it's computed:** shortest paths come from Dijkstra's algorithm on a walking network and
-    a driving network built from OpenStreetMap; the driving network respects one-way streets. The
-    order of stops is then optimized for total time: exact for up to 10 stops, nearest neighbor
-    plus 2-opt beyond that. Down printers are visited first unless you choose "Shortest overall".
-  - **Van mode:** drive to each building's parking spot, then walk in. The planner tells you when
-    walking would be faster.
-  - **Parking spots:** read from `reference/parking.csv`. Fill in `lat`/`lon` for the spot you'd
-    actually use; blank rows fall back to the nearest OpenStreetMap lot (shown in the `suggested_*`
-    columns).
-- **Stations:** every printer, grouped by area, with search ("Weygand", "02061", "Academic") and a
-  status filter (down, warning, needs attention). Every card opens the station's page.
-- **Station page (drill-through):** current status in a sentence; availability, times down, time to
-  fix and time between failures, each compared with all BSU print stations; who supports it and whether that desk is open now; a minute-by-minute **status
-  timeline**; consumable levels now and over time, with replacements marked; fault mix by type and hour
-  of day; full incident history; the other printers in the building (students' backup); and the
-  station's activity.
-- **Analytics:** tabs for **Reliability** (availability, time to fix, building coverage, station
-  scorecard), **Faults** (types, when, where), **Consumables** (use per day, week, month or year;
-  cumulative use; replacement log), **Forecasts & statistics** (see below) and **Data quality**.
-- **Executive:** the story of the month in a paragraph, then month vs prior month vs year to date
-  (including the share of outages that began after desk hours and the desk time to fix), key
-  observations, monthly trends and a 30-day parts forecast.
-- **Activity:** a searchable log of everything that happened, grouped by day: stations going down or
-  recovering, warnings, parts replaced, trays emptied and refilled, monitoring gaps.
+**Pages**
 
-**Top bar**, available on every page:
-- **Scope:** pick sections or areas once, and every page reports on just those stations.
-- **Period:** 7, 30, 90 days or all time, on Analytics, Activity and station pages.
-- **Notifications (bell):** stations going down or coming back, and monitoring gaps from the last 72
-  hours. Unread items are grouped under *New*, and "Mark all read" clears the badge.
-- **Theme:** **Light**, **Dark** or **BSU**. The BSU theme uses the crimson (#89191F) and warm
-  neutrals from bridgew.edu's own stylesheets. Its chart colors (crimson, gold, BSU blue, green) were
-  checked for color-blind safety as a set. Toner and drum charts keep their ink colors in every theme,
-  because there the color is the meaning.
+- **Overview:** what needs attention now: counts, a ranked "Needs attention" list, recent activity,
+  the campus map (street or aerial; export to Google Earth) and parts nearing end of life.
+- **Insights:** the **story** of any day, week or month, then **Ask the data**. Answers are computed
+  from the data with built-in rules, or, if an AI provider is configured, written by AI from those
+  computed numbers (with "The numbers behind it" underneath for checking). See *AI summaries* in
+  `deploy/azure-containerapps/README.md`.
+- **Rounds:** the fastest route to every printer that needs a visit, on foot or by transit van, for
+  ResNet or the IT Service Center, with what to bring. Distances are in feet and miles.
+- **Stations:** every printer, grouped by area; buildings with several printers share one box. Each
+  card shows toner and all four drums. The station page has the status timeline, supplies with an
+  end-of-life projection for any part, faults, incident history, and **where students can print if
+  it's down** (the nearest working printer anyone can walk into, with the walk in feet or miles).
+- **Analytics:** Reliability (availability by day and **through the day**, what cost the most
+  printing time, building coverage, mean time to repair by day/week/month, desk hours, the academic
+  year), Faults (clean fault types built from Wepa's codes *and* the printer's own messages), Supplies,
+  **Usage** (busiest and quietest printers, with suggestions for adding or moving printers),
+  **Report card** (a sortable, filterable grade for every printer: availability, outages, and faults
+  and supply cost *for its workload*; being busy never lowers a grade), **Planning** (parts to stock
+  at 50/90/95% confidence, what extra coverage would save, coverage gaps, where one more printer would
+  help, and printing vs the class schedule) and **Forecasts & statistics** (survival curves, control
+  chart, Bayesian outage rates, warnings that turn into outages, recent changes, before/after studies
+  of changes logged in `reference/changes.csv`).
+- **Executive:** the month as a story, the month vs prior month vs year to date, and trends.
+- **IT Outcomes:** a print-ready feature page for the IT division's annual report, in the style of the
+  printed *IT Outcomes* issues, with every number computed for the chosen year. Headline, subtitle,
+  credits and quote are in `reference/outcomes.json`.
+- **System:** is the monitor healthy (a picture of the moving parts with live status), a read-only
+  live log, data quality, who's using the site (visits anonymized to the network) and sign-in security
+  (failed sign-ins without passwords, temporary blocks after repeated failures), and AI status.
 
-Charts include a **Show data** table, and status is always shown with an icon and a label as well as
-color.
+**Header**, on every page: the **filter** (sections, areas, or search for specific stations), the
+**period** where it applies, **Export** (the current filter and period as CSV, Excel, JSON or PDF),
+the **Activity** log (with a date picker), **notifications**, and **Choose an appearance** (BSU,
+light, dark or match your device; larger text; compact spacing; reduced motion; extra contrast).
 
 ## Support ownership and desk hours
 
@@ -423,6 +402,8 @@ legacy/                  the original v1 terminal script
 ```
 
 ## Roadmap
+
+See also GitHub issue #2 for the analytics backlog.
 
 - **Parking spots.** Replace the suggested lots in `reference/parking.csv` with the spots staff
   actually use.
