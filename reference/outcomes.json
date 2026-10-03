@@ -1,4 +1,5 @@
 {
+  "keep_my_text": false,
   "kicker": "Opportunities. Collaborations. Results.",
   "title": "Every Printer, Every Minute",
   "subtitle": "ResNet turns a status page into a living picture of campus printing",
@@ -6,5 +7,5 @@
   "quote": "",
   "quote_by": "",
   "credits": "ResNet Print Ops was built for ResNet and the IT Service Center to keep BSU's Wepa print stations printing.",
-  "_help": "Edit these fields to customize the IT Outcomes page. Leave quote empty to show a key number instead. Text is plain; no HTML."
+  "_help": "With an AI provider on, the AI drafts the title, subtitle, story and pull quote from the computed numbers; set keep_my_text to true to use the title and subtitle here instead. Kicker, byline, credits and quote are always yours. Leave quote empty to show a key number. Plain text, no HTML."
 }

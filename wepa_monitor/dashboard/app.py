@@ -455,9 +455,10 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             raise PreventUpdate
         return activity_log.quick_range(cache.get(), ctx.triggered_id["days"])
 
-    @app.callback(Output("oc-body", "children"), Input("oc-year", "value"), scope, Input("theme", "data"))
-    def oc_body(year, sc, theme):
-        return outcomes.render(cache.get(), theme or "light", year, sc)
+    @app.callback(Output("oc-body", "children"), Input("oc-year", "value"), scope, Input("theme", "data"),
+                  Input("oc-regen", "n_clicks"))
+    def oc_body(year, sc, theme, draft):
+        return outcomes.render(cache.get(), theme or "light", year, sc, draft or 0)
 
     @app.callback(Output("sy-body", "children"), Input("theme", "data"), Input("tick", "n_intervals"))
     def sy_body(theme, _):

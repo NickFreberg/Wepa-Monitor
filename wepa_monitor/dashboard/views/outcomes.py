@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from dash import dcc, html
 
-from ... import config, metrics as M, narrative as N
+from ... import ai, config, metrics as M, narrative as N
 from .. import charts
 from ..components import icon
 from .common import empty, scope_ids, scope_label
@@ -69,6 +69,8 @@ def layout(ds: M.Dataset):
                      style={"minWidth": "260px"}, persistence=True, persistence_type="session"),
         html.Button([icon("printer"), "Print or save as PDF"], id="oc-print", className="btn",
                     **{"data-print": "1"}),
+        html.Button([icon("sparkle"), "Rewrite with AI"], id="oc-regen", className="btn", n_clicks=0,
+                    title="Ask the AI for a fresh draft of the headline and story", hidden=not ai.enabled()),
         html.Span("Tip: in the print dialog choose “Save as PDF”, Letter, and turn on background graphics.",
                   className="toolbar__hint"),
     ]), dcc.Loading(html.Div(id="oc-body"), type="dot", delay_show=400)]
@@ -82,7 +84,7 @@ def _num(n: float) -> str:
     return f"{n:,.0f}"
 
 
-def render(ds: M.Dataset, theme: str, year, scope):
+def render(ds: M.Dataset, theme: str, year, scope, draft: int = 0):
     if ds.empty:
         return empty("No data yet.")
     ids = scope_ids(ds, scope)
@@ -185,14 +187,31 @@ def render(ds: M.Dataset, theme: str, year, scope):
 
     credits = s.get("credits", "").strip()
     busiest = usage.head(1)
+    title, subtitle = s.get("title", "Every Printer, Every Minute"), s.get("subtitle", "")
+    story = [html.P(p1, className="oc__lede"), html.P(p2), html.P(p3), pull, html.P(p4), html.P(p5)]
+    written_by = None
+    copy = None if s.get("keep_my_text") else _ai_copy(
+        ds, year, scope, draft, when, [p1, p2, p3, p4, p5], numbers, busiest, quote)
+    if copy:
+        title = copy.get("title") or title
+        subtitle = copy.get("subtitle") or subtitle
+        paras = [x for x in copy.get("paragraphs", []) if x.strip()]
+        pq = copy.get("pull_quote", "").strip()
+        if not quote and pq:
+            pull = html.Blockquote([html.Span("“", className="oc__qmark"), html.P(pq),
+                                    html.Cite("From the monitoring data")], className="oc__quote")
+        mid = max(1, len(paras) // 2)
+        story = ([html.P(paras[0], className="oc__lede")] + [html.P(x) for x in paras[1:mid]] + [pull] +
+                 [html.P(x) for x in paras[mid:]])
+        written_by = copy["_by"]
     feature = html.Article(className="oc", children=[
         html.Div(s.get("kicker", "Opportunities. Collaborations. Results."), className="oc__kicker"),
-        html.H1(s.get("title", "Every Printer, Every Minute"), className="oc__title"),
-        html.P(s.get("subtitle", ""), className="oc__subtitle"),
+        html.H1(title, className="oc__title"),
+        html.P(subtitle, className="oc__subtitle"),
         html.P(s.get("byline", ""), className="oc__byline") if s.get("byline") else None,
         html.Div(className="oc__layout", children=[
             html.Div(className="oc__story", children=[
-                html.P(p1, className="oc__lede"), html.P(p2), html.P(p3), pull, html.P(p4), html.P(p5),
+                *story,
                 html.Figure([dcc.Graph(figure=fig, config={"displayModeBar": False, "staticPlot": True},
                                        style={"height": "220px"}),
                              html.Figcaption("Share of the time printers could print, by month. Lighter bars are "
@@ -207,9 +226,14 @@ def render(ds: M.Dataset, theme: str, year, scope):
         ]),
         html.Div([html.Span(s.get("kicker", "")), " // ", html.Span("IT Outcomes")], className="oc__foot"),
     ])
-    return [feature, html.P("Every figure is computed from the monitoring data for the period chosen above. Edit the "
-                            "headline, subtitle, credits or quote in reference/outcomes.json.",
-                            className="footnote no-print")]
+    note = ("Headline and story drafted by " + written_by + " from the numbers in the sidebar, which the app "
+            "computes; check them before publishing. 'Rewrite with AI' asks for a fresh draft. To use your own words "
+            "instead, set \"keep_my_text\": true in reference/outcomes.json." if written_by else
+            "Every figure is computed from the monitoring data for the period chosen above. Edit the headline, "
+            "subtitle, credits or quote in reference/outcomes.json" +
+            ("." if s.get("keep_my_text") or not ai.enabled() else
+             "; the AI draft wasn't available, so this is the built-in text."))
+    return [feature, html.P(note, className="footnote no-print")]
 
 
 def _year_word(year, ds) -> str:
@@ -220,3 +244,45 @@ def _year_word(year, ds) -> str:
         y = int(year[2:])
         return f"{y}–{str(y + 1)[2:]}"
     return str(year)
+
+
+OUTCOMES_PROMPT = """Write the copy for a one-page feature in Bridgewater State University's annual "IT Outcomes" report
+(theme: Opportunities. Collaborations. Results.) about ResNet Print Ops, a tool that monitors the campus Wepa print
+stations every minute. Match the report's voice: upbeat, proud of the IT and ResNet teams, concrete, readable by
+anyone on campus. Use ONLY the facts given; copy numbers exactly; no invented people, quotes, names, titles or dates.
+If the data covers only a short time, say so honestly. No prices or costs.
+
+Return ONLY a JSON object, no other text:
+{"title": "a short punchy headline (max 7 words)",
+ "subtitle": "one italic-style line (max 14 words)",
+ "paragraphs": ["4 or 5 paragraphs, 50-90 words each: the problem students and staff faced, what the tool does,
+   what the data showed {when}, how teams use it (Rounds, backup printers, report card), and what's next"],
+ "pull_quote": "one striking fact from the numbers as a short sentence (max 14 words), not attributed to a person"}"""
+
+
+def _ai_copy(ds, year, scope, draft, when, paragraphs, numbers, busiest, quote) -> dict | None:
+    """AI-written headline, subtitle, story and pull quote, from the computed figures only."""
+    if not ai.enabled():
+        return None
+    import json as _json
+    facts = ["Built-in draft (accurate, but plain):"] + [f"- {p}" for p in paragraphs if p]
+    facts += ["By the numbers " + when + ":"] + [f"- {v}: {label}" for _, v, label in numbers]
+    if len(busiest):
+        b = busiest.iloc[0]
+        facts.append(f"- Busiest printer: {b['description']} ({b['relative']:.1f}x the typical station)")
+    if quote:
+        facts.append("- A staff quote will appear on the page separately; don't write another.")
+    if ds.is_demo:
+        facts.append("- NOTE: this is DEMO DATA (synthetic); say it's a preview.")
+    try:
+        r = ai.ask(OUTCOMES_PROMPT.replace("{when}", when), "\n".join(facts),
+                   cache_key=f"outcomes|{year}|{scope}|{draft}|{ds.as_of.floor('1h').isoformat()}", timeout=60)
+        text = r.text.strip()
+        text = text[text.find("{"): text.rfind("}") + 1]
+        copy = _json.loads(text)
+        if not isinstance(copy.get("paragraphs"), list) or not copy["paragraphs"]:
+            return None
+        copy["_by"] = r.provider
+        return copy
+    except (ai.AIError, ValueError, KeyError, TypeError):
+        return None

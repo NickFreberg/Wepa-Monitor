@@ -62,3 +62,20 @@ def test_hourly_spending_guard(monkeypatch):
     with pytest.raises(ai.AIError):
         ai.ask("a", "x3", cache_key="g3")
     assert ai.ask("a", "x1", cache_key="g1").text            # cached answers don't count
+
+
+def test_outcomes_copy_written_by_ai(monkeypatch, ds):
+    from wepa_monitor.dashboard.views import outcomes
+    monkeypatch.setenv("WEPA_AI_PROVIDER", "fake")
+    reply = ai.Reply('{"title": "Printing, Minute by Minute", "subtitle": "A new view of campus printers", '
+                     '"paragraphs": ["One.", "Two.", "Three.", "Four."], "pull_quote": "Thirty-one printers."}',
+                     "test model", "x", 0.1)
+    monkeypatch.setattr(ai, "ask", lambda *a, **k: reply)
+    text = str(outcomes.render(ds, "light", "all", None))
+    assert "Printing, Minute by Minute" in text and "Thirty-one printers." in text and "drafted by test model" in text
+
+    def boom(*a, **k):
+        raise ai.AIError("down")
+    monkeypatch.setattr(ai, "ask", boom)
+    text = str(outcomes.render(ds, "light", "all", None))
+    assert "built-in text" in text                              # falls back cleanly
