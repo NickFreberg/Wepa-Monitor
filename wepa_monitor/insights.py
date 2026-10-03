@@ -197,3 +197,34 @@ def by_phase(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
     order = list(campus.PHASES)
     g["o"] = g["phase"].map({p: i for i, p in enumerate(order)}).fillna(99)
     return g.sort_values("o").drop(columns=["o", "up_s", "covered_s"]).reset_index(drop=True)
+
+
+def downtime_drivers(ds: M.Dataset, start, end, ids=None) -> dict[str, pd.DataFrame]:
+    """What cost the most printing time: printer-hours down in the window, split by cause, by
+    station, and by whether the owning desk was open. Each outage is clipped to the window and
+    attributed to its main cause (the most specific problem that opened with it)."""
+    from . import narrative as N, rules
+    inc = ds.sev_inc if ids is None else ds.sev_inc[ds.sev_inc["station_id"].isin(ids)]
+    inc = inc[inc["severity"] == "red"]
+    finish = inc["end"].fillna(inc["last_seen"]).where(inc["status"] != "open", ds.as_of)
+    inc = inc[(inc["start"] < end) & (finish > start)].assign(finish=finish)
+    if inc.empty:
+        empty = pd.DataFrame(columns=["key", "label", "down_h", "outages", "share"])
+        return {"cause": empty, "station": empty, "desk": empty}
+    lost = ((inc["finish"].clip(upper=end) - inc["start"].clip(lower=start)).dt.total_seconds() / 3600).clip(lower=0)
+    causes = [N.outage_causes(ds, s, t) for s, t in zip(inc["station_id"], inc["start"])]
+    inc = inc.assign(lost_h=lost.to_numpy(),
+                     cause=[rules.issue_label(c[0][0]) if c else "Unexplained (no code)" for c in causes],
+                     desk=np.where(inc["in_hours"].astype(bool), "Began while the desk was open",
+                                   "Began after desk hours"))
+    names = ds.stations.set_index("station_id")["label"]
+    total = float(inc["lost_h"].sum()) or 1.0
+
+    def by(col, label=None):
+        g = inc.groupby(col).agg(down_h=("lost_h", "sum"), outages=("lost_h", "size")).reset_index()
+        g = g.rename(columns={col: "key"})
+        g["label"] = g["key"].map(label) if label is not None else g["key"]
+        g["share"] = g["down_h"] / total
+        return g.sort_values("down_h", ascending=False).reset_index(drop=True)
+
+    return {"cause": by("cause"), "station": by("station_id", names), "desk": by("desk")}

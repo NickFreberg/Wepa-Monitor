@@ -123,27 +123,26 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
     fc_table = data_table(fc, [
         ("label", "Part", None), ("level", "Level", lambda v: f"{v:.0f}%"),
         ("window", "End of life in (90% window)", None), ("method", "Method", None)])
-    # Regression chart for the part closest to end of life that has a fit.
-    fitted = fc[(fc["method"] == "regression") & (fc["days"] > 0)].head(1)
-    eol_card = None
-    if len(fitted):
-        f = fitted.iloc[0]
-        comp = f["component"]
-        pts_fit = models.eol_points(ds, station_id, comp)
-        fit = models.fit_series(pts_fit["scrape_ts"], pts_fit["level"], ds.as_of, models.replace_point(comp))
-        if fit:
-            eol_card = chart_card(
-                f"End-of-life projection: {f['label']}",
-                "Readings since the last replacement, a Theil-Sen line of best fit (robust to sensor blips), and "
-                "where it meets the replacement point.",
-                charts.eol_projection(theme, pts_fit, fit, comp, ds.as_of, models.replace_point(comp)),
-                graph_id={"type": "xg", "chart": "eol"},
-                note=(f"Projected end of life in {eol_window(f)} at {fit['slope_per_day']:.2f} pts/day "
-                      f"(R² = {fit['r2']:.2f}, {fit['n']} readings)."))
+    # End-of-life projection, for any part (the one closest to end of life by default).
+    fc_sorted = fc.sort_values(["days", "level"], na_position="last")
+    fitted = fc_sorted[(fc_sorted["method"] == "regression") & (fc_sorted["days"] > 0)]
+    default = fitted.iloc[0]["component"] if len(fitted) else fc_sorted.iloc[0]["component"] if len(fc_sorted) else None
+    part_opts = [{"label": f"{r['label']} · {r['level']:.0f}%" + (f" · {r['window']}" if r["window"] not in ("—", "") else ""),
+                  "value": r["component"]} for _, r in fc_sorted.iterrows()]
+    fig0, note0 = eol_figure(ds, theme, station_id, default) if default else (None, "")
+    eol_card = chart_card(
+        "End-of-life projection", "Each part's readings since it was last replaced, and when the trend reaches the "
+        "replacement point. Pick a part:",
+        fig0 if fig0 is not None else charts.blank(), graph_id={"type": "xg", "chart": "eol"},
+        action=dcc.Dropdown(id="sd-eol-part", options=part_opts, value=default, clearable=False, searchable=False,
+                            className="dropdown dropdown--sm", style={"minWidth": "230px"}),
+        note=html.Span(note0, id="sd-eol-note"),
+        nerd="Theil-Sen line (the median of all pairwise slopes, so a sensor blip can't drag it) through the readings "
+             "since the last replacement; the window is the 90% range of the slope.") if default else None
     consumables = [
         chart_card("Consumable levels now", "Bars turn amber at 10% and red at 5% (belt and fuser: 5% / 2%). "
                    "The table forecasts each part's end of life.", body=bars, table=fc_table),
-        *([eol_card] if eol_card else []),
+        *([eol_card] if eol_card is not None else []),
         chart_card("Toner over time", "Triangles mark detected replacements.",
                    charts.levels_over_time(theme, pts, repl, ["toner_k", "toner_c", "toner_m", "toner_y"], start, end),
                    graph_id={"type": "xg", "chart": "levels_toner"}, explain="Lines step down as toner is used and jump back to 100% when "
@@ -236,3 +235,22 @@ def building_line(ds: M.Dataset, row) -> html.Div | None:
                          html.Span("outages while it's closed don't strand anyone", className="desk__status")],
                         className="desk desk--campus")
     return None
+
+
+def eol_figure(ds: M.Dataset, theme: str, station_id: str, comp: str):
+    """(figure or None, note) for one part's end-of-life projection."""
+    pts_fit = models.eol_points(ds, station_id, comp)
+    if len(pts_fit) < models.MIN_POINTS_FOR_FIT:
+        return None, "Not enough readings since its last replacement to project a trend yet."
+    floor = models.replace_point(comp)
+    fit = models.fit_series(pts_fit["scrape_ts"], pts_fit["level"], ds.as_of, floor)
+    if not fit:
+        return None, "Its level hasn't been falling, so there's no end of life in sight."
+    row = models.eol_forecast(ds, [station_id]).set_index("component").loc[comp]
+    label = config.COMPONENT_LABELS[comp]
+    fig = charts.eol_projection(theme, pts_fit, fit, comp, ds.as_of, floor)
+    when = eol_window(row)
+    note = (f"{label}: {when} until it needs replacing, using {abs(fit['slope_per_day']):.2f} points a day "
+            f"(the trend fits {fit['r2']:.0%} of the ups and downs; {fit['n']} readings)." if when not in ("—", "now")
+            else f"{label} is at its replacement point now.")
+    return fig, note

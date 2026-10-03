@@ -60,17 +60,20 @@ def building_bars(theme: str, b: pd.DataFrame) -> go.Figure:
 
 
 def mttr_weekly(theme: str, weekly: pd.DataFrame) -> go.Figure:
+    """Median time to repair per period (column 'period', or 'week' for older callers)."""
     fig = go.Figure()
-    for sev, tone, name in (("red", "critical", "Red (down)"), ("yellow", "warning", "Yellow (warning)")):
+    xcol = "period" if "period" in weekly else "week"
+    for sev, tone, name in (("red", "critical", "Outages (down)"), ("yellow", "warning", "Warnings")):
         d = weekly[weekly["severity"] == sev]
         if d.empty:
             continue
-        fig.add_scatter(x=d["week"], y=d["median_min"], name=name, mode="lines+markers",
+        fig.add_scatter(x=d[xcol], y=d["median_min"], name=name, mode="lines+markers",
                         line=dict(width=2, color=STATUS[tone]), marker=dict(size=8),
                         customdata=np.stack([d["n"], d["mean_min"], [sev] * len(d)], axis=1),
                         hovertemplate="median %{y:.0f} min · mean %{customdata[1]:.0f} min · "
                                       "%{customdata[0]} incidents<extra>" + name + "</extra>")
-    fig.update_layout(**layout(theme, 280, hovermode="x unified", yaxis=dict(ticksuffix=" min", rangemode="tozero")))
+    fig.update_layout(**layout(theme, 280, hovermode="x unified", yaxis=dict(ticksuffix=" min", rangemode="tozero",
+                                                                             title=dict(text="median minutes"))))
     return fig
 
 
@@ -636,3 +639,102 @@ def route_map(theme: str, plan, start_xy: tuple[float, float]) -> go.Figure:
                                legend=dict(x=0.01, y=0.99, yanchor="top", bgcolor=t["surface"],
                                            bordercolor=t["border"], borderwidth=1, font=dict(color=t["ink"]))))
     return fig
+
+
+# --- availability through the day, drivers, usage, supplies ------------------------------------------
+
+HOUR_NAMES = [f"{(h % 12) or 12}{'a' if h < 12 else 'p'}" for h in range(24)]
+
+
+def hourly_availability(theme: str, prof: pd.DataFrame, teams: list[str] | None = None) -> go.Figure:
+    """Availability by hour of day, weekdays vs weekends, with weekday desk hours shaded."""
+    t = TOKENS[theme]
+    fig = go.Figure()
+    shapes = []
+    for name in teams or []:
+        spans = [support.team(name)["hours"].get(d) for d in range(5)]
+        spans = [s for s in spans if s]
+        if spans:
+            a, b = min(s[0] for s in spans), max(s[1] for s in spans)
+            shapes.append(dict(type="rect", xref="x", yref="paper", x0=a - 0.5, x1=b - 0.5, y0=0, y1=1,
+                               fillcolor=t["grid"], opacity=0.55, line_width=0, layer="below"))
+    if shapes:
+        fig.add_scatter(x=[None], y=[None], mode="markers", name="Weekday desk hours", hoverinfo="skip",
+                        marker=dict(symbol="square", size=11, color=t["grid"], line=dict(color=t["axis"], width=1)))
+    for i, (dt, dash) in enumerate((("Weekdays", "solid"), ("Weekends", "dot"))):
+        d = prof[prof["daytype"] == dt].sort_values("hour")
+        if d.empty:
+            continue
+        fig.add_scatter(x=d["hour"], y=d["availability"], name=dt, mode="lines+markers",
+                        line=dict(width=2.5 if i == 0 else 2, color=t["series"][i], dash=dash),
+                        marker=dict(size=7, color=t["series"][i], line=dict(color=t["surface"], width=1.5)),
+                        customdata=np.stack([d["down_h"], [dt] * len(d), d["hour"]], axis=1),
+                        hovertemplate="%{y:.1f}% able to print · %{customdata[0]:,.0f} printer-h lost<extra>"
+                                      + dt + "</extra>")
+    lo = float(np.nanmin(prof["availability"])) if len(prof) else 90
+    fig.update_layout(**layout(theme, 300, hovermode="x unified", shapes=shapes,
+                               xaxis=dict(tickmode="array", tickvals=list(range(0, 24, 3)),
+                                          ticktext=HOUR_NAMES[::3], range=[-0.5, 23.5], title=dict(text="hour of day")),
+                               yaxis=dict(ticksuffix="%", range=[max(0, lo - 2), 100.5])))
+    return fig
+
+
+def driver_bars(theme: str, d: pd.DataFrame, n: int = 8, color_slot: int = 0) -> go.Figure:
+    """Printer-hours lost, largest first, labeled with hours and share."""
+    t = TOKENS[theme]
+    d = d.head(n).iloc[::-1]
+    fig = go.Figure(go.Bar(
+        y=d["label"], x=d["down_h"], orientation="h", marker=dict(color=t["series"][color_slot]),
+        text=[f"{h:,.0f} h · {s:.0%}" for h, s in zip(d["down_h"], d["share"])], textposition="outside",
+        cliponaxis=False, textfont=dict(color=t["secondary"], size=11),
+        customdata=np.stack([d["key"].astype(str), d["outages"]], axis=1),
+        hovertemplate="<b>%{y}</b><br>%{x:,.0f} printer-hours lost in %{customdata[1]} outage(s)<extra></extra>"))
+    fig.update_layout(**layout(theme, max(200, 34 * len(d) + 50), margin=dict(r=90),
+                               xaxis=dict(showgrid=True, title=dict(text="printer-hours lost"), rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
+    return fig
+
+
+def consumption_bars(theme: str, burn: pd.DataFrame, unit: str) -> go.Figure:
+    """Parts used per day/week/month, one bar per part in its ink color, labeled with the number."""
+    t = TOKENS[theme]
+    d = burn.iloc[::-1]
+    fig = go.Figure(go.Bar(
+        y=d["label"], x=d["rate_units"], orientation="h",
+        marker=dict(color=[ink(theme, c) for c in d["component"]], line=dict(color=t["surface"], width=2)),
+        text=[("—" if not np.isfinite(v) else f"{v:.2f}" if v < 10 else f"{v:,.0f}") for v in d["rate_units"]],
+        textposition="outside", cliponaxis=False, textfont=dict(color=t["secondary"], size=11),
+        customdata=np.stack([d["component"], d["used_units"]], axis=1),
+        hovertemplate="<b>%{y}</b><br>%{x:.2f} parts per " + unit + "<br>%{customdata[1]:.1f} used in the period"
+                      "<extra></extra>"))
+    fig.update_layout(**layout(theme, max(240, 30 * len(d) + 50), margin=dict(r=60),
+                               xaxis=dict(showgrid=True, title=dict(text=f"parts used per {unit}"), rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
+    return fig
+
+
+def usage_bars(theme: str, u: pd.DataFrame) -> go.Figure:
+    """Every printer's usage relative to the typical one; the 3 busiest and 3 quietest stand out."""
+    t = TOKENS[theme]
+    d = u[u["relative"].notna()].sort_values("relative")
+    n = len(d)
+    colors = [t["series"][0] if i >= n - 3 else t["series"][1] if i < 3 else t["neutral_bar"] for i in range(n)]
+    fig = go.Figure(go.Bar(
+        y=d["label"], x=d["relative"], orientation="h", marker=dict(color=colors),
+        text=[f"{v:.1f}×" for v in d["relative"]], textposition="outside", cliponaxis=False,
+        textfont=dict(color=t["secondary"], size=10.5),
+        customdata=np.stack([d["station_id"], d["cartridges_per_month"].fillna(0), d["printers_in_building"]], axis=1),
+        hovertemplate="<b>%{y}</b><br>%{x:.1f}× the typical printer<br>about %{customdata[1]:.2f} black cartridges a "
+                      "month<br>%{customdata[2]} printer(s) in the building<extra></extra>"))
+    fig.add_vline(x=1, line=dict(color=t["axis"], width=1, dash="dot"))
+    fig.update_layout(**layout(theme, max(300, 22 * n + 60), margin=dict(r=50), bargap=0.25,
+                               xaxis=dict(showgrid=True, title=dict(text="usage vs the typical printer (1× = median)"),
+                                          rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"], size=11))))
+    return fig
+
+
+def blank(height: int = 60) -> go.Figure:
+    """An empty, invisible plot (keeps a graph slot in the page when there's nothing to draw)."""
+    return go.Figure().update_layout(height=height, xaxis_visible=False, yaxis_visible=False, margin=dict(l=0, r=0, t=0, b=0),
+                                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")

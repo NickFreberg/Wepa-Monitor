@@ -226,6 +226,22 @@ def availability_daily(ds: Dataset, start, end, ids=None, by: str | None = None)
     return g
 
 
+def availability_by_hour(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
+    """Availability by local hour of day, for weekdays and weekends: when in the day printers are
+    least likely to work. Columns: hour (0-23), daytype ('Weekdays' | 'Weekends'), availability,
+    down_h (printer-hours lost in that hour slot across the period), observed_h."""
+    sp = _hours(ds, start, end, ids)
+    if sp.empty:
+        return pd.DataFrame(columns=["hour", "daytype", "availability", "down_h", "observed_h"])
+    local = sp["hour"].dt.tz_convert(config.LOCAL_TZ)
+    g = sp.assign(h=local.dt.hour, daytype=np.where(local.dt.dayofweek >= 5, "Weekends", "Weekdays")) \
+        .groupby(["daytype", "h"])[["up_s", "covered_s"]].sum().reset_index().rename(columns={"h": "hour"})
+    g["availability"] = g["up_s"] / g["covered_s"] * 100
+    g["down_h"] = (g["covered_s"] - g["up_s"]) / 3600
+    g["observed_h"] = g["covered_s"] / 3600
+    return g[["hour", "daytype", "availability", "down_h", "observed_h"]]
+
+
 def building_availability(ds: Dataset, start, end, ids=None) -> pd.DataFrame:
     """Share of observed minutes in which at least one printer in the building could print."""
     b = ds.bhourly

@@ -119,6 +119,10 @@ def avail_daily(ds, point, ctx: Context) -> Explanation:
         what = cal["event"].split(";")[0] if cal["event"] else campus.PHASES.get(cal["phase"], "")
         tells += [" On the academic calendar: ", ("b", what or cal["label"]),
                   "" if cal["halls_open"] else " (residence halls closed)", "."]
+    others = [(str(_cd(q, 1, "")), float(q["y"])) for q in ctx.points
+              if q.get("y") is not None and _cd(q, 1) not in (series, None)]
+    if others:
+        tells += [" Side by side that day: "] + [", ".join(f"{name} {v:.1f}%" for name, v in others) + "."]
     matters = ["Each lost printer-hour is time students at that building had to find another printer. A dip "
                "concentrated in one station points to a fault; a dip spread across many suggests a staffing or "
                "supply issue that day."]
@@ -233,6 +237,10 @@ def cumulative(ds, point, ctx: Context) -> Explanation:
     title = f"By {day:%B %-d}, the stations had used {used:.1f} {label} parts' worth since the period began."
     tells = [f"That's about {pace:.2f} a day, or ", ("b", f"{pace * 30.44:.1f} a month"), " at this pace. "
              "Use is counted from level drops only, so a replacement never counts as negative use."]
+    others = [(config.COMPONENT_LABELS.get(_cd(q, 0, ""), ""), float(q["y"])) for q in ctx.points
+              if q.get("y") is not None and _cd(q, 0) not in (comp, None)]
+    if others:
+        tells.append(" By the same day: " + ", ".join(f"{name} {v:.1f}" for name, v in others) + ".")
     matters = ["This is the ordering signal: at this pace, how many cartridges or drums to keep on the shelf. A "
                "steeper stretch usually means a busy time of the semester, such as finals."]
     return Explanation("Cumulative use", title, tells, matters, [("Consumables tab", "/analytics?tab=consumables")])
@@ -426,7 +434,62 @@ def phases(ds, point, ctx: Context) -> Explanation:
     return Explanation("Academic calendar", title, tells, [matters])
 
 
+def avail_hourly(ds, point, ctx: Context) -> Explanation:
+    hour = int(_cd(point, 2, point.get("x", 0)))
+    daytype = _cd(point, 1, "Weekdays")
+    lost = float(_cd(point, 0, 0) or 0)
+    h12 = f"{(hour % 12) or 12} {'AM' if hour < 12 else 'PM'}"
+    title = f"{daytype} in the {h12} hour, printers could print {float(point['y']):.1f}% of the time."
+    others = [(str(_cd(q, 1, "")), float(q["y"])) for q in ctx.points if _cd(q, 1) not in (daytype, None)]
+    tells = [f"Across the {ctx.period_label}, that hour lost ", ("b", f"{lost:,.0f} printer-hours"), " in total. "]
+    if others:
+        tells.append(" ".join(f"On {n.lower()} at the same hour: {v:.1f}%." for n, v in others) + " ")
+    open_now = [o for o in support.TEAMS if daytype == "Weekdays" and
+                support.team(o)["hours"].get(0, (99, 99))[0] <= hour < support.team(o)["hours"].get(0, (0, 0))[1]]
+    tells.append(f"{' and '.join(open_now)} {'is' if len(open_now) == 1 else 'are'} staffed then." if open_now else
+                 "Neither support desk is staffed then, so a problem that starts now waits for the next shift.")
+    matters = ["If availability sags in the evening and recovers in the morning, the fix is coverage (a late check, "
+               "a fuller paper tray before closing), not faster repairs."]
+    return Explanation("Through the day", title, tells, matters, [("Faults by hour", "/analytics?tab=faults")])
+
+
+def drivers(ds, point, ctx: Context) -> Explanation:
+    cause = point.get("y") or point.get("label")
+    hours = float(point.get("x") or 0)
+    n = _cd(point, 1, 0)
+    title = f"{cause} cost about {hours:,.0f} printer-hours in the {ctx.period_label}, across {n} outage(s)."
+    f = M.faults_in(ds, ctx.start, ctx.end, ctx.ids)
+    f = f[f["label"] == cause]
+    tells = []
+    if len(f):
+        top = f.groupby("station")["start"].size().sort_values(ascending=False).head(3)
+        tells = ["It happened most at ", ", ".join(f"{k} ({v})" for k, v in top.items()), ". "]
+        det = pd.Series([x for v in f["detail"].fillna("") for x in v.split(", ") if x]).value_counts()
+        if len(det):
+            tells.append(f"Most often: {', '.join(det.head(3).index)}.")
+    matters = ["Hours lost, not just counts, decide where effort pays off: one long outage after closing can cost "
+               "more than ten quick fixes during the day."]
+    return Explanation("What cost the most printing time", title, tells, matters,
+                       [("Fault types", "/analytics?tab=faults")])
+
+
+def usage_bars(ds, point, ctx: Context) -> Explanation:
+    sid = _cd(point, 0)
+    rel = float(point.get("x") or 0)
+    name = _station(ds, sid)
+    per_month = float(_cd(point, 1, 0) or 0)
+    printers = int(_cd(point, 2, 1) or 1)
+    title = f"{name} prints about {rel:.1f}× as much as the typical BSU printer."
+    tells = [f"That's roughly {per_month:.1f} black toner cartridges a month. "]
+    tells.append("It's the only printer in its building." if printers == 1 else
+                 f"Its building has {printers} printers.")
+    matters = ["Busy printers need fuller paper trays and spare toner on hand; a busy building with one printer is "
+               "where a second one helps most. Quiet printers in buildings with a spare are candidates to move."]
+    return Explanation("Usage", title, tells, matters, [(f"Open {name}", f"/station/{sid}")])
+
+
 EXPLAINERS = {
+    "avail_hourly": avail_hourly, "drivers": drivers, "usage_bars": usage_bars,
     "phases": phases,
     "owner_hours": owner_hours,
     "avail_daily": avail_daily, "building_cov": building_cov, "fault_types": fault_types,

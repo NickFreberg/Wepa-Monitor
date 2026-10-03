@@ -132,17 +132,33 @@ def explain_toggle(text) -> html.Details:
                          html.Div(body, className="card__explain-body")], className="card__explain")
 
 
+def nerd_toggle(text) -> html.Details:
+    """'For nerds': the method behind a chart (algorithm names, formulas, assumptions), tucked away
+    so the card itself speaks plain English."""
+    body = [html.P(t) for t in ([text] if isinstance(text, str) else text)]
+    return html.Details([html.Summary([icon("glasses"), html.Span("For nerds")], title="How this was calculated"),
+                         html.Div(body, className="card__explain-body card__explain-body--nerd")],
+                        className="card__explain card__nerd")
+
+
 def chart_card(title: str, subtitle: str, figure=None, body=None, table: html.Div | None = None,
-               wide: bool = False, note: str = "", graph_id=None, action=None, explain=None) -> html.Section:
+               wide: bool = False, note: str = "", graph_id=None, action=None, explain=None, story=None,
+               nerd=None) -> html.Section:
+    """A titled card. `story` is the one-sentence takeaway shown above the chart (segments, see
+    prose()); `explain` is 'How to read this'; `nerd` is the method, behind 'For nerds'."""
     head = [html.Div([html.H3(title), html.P(subtitle, className="card__sub") if subtitle else None])]
     tools = []
     if action is not None:
         tools.append(html.Div(action, className="card__action"))
     if explain:
         tools.append(explain_toggle(explain))
+    if nerd:
+        tools.append(nerd_toggle(nerd))
     if tools:
         head.append(html.Div(tools, className="card__tools-wrap"))
     children = [html.Header(head, className="card__head")]
+    if story:
+        children.append(prose([story] if not isinstance(story[0], list) else story, className="prose card__story"))
     if figure is not None:
         height = figure.layout.height or 300
         extra = {"id": graph_id} if graph_id else {}

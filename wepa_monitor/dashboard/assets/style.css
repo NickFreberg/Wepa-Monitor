@@ -700,3 +700,33 @@ details.popover[open] > summary { border-color: var(--ink-2); }
   .terminal { height: 240px; font-size: 11.5px; }
   .station__levels { gap: 3px 10px; }
 }
+
+/* chart cards: the takeaway sentence, and 'For nerds' */
+.card__story { margin: 0 0 8px; }
+.card__story p { font-size: 14px; line-height: 1.5; color: var(--ink); max-width: none; margin: 0 0 4px; }
+.card__nerd > summary { font-style: normal; }
+.card__explain-body--nerd { font-size: 12.5px; }
+
+/* usage ranks, grade tiles */
+.ranks { display: flex; flex-direction: column; gap: 8px; }
+.rank { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 10px 12px; border-radius: 12px;
+  background: var(--surface-2); border: 1px solid var(--hairline); border-left: 4px solid var(--tone); }
+.rank--busy { --tone: #9e1b24; }
+.rank--quiet { --tone: #a87405; }
+.rank__n { font-size: 20px; font-weight: 800; color: var(--tone); align-self: center; }
+.rank__name { font-weight: 700; color: var(--ink); text-decoration: none; }
+.rank__name:hover { text-decoration: underline; }
+.rank__meta { color: var(--muted); font-size: 12px; }
+.rank__stat { font-size: 13px; margin: 2px 0; }
+.prose--inline p { margin: 0; font-size: 14px; }
+.tiles--grades { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tiles--grades .tile:nth-child(1) .tile__value { color: #0f8c62; }
+.tiles--grades .tile:nth-child(2) .tile__value { color: #5a9e3a; }
+.tiles--grades .tile:nth-child(3) .tile__value { color: #a87405; }
+.tiles--grades .tile:nth-child(4) .tile__value { color: #c4621d; }
+.tiles--grades .tile:nth-child(5) .tile__value { color: #b5122b; }
+@media (max-width: 700px) { .tiles--grades { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td.dash-cell div.dash-cell-value { white-space: normal; }
+.dash-table-container .dash-filter input::placeholder { color: var(--muted); }
+.dash-table-container a { color: var(--accent); font-weight: 600; }
+.dash-table-container p { margin: 0; }

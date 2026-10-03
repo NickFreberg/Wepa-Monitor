@@ -206,6 +206,7 @@ def _shell(ds: M.Dataset):
         dcc.Store(id="notif-latest"),
         dcc.Store(id="basemap-store", storage_type="local", data="street"),
         dcc.Store(id="burn-store", storage_type="session", data="per_week"),
+        dcc.Store(id="mttr-store", storage_type="session", data="W"),
         dcc.Store(id="session-beat"),
         dcc.Download(id="kml-dl"),
         dcc.Download(id="export-dl"),
@@ -373,7 +374,10 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             sid = (path or "").rstrip("/").rsplit("/", 1)[-1]
             return [dcc.Store(id="sd-id", data=sid), loading("sd-body")]
         if route == "/analytics":
-            return [html.Div(segmented("an-tab", analytics.TABS, params.get("tab", "reliability"),
+            tab = params.get("tab", "reliability")
+            if tab == "quality":
+                return system.layout()
+            return [html.Div(segmented("an-tab", analytics.TABS, tab,
                                        persistence="session"), className="toolbar"), loading("an-body")]
         if route == "/executive":
             opts = executive.month_options(ds)
@@ -413,10 +417,23 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     def sd_body(sid, period, theme, _):
         return station.render(cache.get(), theme or "light", sid, period or "30")
 
+    @app.callback(Output({"type": "xg", "chart": "eol"}, "figure"), Output("sd-eol-note", "children"),
+                  Input("sd-eol-part", "value"), State("sd-id", "data"), State("theme", "data"),
+                  prevent_initial_call=True)
+    def sd_eol(comp, sid, theme):
+        fig, note = station.eol_figure(cache.get(), theme or "light", sid, comp)
+        from .charts import blank
+        return (fig if fig is not None else blank()), note
+
     @app.callback(Output("an-body", "children"), Input("an-tab", "value"), scope, Input("period", "value"),
-                  Input("burn-store", "data"), Input("theme", "data"))
-    def an_body(tab, sc, period, burn, theme):
-        return analytics.render(cache.get(), theme or "light", sc, period or "30", tab, burn or "per_week")
+                  Input("burn-store", "data"), Input("mttr-store", "data"), Input("theme", "data"))
+    def an_body(tab, sc, period, burn, mttr_unit, theme):
+        return analytics.render(cache.get(), theme or "light", sc, period or "30", tab, burn or "per_week",
+                                mttr_unit or "W")
+
+    @app.callback(Output("mttr-store", "data"), Input("mttr-unit", "value"), prevent_initial_call=True)
+    def keep_mttr(value):
+        return value
 
     @app.callback(Output("burn-store", "data"), Input("burn-unit", "value"), prevent_initial_call=True)
     def keep_burn(value):
