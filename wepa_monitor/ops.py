@@ -61,7 +61,7 @@ def work_queue(ds: Dataset, ids=None) -> pd.DataFrame:
             add(s["station_id"], s["severity"], f"{s['severity'].capitalize()} status (no code)",
                 rules.FIX_CATEGORIES["other"], s["start"], s["censored_start"])
 
-    for sid, st in cur[cur["stale"]].iterrows():
+    for sid, _row in cur[cur["stale"]].iterrows():
         add(sid, "stale", "No data from station", "Check that the station is online")
 
     trays = ds.tray_inc[(ds.tray_inc["status"] == "open") & ds.tray_inc["station_id"].isin(cur.index)]
