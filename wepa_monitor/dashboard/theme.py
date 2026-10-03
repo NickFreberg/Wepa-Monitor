@@ -48,11 +48,11 @@ TOKENS["crimson"] = {
 THEMES = ("light", "dark", "crimson")
 
 STATUS = {"good": "#0ca30c", "warning": "#fab219", "serious": "#ec835a", "critical": "#d03b3b"}
-STATE_STYLE = {
-    "green": ("good", "✓", "Printing"),
-    "yellow": ("warning", "!", "Warning"),
-    "red": ("critical", "✕", "Down"),
-    "stale": ("serious", "?", "No data"),
+STATE_STYLE = {   # labels from vocab.STATE
+    "green": ("good", "✓", "Operational"),
+    "yellow": ("warning", "!", "Degraded"),
+    "red": ("critical", "✕", "Out of service"),
+    "stale": ("serious", "?", "No signal"),
 }
 
 

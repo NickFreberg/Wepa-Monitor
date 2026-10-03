@@ -121,10 +121,17 @@ def metric_tile(label: str, m: Metric, formatter, help_text: str = "", unit_note
     return tile(label, formatter(m.value), sub, ok=m.ok, help_text=help_text)
 
 
-def status_pill(state: str) -> html.Span:
+def status_pill(state: str, sub: str = "") -> html.Span:
+    """Status in the shared vocabulary (vocab.STATE); `sub` is a sub-status such as
+    'Support unavailable until 10 AM', shown beside it."""
     tone, icon, text = STATE_STYLE.get(state, STATE_STYLE["stale"])
-    return html.Span(className=f"pill pill--{tone}", children=[
+    pill = html.Span(className=f"pill pill--{tone}", children=[
         html.Span(icon, className="pill__icon", **{"aria-hidden": "true"}), text])
+    if not sub:
+        return pill
+    return html.Span([pill, html.Span(sub, className="pill-sub", title="The support desk responsible for this "
+                                      "printer is closed, so nobody is on duty to fix it before then.")],
+                     className="pill-wrap")
 
 
 def data_table(df: pd.DataFrame, columns: list[tuple[str, str, object]], max_rows: int = 200,

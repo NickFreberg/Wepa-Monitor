@@ -72,6 +72,14 @@ def station_messages(row) -> list[str]:
     return rules.describe(row["status_codes"], row["printer_text"])
 
 
+def _unstaffed(row) -> str:
+    """'Support unavailable until …' for a printer that isn't operational while its desk is closed."""
+    if row.get("state") not in ("red", "yellow"):
+        return ""
+    from ... import vocab
+    return vocab.support_substate(row.get("owner") or config.DEFAULT_OWNER, pd.Timestamp(row["scrape_ts"]))
+
+
 def station_card(row, levels: dict, in_group: bool = False) -> dcc.Link:
     """A station tile on the Stations page; the whole card opens the drill-through. Toner and drum
     levels sit side by side, one line per color, so a single worn drum can't hide behind the others."""
@@ -80,8 +88,10 @@ def station_card(row, levels: dict, in_group: bool = False) -> dcc.Link:
                       html.Div(f"#{row['station_id']}" + ("" if in_group else f" · {row['building']}"),
                                className="station__meta")]),
             status_pill(row["state"])]
+    sub = _unstaffed(row)
     return dcc.Link(href=f"/station/{row['station_id']}", className=f"station station--{row['state']}", children=[
         html.Div(className="station__head", children=head),
+        html.Div(sub, className="station__sub") if sub else None,
         html.Ul([html.Li(m) for m in msgs], className="station__msgs") if msgs else
         html.Div("No alerts", className="station__ok"),
         html.Div(className="station__levels", children=[

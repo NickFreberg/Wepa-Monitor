@@ -4,13 +4,13 @@ from __future__ import annotations
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, config, geo, metrics as M, models, ops, support
+from ... import activity, config, geo, metrics as M, models, ops, support, vocab
 from .. import charts
 from ..components import campus_line, chart_card, data_table, desk_line, explore_hint, fmt_minutes, headline, icon, station_link, tile
 from .common import empty, scope_ids
 
-KIND_LABEL = {"red": "Down", "yellow": "Warning", "tray": "Tray empty", "consumable_now": "End of life",
-              "consumable_soon": "Nearing end", "stale": "No data"}
+KIND_LABEL = {"red": "Out of service", "yellow": "Degraded", "tray": "Tray empty", "consumable_now": "End of life",
+              "consumable_soon": "Nearing end", "stale": "No signal"}
 KIND_TONE = {"red": "critical", "yellow": "warning", "stale": "serious", "tray": "info",
              "consumable_now": "warning", "consumable_soon": "info"}
 
@@ -25,22 +25,22 @@ def status_headline(ds: M.Dataset, cur: pd.DataFrame, queue: pd.DataFrame) -> ht
     if parts:
         extras.append(f"{parts} station{'s' if parts != 1 else ''} {'has' if parts == 1 else 'have'} a consumable at end of life")
     if len(yel) and len(red):
-        extras.append(f"{len(yel)} warning{'s' if len(yel) != 1 else ''}")
+        extras.append(f"{len(yel)} station{'s' if len(yel) != 1 else ''} degraded")
     if not ds.is_demo and age_min > 10:
         return headline("serious", f"Status may be out of date: the last snapshot is {fmt_minutes(age_min)} old",
                         "Check that the collector is running (Activity shows monitoring gaps).")
     if len(red):
         reds = queue[queue["kind"] == "red"].sort_values("open_min", ascending=False)
         lead = reds.iloc[0] if len(reds) else None
-        oldest = (f"Longest: {lead['station']}, down {fmt_minutes(lead['open_min'])}"
+        oldest = (f"Longest ongoing: {lead['station']}, out of service {fmt_minutes(lead['open_min'])}"
                   f"{'+' if lead['open_censored'] else ''} ({lead['issue'].lower()})") if lead is not None else ""
-        title = f"{len(red)} of {n} stations {'is' if len(red) == 1 else 'are'} down"
+        title = f"{len(red)} of {n} stations out of service"
         return headline("critical", title, ". ".join([oldest] + extras) + ".")
     if len(yel):
-        return headline("warning", f"All stations can print; {len(yel)} {'has' if len(yel) == 1 else 'have'} a warning",
+        return headline("warning", f"All stations operational; {len(yel)} degraded",
                         ". ".join(extras) + "." if extras else "")
     detail = ". ".join(extras)
-    return headline("good", f"All {n} stations are printing",
+    return headline("good", f"All {n} stations operational",
                     (detail[:1].upper() + detail[1:] + ".") if extras else "Nothing needs attention right now.")
 
 
@@ -66,11 +66,11 @@ def render(ds: M.Dataset, theme: str, scope, basemap: str = "street"):
         compare = f"{'▲' if d >= 0 else '▼'} {abs(d):.1f} pts vs prior 7 days"
 
     tiles = html.Div(className="tiles", children=[
-        tile("Printing now", f"{n - red - stale} / {n}", f"{stale} without recent data" if stale else "stations able to print",
+        tile("Operational", f"{n - red - stale} / {n}", f"{stale} with no signal" if stale else "stations able to print",
              tone="good" if red == 0 else None, href="/stations"),
-        tile("Down", str(red), "stations that can't print", tone="critical" if red else None,
+        tile("Out of service", str(red), "stations that can't print", tone="critical" if red else None,
              href="/stations?status=red"),
-        tile("Warnings", str(yel), "printing, but need a look", tone="warning" if yel else None,
+        tile("Degraded", str(yel), "printing, but need a look", tone="warning" if yel else None,
              href="/stations?status=yellow"),
         tile("Availability, last 24 h", f"{a24.value:.1f}%" if a24.value is not None else "—",
              f"{a24.extra.get('down_h', 0):.1f} printer-hours down" if a24.value is not None else a24.note,
@@ -87,7 +87,7 @@ def render(ds: M.Dataset, theme: str, scope, basemap: str = "street"):
         owner = owner_of.get(r.station_id, config.DEFAULT_OWNER)
         waits = ""
         if r.kind in ("red", "yellow", "tray") and not support.is_open(owner, ds.as_of):
-            waits = f"{owner}: {support.desk_status(owner, ds.as_of)[1].lower()}"
+            waits = vocab.support_substate(owner, ds.as_of)
         rows.append(html.Li(className=f"todo todo--{tone}", children=[
             html.Span(KIND_LABEL.get(r.kind, r.kind), className=f"todo__tag tag tag--{tone}"),
             html.Div([station_link(r.station_id, r.station, "todo__station"),

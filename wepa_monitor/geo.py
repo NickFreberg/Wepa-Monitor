@@ -15,7 +15,7 @@ from .metrics import Dataset
 from .ops import current_status
 
 STATE_RANK = {"red": 3, "yellow": 2, "stale": 1, "green": 0}
-STATE_LABEL = {"red": "Down", "yellow": "Warning", "stale": "No data", "green": "Printing"}
+STATE_LABEL = {"red": "Out of service", "yellow": "Degraded", "stale": "No signal", "green": "Operational"}
 
 
 def _station_line(r) -> str:

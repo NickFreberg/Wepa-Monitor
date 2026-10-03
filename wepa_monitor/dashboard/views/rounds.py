@@ -8,7 +8,7 @@ from .. import charts
 from ..components import chart_card, headline, segmented, station_link
 from .common import empty
 
-INCLUDE = {"red": "Down", "yellow": "Warnings", "tray": "Empty trays", "consumable_now": "Parts at end of life",
+INCLUDE = {"red": "Out of service", "yellow": "Degraded", "tray": "Empty trays", "consumable_now": "Parts at end of life",
            "consumable_soon": "Parts due soon"}
 
 

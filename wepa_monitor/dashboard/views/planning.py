@@ -193,12 +193,12 @@ def stats_extras(ds: M.Dataset, theme: str, ids, start, end, plabel: str) -> lis
         lo, hi = w["ci"]
         cards.append(chart_card(
             "When a warning shows up, does an outage follow?", f"Warnings in the last {plabel}, and whether the same "
-            "printer went down within 24 hours.",
+            "printer went out of service within 24 hours.",
             story=[("b", f"{w['share']:.0%}"), f" of warnings were followed by an outage within a day (likely "
                    f"{lo:.0%}–{hi:.0%})" + (f", typically {w['median_lag_h']:.0f} hours later" if np.isfinite(
                        w["median_lag_h"]) else "") + "."],
             body=data_table(w["by_cause"], [("cause", "Warning", None), ("warnings", "Times", None),
-                                            ("led_to_outage", "Then went down", None),
+                                            ("led_to_outage", "Then out of service", None),
                                             ("share", "Share", lambda v: f"{v:.0%}")]),
             explain="Warnings that often turn into outages are worth a visit before they do. A warning type that "
                     "rarely leads anywhere can wait for the next round.",

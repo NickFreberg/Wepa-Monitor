@@ -112,10 +112,10 @@ def _shared_outages(ds, ids, start, end, plabel):
                            ("kind", "Likely cause", None),
                            ("together", "Came back together", lambda v: "Yes" if v else "No"),
                            ("verdict", "Verdict", None)], max_rows=15)
-            if len(c) else empty("Nothing to show: no group of printers went down within "
+            if len(c) else empty("Nothing to show: no group of printers went out of service within "
                                  f"{C.WINDOW_MIN} minutes of each other.", big=False))
     return chart_card(
-        "Did several printers go down together?", f"Groups of {C.MIN_STATIONS}+ printers going down within "
+        "Did several printers go out of service together?", f"Groups of {C.MIN_STATIONS}+ printers going down within "
         f"{C.WINDOW_MIN} minutes of each other, last {plabel}.", body=body, story=story, wide=True,
         icon_name=("pulse", "crimson"),
         explain=["When printers in different buildings drop off at the same moment, the cause is usually shared "

@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import pandas as pd
 
-from . import config
+from . import config, rules
 from .metrics import Dataset
 
 COLUMNS = ["ts", "kind", "severity", "station_id", "station", "building", "title", "detail"]
 
 KIND_LABEL = {
-    "down": "Went down", "recovered": "Back up", "warning": "Warning", "warning_cleared": "Warning cleared",
+    "down": "Outage began", "recovered": "Resolved", "warning": "Degraded", "warning_cleared": "Restored",
     "replaced": "Part replaced", "tray_empty": "Tray empty", "tray_refilled": "Tray refilled",
     "data_gap": "Monitoring gap", "data_restored": "Monitoring restored",
 }
@@ -57,28 +57,38 @@ def events(ds: Dataset, since: pd.Timestamp | None = None, ids=None) -> pd.DataF
                      "title": title, "detail": detail})
 
     # What each red incident was about: the fault codes that opened with it.
-    faults = ds.fault_inc[["station_id", "start", "label", "detail"]]
-    faults = faults.assign(what=faults["label"] + faults["detail"].fillna("").map(lambda d: f" ({d})" if d else ""))
+    faults = ds.fault_inc[["station_id", "start", "code", "detail"]]
+    faults = faults.assign(what=faults["code"].map(rules.issue_status)
+                           + faults["detail"].fillna("").map(lambda d: f" ({d})" if d else ""))
     cause = faults.groupby(["station_id", "start"])["what"].agg(lambda s: "; ".join(sorted(set(s))))
 
     inc = ds.sev_inc
     if ids is not None:
         inc = inc[inc["station_id"].isin(ids)]
+    from . import support, vocab
+    owner = ds.stations.set_index("station_id")["section"].map(support.owner).to_dict()
+
+    def unstaffed(sid, ts) -> str:
+        sub = vocab.support_substate(owner.get(sid, config.DEFAULT_OWNER), ts)
+        return f" · {sub}" if sub else ""
+
     for r in inc.itertuples(index=False):
         name = label.get(r.station_id, r.station_id)
         why = cause.get((r.station_id, r.start), "")
         if r.severity == "red":
             if r.start >= since and not r.censored_start:
-                add(r.start, "down", "critical", r.station_id, f"{name} went down", why)
+                add(r.start, "down", "critical", r.station_id, f"{name}: out of service",
+                    (why or "No cause reported") + unstaffed(r.station_id, r.start))
             if r.status == "resolved" and r.end >= since:
-                add(r.end, "recovered", "good", r.station_id, f"{name} is back up",
-                    f"Down for {_dur(r.duration_s)}" + (f" ({why})" if why else ""))
+                add(r.end, "recovered", "good", r.station_id, f"{name}: resolved",
+                    f"Out of service for {_dur(r.duration_s)}" + (f" ({why})" if why else ""))
         else:
             if r.start >= since and not r.censored_start:
-                add(r.start, "warning", "warning", r.station_id, f"{name} has a warning", why)
+                add(r.start, "warning", "warning", r.station_id, f"{name}: degraded",
+                    (why or "Warning reported") + unstaffed(r.station_id, r.start))
             if r.status == "resolved" and r.end >= since:
-                add(r.end, "warning_cleared", "info", r.station_id, f"{name} warning cleared",
-                    f"After {_dur(r.duration_s)}")
+                add(r.end, "warning_cleared", "info", r.station_id, f"{name}: restored",
+                    f"Degraded for {_dur(r.duration_s)}")
 
     repl = ds.repl[ds.repl["ts"] >= since]
     if ids is not None:

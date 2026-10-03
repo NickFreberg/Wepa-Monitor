@@ -75,7 +75,7 @@ def render(ds: M.Dataset, scope, d0, d1, groups, query):
 
     counts = ev["kind"].value_counts()
     parts = [f"{counts[k]:,} {text}" for k, text in (
-        ("down", "times a station went down"), ("warning", "warnings"), ("replaced", "parts replaced"),
+        ("down", "outages"), ("warning", "warnings"), ("replaced", "parts replaced"),
         ("tray_empty", "trays ran empty"), ("data_gap", "monitoring gaps")) if counts.get(k, 0)]
     summary = f"{len(ev):,} events, {span}" + (": " + ", ".join(parts) if parts else "") + "."
     shown = ev.head(MAX_ROWS)

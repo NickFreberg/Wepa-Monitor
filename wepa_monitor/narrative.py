@@ -429,7 +429,7 @@ def outages_paragraph(ds: M.Dataset, red: pd.DataFrame, p: Period, nm: dict) -> 
     if len(by_st) and by_st.iloc[0] >= 3:
         sid = by_st.index[0]
         causes = outage_causes(ds, sid, red[red["station_id"] == sid]["start"].iloc[0])
-        seg += [" ", ("st", sid, nm.get(sid, sid)), f" went down {by_st.iloc[0]} times"
+        seg += [" ", ("st", sid, nm.get(sid, sid)), f" was out of service {by_st.iloc[0]} times"
                 + (f", usually because it {rules.issue_phrase(causes[0][0])}" if causes else "")
                 + ": worth a closer look than another quick fix."]
     return seg
@@ -481,7 +481,7 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
     red = inc[inc["severity"] == "red"]
     faults = M.faults_in(ds, p.start, p.end, ids)
     if red.empty:
-        paras.append(["No station went down. ", "Any time lost came from monitoring gaps or warnings, "
+        paras.append(["No station was out of service. ", "Any time lost came from monitoring gaps or warnings, "
                       "not outages." if down_h > 0.5 else "Every station that reported could print throughout."])
     else:
         paras.append(outages_paragraph(ds, red, p, nm))

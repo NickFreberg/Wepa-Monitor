@@ -122,19 +122,22 @@ def empty_trays(messages: list[str]) -> list[str]:
 ISSUES: dict[str, tuple[str, str, str, str]] = {
     "paper_out": ("Out of paper", "ran out of paper", "red", "paper"),
     "paper_jam": ("Paper jam", "jammed", "red", "jam"),
-    "tray_missing": ("Paper tray out", "had a paper tray pulled out or not seated", "red", "paper"),
-    "toner_empty": ("Toner empty", "ran out of toner", "red", "consumable"),
-    "drum_end": ("Drum at end of life", "needed a new drum", "red", "consumable"),
-    "cover_open": ("Cover or door open", "had a cover or door open", "red", "hardware"),
-    "service_call": ("Needs service", "reported an error that needs a service call", "red", "power_cycle"),
-    "fatal_error": ("Printer error", "hit a printer error and needed a restart", "red", "power_cycle"),
-    "not_reachable": ("Offline (network)", "dropped off the network", "red", "network"),
-    "offline": ("Printer not responding", "stopped responding to Wepa", "red", "hardware"),
+    "tray_missing": ("Tray disengaged", "had a paper tray pulled out or not seated", "red", "paper"),
+    "toner_empty": ("Toner depleted", "ran out of toner", "red", "consumable"),
+    "drum_end": ("Drum expired", "needed a new drum", "red", "consumable"),
+    "cover_open": ("Cover open", "had a cover or door open", "red", "hardware"),
+    "service_call": ("Service required", "reported an error that needs a service call", "red", "power_cycle"),
+    "fatal_error": ("System fault", "hit a printer error and needed a restart", "red", "power_cycle"),
+    "not_reachable": ("Network unreachable", "dropped off the network", "red", "network"),
+    "offline": ("Unresponsive printer", "stopped responding to Wepa", "red", "hardware"),
     "paper_low": ("Paper low", "was running low on paper", "yellow", "paper"),
     "toner_low": ("Toner low", "was running low on toner", "yellow", "consumable"),
-    "drum_low": ("Drum wearing out", "had a drum nearing the end of its life", "yellow", "consumable"),
-    "wrong_paper": ("Wrong paper size", "had the wrong paper size in a tray", "yellow", "paper"),
+    "drum_low": ("Drum near end of life", "had a drum nearing the end of its life", "yellow", "consumable"),
+    "wrong_paper": ("Paper size mismatch", "had the wrong paper size in a tray", "yellow", "paper"),
 }
+# The same issues as a status word, for status lines ("Jammed", "Unreachable"); the nouns above are
+# for counts and charts ("Paper jam was the most common fault").
+ISSUE_STATUS = {"paper_jam": "Jammed", "not_reachable": "Unreachable", "offline": "Unresponsive"}
 _CODE_ISSUE = {
     "paper_out_error": "paper_out", "paper_jam": "paper_jam", "tray_missing": "tray_missing",
     "toner_critical": "toner_empty", "toner_sensor_error": "toner_empty", "drum_critical": "drum_end",
@@ -216,6 +219,10 @@ def diagnose(status_codes: str, printer_text: str) -> dict[str, list[str]]:
     return found
 
 
+def issue_status(issue: str) -> str:
+    return ISSUE_STATUS.get(issue) or issue_label(issue)
+
+
 def issue_label(issue: str) -> str:
     if issue.startswith("other:"):
         return code_label(issue.split(":", 1)[1])
@@ -238,10 +245,10 @@ def issue_fix_category(issue: str) -> str:
 
 
 def describe(status_codes: str, printer_text: str) -> list[str]:
-    """Short human lines for a station card: ['Paper jam (paper feed, duplex unit)', 'Tray 2 empty']."""
+    """Short status lines for a station card: ['Jammed (paper feed, duplex unit)', 'Tray 2 empty']."""
     out = []
     for issue, details in diagnose(status_codes, printer_text).items():
-        label = issue_label(issue)
+        label = issue_status(issue)
         out.append(f"{label} ({', '.join(details)})" if details else label)
     for msg in split_printer_text(str(printer_text or "").replace(" | ", "\n")):
         m = _TRAY_EMPTY.search(msg)

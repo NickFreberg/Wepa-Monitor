@@ -128,7 +128,7 @@ def render(ds: M.Dataset, theme: str, year, scope, draft: int = 0):
         findings.append(f"Across {scope_txt}, printers could print {a.value:.1f}% of the time")
     if len(red):
         findings.append(f"the monitor caught {len(red):,} outages" +
-                        (f", typically back up in {N.dur(med_fix)}" if np.isfinite(med_fix) else ""))
+                        (f", typically resolved in {N.dur(med_fix)}" if np.isfinite(med_fix) else ""))
     p3 = (("; ".join(findings) + ". ") if findings else "")
     if np.isfinite(after) and len(red) >= 5:
         p3 += (f"Its clearest lesson is about timing: {after:.0%} of outages began after the support desks "

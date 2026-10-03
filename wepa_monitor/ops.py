@@ -51,7 +51,7 @@ def work_queue(ds: Dataset, ids=None) -> pd.DataFrame:
         sid = f["station_id"]
         if sev == "red" and cur.loc[sid, "row_status"] != "red":
             sev = cur.loc[sid, "row_status"] if cur.loc[sid, "row_status"] != "green" else "yellow"
-        label = f["label"] + (f" ({f['detail']})" if f.get("detail") else "")
+        label = rules.issue_status(f["code"]) + (f" ({f['detail']})" if f.get("detail") else "")
         add(sid, sev, label, rules.FIX_CATEGORIES[f["fix_category"]], f["start"], f["censored_start"])
 
     flagged = {r["station_id"] for r in rows}

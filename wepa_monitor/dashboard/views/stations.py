@@ -7,7 +7,7 @@ from ... import metrics as M, ops
 from ..components import headline, icon
 from .common import area_key, empty, scope_ids, station_card
 
-STATUS_FILTERS = {"all": "All", "red": "Down", "yellow": "Warning", "green": "Printing", "attention": "Needs attention"}
+STATUS_FILTERS = {"all": "All", "red": "Out of service", "yellow": "Degraded", "green": "Operational", "attention": "Needs attention"}
 
 
 def render(ds: M.Dataset, scope, query: str = "", status: str = "all"):
@@ -41,9 +41,9 @@ def render(ds: M.Dataset, scope, query: str = "", status: str = "all"):
         n_yel = int((sub["state"] == "yellow").sum())
         bits = [f"{len(sub)} station{'s' if len(sub) != 1 else ''}"]
         if n_red:
-            bits.append(f"{n_red} down")
+            bits.append(f"{n_red} out of service")
         if n_yel:
-            bits.append(f"{n_yel} warning")
+            bits.append(f"{n_yel} degraded")
         tiles = []
         for building, b in sub.groupby("building", sort=False):
             if len(b) == 1:

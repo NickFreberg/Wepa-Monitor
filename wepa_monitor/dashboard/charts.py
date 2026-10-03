@@ -224,8 +224,8 @@ def monthly_stacked(theme: str, frame: pd.DataFrame, components: list[str]) -> g
 
 
 ESRI_IMAGERY = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-MAP_STATES = [("red", "critical", "Down"), ("yellow", "warning", "Warning"),
-              ("stale", "serious", "No data"), ("green", "good", "Printing")]
+MAP_STATES = [("red", "critical", "Out of service"), ("yellow", "warning", "Degraded"),
+              ("stale", "serious", "No signal"), ("green", "good", "Operational")]
 
 
 def _label_positions(pts: pd.DataFrame, zoom: float = 15.6) -> list[str]:
@@ -326,8 +326,8 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
     return fig
 
 
-TIMELINE_STATES = [("red", "critical", "Down"), ("yellow", "warning", "Warning"),
-                   ("green", "good", "Printing"), ("nodata", None, "No data")]
+TIMELINE_STATES = [("red", "critical", "Out of service"), ("yellow", "warning", "Degraded"),
+                   ("green", "good", "Operational"), ("nodata", None, "No data")]
 
 
 def status_timeline(theme: str, segments: pd.DataFrame, start=None, end=None, owner: str | None = None) -> go.Figure:
@@ -490,7 +490,7 @@ def km_curves(theme: str, ttf) -> go.Figure:
             fig.add_scatter(x=[med], y=[50], mode="markers", showlegend=False, hoverinfo="skip",
                             marker=dict(size=9, color=t["series"][i], line=dict(color=t["surface"], width=2)))
     fig.add_hline(y=50, line=dict(color=t["grid"], width=1))
-    fig.update_layout(**layout(theme, 300, xaxis=dict(title=dict(text="hours since the station went down"),
+    fig.update_layout(**layout(theme, 300, xaxis=dict(title=dict(text="hours since the outage began"),
                                                       range=[0, 24], showgrid=True),
                                yaxis=dict(ticksuffix="%", range=[0, 102], title=dict(text="still down")),
                                legend=dict(y=1.02)))
@@ -817,7 +817,7 @@ def calibration(theme: str, rows: list[dict]) -> go.Figure:
         go.Scatter(x=d["predicted"], y=d["actual"], mode="lines+markers", name="The model",
                    line=dict(color=t["series"][0], width=2), marker=dict(size=8 + 0 * d["n"]),
                    customdata=d["n"],
-                   hovertemplate="Predicted %{x:.0%}<br>Actually went down %{y:.0%}<br>%{customdata:,} predictions"
+                   hovertemplate="Predicted %{x:.0%}<br>Actually had an outage %{y:.0%}<br>%{customdata:,} predictions"
                                  "<extra></extra>")])
     fig.update_layout(**layout(theme, 280, showlegend=False,
                                xaxis=dict(title=dict(text="predicted chance of going down"), tickformat=".0%",

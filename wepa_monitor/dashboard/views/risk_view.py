@@ -76,7 +76,7 @@ def model_card(ds: M.Dataset, theme: str):
     if live:
         story = [("b", "Live. "), f"The best model ({risk.MODEL_NAMES.get(champ, champ)}) predicts outages "
                  f"{best.get('skill', 0):+.0%} better than each printer's own track record, and its three riskiest "
-                 f"printers each hour really went down {_pct(best.get('top3_hit'))} of the time "
+                 f"printers each hour really had an outage {_pct(best.get('top3_hit'))} of the time "
                  f"(vs {_pct(card.get('base_rate'))} for a typical printer-hour)."]
     else:
         story = [("b", "Learning, not shown yet. "), "It switches on by itself once it passes every check below. "
@@ -97,7 +97,7 @@ def model_card(ds: M.Dataset, theme: str):
     if tr:
         body.append(html.P([("Live track record: "), html.B(f"{tr['predictions']:,} predictions"),
                             f" over {tr['hours']:,} hours have been checked against what happened. The riskiest "
-                            f"fifth went down {_pct(tr['top20_rate'])} of the time, vs {_pct(tr['base_rate'])} "
+                            f"fifth had an outage {_pct(tr['top20_rate'])} of the time, vs {_pct(tr['base_rate'])} "
                             f"overall (AUC {tr['auc']:.2f})." if pd.notna(tr["auc"]) else ""], className="prose"))
     if live:
         f = risk.predict_now(ds)

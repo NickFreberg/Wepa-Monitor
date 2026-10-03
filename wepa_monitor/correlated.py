@@ -103,9 +103,9 @@ def clusters(ds: M.Dataset, start, end, ids=None, window_min: int = WINDOW_MIN,
 
 def summary(c: pd.DataFrame) -> str:
     if c.empty:
-        return (f"No times when {c.attrs.get('min_stations', MIN_STATIONS)} or more printers went down within "
+        return (f"No times when {c.attrs.get('min_stations', MIN_STATIONS)} or more printers went out of service within "
                 f"{c.attrs.get('window_min', WINDOW_MIN)} minutes of each other: outages look independent.")
     likely = c[(c["chance_windows"] < 0.5) & (c["kind"] != "Mixed causes")]
-    return (f"{len(c)} time{'s' if len(c) != 1 else ''} several printers went down together; "
+    return (f"{len(c)} time{'s' if len(c) != 1 else ''} several printers went out of service together; "
             f"{len(likely)} look{'s' if len(likely) == 1 else ''} like a shared cause (same kind of problem, "
             "more than chance would explain).")

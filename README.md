@@ -260,6 +260,25 @@ recomputed over the full history.
 The parser finds columns **by header text**, not by position. If Wepa adds or reorders a column, the
 scrape fails loudly and is logged as a failure, rather than putting values in the wrong fields.
 
+## Status vocabulary
+
+One set of words everywhere (`wepa_monitor/vocab.py`), on every page, in exports and in AI answers:
+
+| Station status | Meaning |
+|---|---|
+| **Operational** | Printing normally |
+| **Degraded** | Printing, with a warning (paper low, drum near end of life, paper size mismatch) |
+| **Out of service** | Can't print |
+| **No signal** | Hasn't reported recently, so its status isn't known |
+
+Incidents are **Ongoing** or **Resolved**. Status lines name the problem as a state: *Jammed*,
+*Unreachable* (network), *Out of paper*, *Tray disengaged*, *Toner depleted*, *Drum expired*, *System fault*,
+*Service required*, *Unresponsive*. When the responsible desk is closed, anything not Operational also
+shows **Support unavailable until <time>** (for example "until tomorrow 9 AM").
+
+"In progress" isn't used on purpose: the monitor can see that a problem is open, not whether someone is
+working on it.
+
 ## Metric definitions (the business rules)
 
 All thresholds live in [`wepa_monitor/config.py`](wepa_monitor/config.py).

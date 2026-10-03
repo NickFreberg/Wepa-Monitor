@@ -23,10 +23,24 @@ def test_toner_colors_fold_into_one_type():
     assert got == {"toner_empty": ["magenta", "yellow"]}            # an empty tray isn't a fault
 
 
-def test_card_lines_are_plain_language():
-    assert rules.describe("tray_missing,paper_out_error", "Tray1 missing") == ["Paper tray out (tray 1)", "Out of paper"]
+def test_card_lines_use_the_status_vocabulary():
+    assert rules.describe("tray_missing,paper_out_error", "Tray1 missing") == ["Tray disengaged (tray 1)", "Out of paper"]
     assert rules.describe("", "Paper Out Warning for Tray2") == ["Tray 2 empty"]
-    assert rules.describe("", "Drum Life Warning for Black") == ["Drum wearing out (black)"]
+    assert rules.describe("", "Drum Life Warning for Black") == ["Drum near end of life (black)"]
+    assert rules.describe("paper_jam", "") == ["Jammed"] and rules.describe("not_reachable", "") == ["Unreachable"]
+    assert rules.issue_label("paper_jam") == "Paper jam"          # nouns stay nouns for counts and charts
+
+
+def test_support_substate_only_when_desk_is_closed():
+    import pandas as pd
+
+    from wepa_monitor import vocab
+    tue_noon = pd.Timestamp("2026-09-29 12:00", tz="America/New_York")
+    tue_night = pd.Timestamp("2026-09-29 23:00", tz="America/New_York")
+    assert vocab.support_substate("ResNet", tue_noon) == ""
+    sub = vocab.support_substate("ResNet", tue_night)
+    assert sub.startswith("Support unavailable until") and "10 AM" in sub
+    assert vocab.state("red") == "Out of service" and vocab.state("yellow") == "Degraded"
 
 
 def test_fault_incidents_use_issues_with_details():

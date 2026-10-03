@@ -165,7 +165,7 @@ def test_kml_is_valid_and_escaped():
     doc = xml.dom.minidom.parseString(geo.to_kml(pts, "test"))
     marks = doc.getElementsByTagName("Placemark")
     assert len(marks) == 1
-    assert marks[0].getElementsByTagName("name")[0].firstChild.data == "DMF Science & Math Center - Down"
+    assert marks[0].getElementsByTagName("name")[0].firstChild.data == "DMF Science & Math Center - Out of service"
     assert "-70.970710,41.988290,0" in marks[0].toxml()
 
 

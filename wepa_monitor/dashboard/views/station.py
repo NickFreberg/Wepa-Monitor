@@ -8,7 +8,7 @@ from ... import activity, campus, config, metrics as M, models, nearby, ops, sup
 from .. import charts
 from ..components import (chart_card, data_table, desk_line, explore_hint, fmt_hours, fmt_minutes, headline,
                           level_bar, station_link, status_pill, tile)
-from .common import empty, period_label, period_window, station_messages, status_segments
+from .common import _unstaffed, empty, period_label, period_window, station_messages, status_segments
 from .analytics import eol_window
 from .overview import activity_list
 
@@ -42,20 +42,21 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
                  if a.value is not None and fleet.value is not None else "")
     state = row["state"]
     if state == "red":
-        hl = headline("critical", f"Down: {', '.join(msgs[:2]) or 'not printing'}",
+        hl = headline("critical", f"Out of service: {', '.join(msgs[:2]) or 'not printing'}",
                       ". ".join(x for x in (avail_txt, part_txt) if x) + ".")
     elif state == "yellow":
-        hl = headline("warning", f"Printing, with a warning: {', '.join(msgs[:2])}",
+        hl = headline("warning", f"Degraded: {', '.join(msgs[:2])}",
                       ". ".join(x for x in (avail_txt, part_txt) if x) + ".")
     elif state == "stale":
         hl = headline("serious", "No recent data from this station", "It hasn't appeared on the Wepa page lately.")
     else:
-        hl = headline("good", "Printing normally" + (f" ({msgs[0].lower()})" if msgs else ""),
+        hl = headline("good", "Operational" + (f" ({msgs[0].lower()})" if msgs else ""),
                       ". ".join(x for x in (avail_txt, part_txt) if x) + ".")
 
     header = html.Div(className="station-hero", children=[
         html.Div([
-            html.Div([html.H1(row["description"]), status_pill(state)], className="station-hero__title"),
+            html.Div([html.H1(row["description"]), status_pill(state, _unstaffed(row))],
+                     className="station-hero__title"),
             html.Div(f"Station #{station_id} · {row['building']} · {row['area']} · {row['section']} · "
                      f"updated {row['scrape_ts'].tz_convert(config.LOCAL_TZ):%-I:%M %p}",
                      className="station-hero__meta"),
@@ -81,7 +82,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
     tiles = html.Div(className="tiles", children=[
         tile("Availability", f"{a.value:.1f}%" if a.value is not None else "—", f"last {plabel}",
              compare=vs(a.value, fleet.value, lambda x: f"{x:.1f}%"), ok=a.ok),
-        tile("Times down", str(red_n), (f"{after_n} began after desk hours" if red_n else f"red incidents, last {plabel}")),
+        tile("Outages", str(red_n), (f"{after_n} began after desk hours" if red_n else f"red incidents, last {plabel}")),
         tile("Mean time to repair (MTTR)", fmt_minutes(mttr.value) if mttr.value is not None else "—",
              mttr.note or f"mean of {mttr.n} incidents",
              compare=vs(mttr.value, fleet_mttr.value, fmt_minutes), ok=mttr.ok),
@@ -162,7 +163,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
     hist = inc.sort_values("start", ascending=False).assign(
         when=lambda d: d["start"].dt.tz_convert(config.LOCAL_TZ).dt.strftime("%a %b %-d, %-I:%M %p"),
         cause=lambda d: d["start"].map(cause).fillna(""),
-        sev=lambda d: d["severity"].map({"red": "Down", "yellow": "Warning"}),
+        sev=lambda d: d["severity"].map({"red": "Outage", "yellow": "Degraded"}),
         lasted=lambda d: [("still open" if s == "open" else ("unknown" if s == "unknown_end" else fmt_minutes(x / 60)))
                           for s, x in zip(d["status"], d["duration_s"])])
     fault_cards = [
@@ -211,7 +212,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
         html.H2("Faults and incidents", className="section-title"),
         html.Div(className="grid", children=fault_cards),
         html.Div(className="grid", children=[
-            chart_card("If this printer is down", backup_sub, body=neighbours),
+            chart_card("If this printer is out of service", backup_sub, body=neighbours),
             chart_card("Recent activity", f"The latest {len(ev)} of {len(ev_all)} events in the last {plabel}.",
                        body=activity_list(ev, show_date=True) if len(ev) else empty("No activity.", big=False),
                        action=dcc.Link("View all", href=f"/activity?q={station_id}", className="link link--quiet")),

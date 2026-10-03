@@ -22,6 +22,7 @@ import pandas as pd
 
 from .. import config, nearby, ops
 
+# Students get plain words; staff pages use vocab.STATE ("Operational", "Out of service").
 STATE = {"green": ("Working", "ok"), "yellow": ("Working", "ok"), "red": ("Not working", "down"),
          "stale": ("Status unknown", "unknown")}
 
@@ -78,10 +79,14 @@ def station_html(ds, sid: str) -> str | None:
     name = html.escape(str(r["description"]))
     from .views.common import station_messages
     msgs = station_messages(r) if r["state"] == "red" else []
+    from .views.common import _unstaffed
+    unstaffed = _unstaffed(r) if r["state"] == "red" else ""
     body = [f"<section class='card'><h1>{name}</h1><div class='muted'>{html.escape(str(r['building']))}</div>",
             _pill(r["state"]),
             f"<div class='muted'>As of {_when(r['scrape_ts'])}"
-            + (f" · {html.escape(', '.join(msgs[:2]))}" if msgs else "") + "</div></section>"]
+            + (f" · {html.escape(', '.join(msgs[:2]))}" if msgs else "") + "</div>"
+            + (f"<div class='muted'>The support desk is closed{html.escape(unstaffed[len('Support unavailable'):])}, "
+               "so it may not be fixed before then.</div>" if unstaffed else "") + "</section>"]
     alt = nearby.backups(cur, sid, limit=4)
     if len(alt):
         items = []

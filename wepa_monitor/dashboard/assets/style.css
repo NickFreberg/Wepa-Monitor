@@ -877,3 +877,9 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .gate__item.is-met .icon { color: var(--good-text); }
 .result-bar { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .result-signs { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+
+/* status sub-state: "Support unavailable until 10 AM" beside a status pill */
+.pill-wrap { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pill-sub { font-size: 11.5px; font-weight: 600; color: var(--muted); border: 1px dashed var(--hairline);
+  border-radius: 99px; padding: 2px 8px; white-space: nowrap; }
+.station__sub { font-size: 12px; font-weight: 600; color: var(--muted); margin: 2px 0 6px; }
