@@ -134,7 +134,7 @@ def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float 
         elif p == "openai":
             text = _openai(message, timeout)
         elif p == "anthropic":
-            text = _anthropic(message, timeout)
+            text = _anthropic(message, timeout, tool)
         else:
             text = _fake(message)
     except AIError:
@@ -168,22 +168,43 @@ def _log(msg: str, kind: str) -> None:
 # --- Claude (Anthropic API) -------------------------------------------------------------------------
 
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-5-5"
+MAX_TOOL_ROUNDS = 4
+WEPA_QUERY_DESCRIPTION = ("Answer a plain-English question from the BSU print-station monitoring data "
+                          "(computed numbers, read-only), e.g. 'Which station was down the longest last week?'")
 
 
-def _anthropic(message: str, timeout: float) -> str:
+def _anthropic(message: str, timeout: float, tool=None) -> str:
     import anthropic
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("WEPA_AI_API_KEY"),
                                  timeout=timeout, max_retries=1)
+    tools = [{"name": "wepa_query", "description": WEPA_QUERY_DESCRIPTION,
+              "input_schema": {"type": "object", "properties": {"question": {"type": "string"}},
+                               "required": ["question"]}}] if tool is not None else []
+    messages = [{"role": "user", "content": message}]
     # Short summaries of computed facts: low effort is plenty. If a safety classifier declines, the
-    # server-side fallback lets another model answer instead of returning nothing.
-    r = client.beta.messages.create(
-        model=os.environ.get("WEPA_AI_MODEL", ANTHROPIC_DEFAULT_MODEL), max_tokens=4000,
-        system=SYSTEM_PROMPT, messages=[{"role": "user", "content": message}],
-        output_config={"effort": os.environ.get("WEPA_AI_EFFORT", "low")},
-        betas=["server-side-fallback-2026-07-01"], fallbacks="default")
-    if r.stop_reason == "refusal":
-        raise AIError("Claude declined to answer")
-    return "".join(b.text for b in r.content if b.type == "text")
+    # server-side fallback lets another model answer instead of returning nothing. With a tool, Claude
+    # may look things up in the monitoring data (read-only) for a few rounds before answering.
+    for _ in range(MAX_TOOL_ROUNDS + 1):
+        r = client.beta.messages.create(
+            model=os.environ.get("WEPA_AI_MODEL", ANTHROPIC_DEFAULT_MODEL), max_tokens=4000,
+            system=SYSTEM_PROMPT, messages=messages, tools=tools,
+            output_config={"effort": os.environ.get("WEPA_AI_EFFORT", "low")},
+            betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+        if r.stop_reason == "refusal":
+            raise AIError("Claude declined to answer")
+        if r.stop_reason != "tool_use":
+            return "".join(b.text for b in r.content if b.type == "text")
+        messages.append({"role": "assistant", "content": r.content})
+        results = []
+        for b in r.content:
+            if b.type == "tool_use":
+                try:
+                    out = tool(str(b.input.get("question", "")))[:6000]
+                except Exception as exc:  # noqa: BLE001
+                    out = f"Lookup failed: {exc}"
+                results.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
+        messages.append({"role": "user", "content": results})
+    raise AIError("Claude kept looking things up without answering")
 
 
 # --- OpenAI-compatible -------------------------------------------------------------------------
@@ -265,8 +286,7 @@ async def _copilot_async(message: str, tool) -> str:
             except Exception as exc:  # noqa: BLE001
                 return f"Lookup failed: {exc}"
 
-        tools.append(define_tool("wepa_query", description="Answer a question from the BSU print-station "
-                                 "monitoring data (computed numbers, read-only).", handler=handler,
+        tools.append(define_tool("wepa_query", description=WEPA_QUERY_DESCRIPTION, handler=handler,
                                  params_type=Query, skip_permission=True))
         allowed.add_custom("wepa_query")
     kwargs = dict(on_permission_request=_deny, tools=tools, available_tools=allowed,

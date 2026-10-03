@@ -79,3 +79,31 @@ def test_outcomes_copy_written_by_ai(monkeypatch, ds):
     monkeypatch.setattr(ai, "ask", boom)
     text = str(outcomes.render(ds, "light", "all", None))
     assert "built-in text" in text                              # falls back cleanly
+
+
+def test_claude_can_look_things_up(monkeypatch):
+    """Claude gets the same read-only lookup tool as Copilot and answers after using it."""
+    import types
+
+    import anthropic
+
+    B = types.SimpleNamespace
+    calls, asked = [], []
+
+    class Messages:
+        def create(self, **kw):
+            calls.append(kw)
+            if len(calls) == 1:
+                assert kw["tools"][0]["name"] == "wepa_query"
+                return B(stop_reason="tool_use", content=[
+                    B(type="tool_use", id="t1", input={"question": "longest outage this week?"})])
+            assert kw["messages"][-1]["content"][0]["content"] == "Library: 3 h"
+            return B(stop_reason="end_turn", content=[B(type="text", text="The Library was down 3 hours.")])
+
+    monkeypatch.setattr(anthropic, "Anthropic", lambda **_: B(beta=B(messages=Messages())))
+    monkeypatch.setenv("WEPA_AI_PROVIDER", "anthropic")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test")
+    reply = ai.ask("Summarize", "facts", cache_key="claude-tool-test",
+                   tool=lambda q: asked.append(q) or "Library: 3 h")
+    assert reply.text == "The Library was down 3 hours."
+    assert asked == ["longest outage this week?"] and len(calls) == 2
