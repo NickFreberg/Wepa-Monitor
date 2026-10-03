@@ -80,6 +80,18 @@ az containerapp update -g rg-resnet-print-ops -n resnet-print-ops \
   --set-env-vars WEPA_AI_PROVIDER=copilot COPILOT_GITHUB_TOKEN=secretref:copilot-token
 ```
 
+**Or Claude** (an API key from console.anthropic.com, billed per use; a claude.ai Pro/Max subscription
+can't power a website):
+
+```bash
+az containerapp secret set -g rg-resnet-print-ops -n resnet-print-ops --secrets anthropic-key=<key>
+az containerapp update -g rg-resnet-print-ops -n resnet-print-ops \
+  --set-env-vars WEPA_AI_PROVIDER=anthropic ANTHROPIC_API_KEY=secretref:anthropic-key
+```
+
+The default model is Claude Opus 5.5; add `WEPA_AI_MODEL=claude-sonnet-5-5` or `claude-haiku-4-5` to
+the same command for a cheaper model.
+
 **Or an OpenAI-compatible endpoint** (OpenAI, or Azure OpenAI in your BSU subscription):
 
 ```bash

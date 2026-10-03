@@ -12,6 +12,10 @@ Providers (environment variables; nothing is sent anywhere unless one is configu
                                COPILOT_GITHUB_TOKEN (a Copilot-licensed account's token), or bring
                                your own model key: WEPA_AI_BASE_URL, WEPA_AI_API_KEY and
                                WEPA_AI_BYOK_TYPE (openai | azure | anthropic).
+  WEPA_AI_PROVIDER=anthropic   Claude, through the Anthropic API (pip package anthropic). Auth with
+                               ANTHROPIC_API_KEY (a key from the Claude Console, billed per use; a
+                               claude.ai subscription can't be used for this). Model:
+                               WEPA_AI_MODEL, default claude-opus-5-5.
   WEPA_AI_PROVIDER=openai      Any OpenAI-compatible chat endpoint (OpenAI, Azure OpenAI / Azure AI
                                Foundry): WEPA_AI_BASE_URL (…/v1 or the Azure deployment URL),
                                WEPA_AI_API_KEY, WEPA_AI_MODEL.
@@ -82,16 +86,19 @@ def enabled() -> bool:
                     or os.environ.get("WEPA_AI_API_KEY"))
     if p == "openai":
         return bool(os.environ.get("WEPA_AI_BASE_URL") and os.environ.get("WEPA_AI_API_KEY"))
+    if p == "anthropic":
+        return bool(os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("WEPA_AI_API_KEY"))
     return p == "fake"            # tests
 
 
 def label() -> str:
-    return {"copilot": "GitHub Copilot", "openai": "your AI model", "fake": "test model"}.get(provider(), "AI")
+    return {"copilot": "GitHub Copilot", "anthropic": "Claude", "openai": "your AI model",
+            "fake": "test model"}.get(provider(), "AI")
 
 
 def status() -> dict:
     return {"enabled": enabled(), "provider": label() if enabled() else "off",
-            "model": os.environ.get("WEPA_AI_MODEL", "default"), "calls": _state["calls"],
+            "model": os.environ.get("WEPA_AI_MODEL", ANTHROPIC_DEFAULT_MODEL if provider() == "anthropic" else "default"), "calls": _state["calls"],
             "last_error": _state["last_error"], "last_ok": _state["last_ok"]}
 
 
@@ -126,6 +133,8 @@ def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float 
             text = _copilot(message, tool, timeout)
         elif p == "openai":
             text = _openai(message, timeout)
+        elif p == "anthropic":
+            text = _anthropic(message, timeout)
         else:
             text = _fake(message)
     except AIError:
@@ -154,6 +163,27 @@ def _log(msg: str, kind: str) -> None:
         security.log(msg, kind)
     except Exception:  # noqa: BLE001
         print(msg, flush=True)
+
+
+# --- Claude (Anthropic API) -------------------------------------------------------------------------
+
+ANTHROPIC_DEFAULT_MODEL = "claude-opus-5-5"
+
+
+def _anthropic(message: str, timeout: float) -> str:
+    import anthropic
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("WEPA_AI_API_KEY"),
+                                 timeout=timeout, max_retries=1)
+    # Short summaries of computed facts: low effort is plenty. If a safety classifier declines, the
+    # server-side fallback lets another model answer instead of returning nothing.
+    r = client.beta.messages.create(
+        model=os.environ.get("WEPA_AI_MODEL", ANTHROPIC_DEFAULT_MODEL), max_tokens=4000,
+        system=SYSTEM_PROMPT, messages=[{"role": "user", "content": message}],
+        output_config={"effort": os.environ.get("WEPA_AI_EFFORT", "low")},
+        betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+    if r.stop_reason == "refusal":
+        raise AIError("Claude declined to answer")
+    return "".join(b.text for b in r.content if b.type == "text")
 
 
 # --- OpenAI-compatible -------------------------------------------------------------------------
