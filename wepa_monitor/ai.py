@@ -1,9 +1,10 @@
 """AI-written insights, grounded in the monitor's own numbers.
 
-The AI never sees raw data and never computes anything. The app computes every figure (the same
-metrics, stories and answers the pages show), hands the model a compact fact sheet, and the model
-turns it into the kind of plain, human summary a ResNet supervisor would write: what happened,
-what it means for students, what to do next. If the AI is off, slow, or fails, every page falls
+The model is the interpreter, never the calculator. The app computes every figure (the same metrics,
+stories, forecasts and statistics the pages show) and hands the model a fact sheet plus read-only
+tools to look further (analyst.py). The model reads across them like an expert analyst and writes
+what a ResNet supervisor needs: what happened, why, what it means for students, what to do next.
+Every figure in a reply is checked against what the model was shown. If the AI is off, slow, or fails, every page falls
 back to the built-in, rule-written text, so the site never depends on it.
 
 Providers (environment variables; nothing is sent anywhere unless one is configured):
@@ -22,9 +23,11 @@ Providers (environment variables; nothing is sent anywhere unless one is configu
   WEPA_AI_MODEL                Model name (optional for Copilot: its default model is used).
   WEPA_AI_MAX_PER_HOUR         Spending guard: AI calls allowed per hour (default 120).
 
-Safety: the Copilot session runs in the SDK's "empty" mode with one custom, read-only tool
-(answer a question from the monitoring data); built-in tools (shell, files, web) are not
-available and any permission request is refused. Only printer data is sent; there is no data
+Agent: with a toolkit (analyst.py) the model gets read-only analysis tools over all the data and
+looks things up itself before answering; every reply is then fact-checked (unsupported()).
+
+Safety: the Copilot session runs in the SDK's "empty" mode with only those custom, read-only
+tools; built-in tools (shell, files, web) are not available and any permission request is refused. Only printer data is sent; there is no data
 about students or site visitors in the fact sheet.
 """
 from __future__ import annotations
@@ -32,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import os
+import re
 import threading
 import time
 from collections import deque
@@ -39,21 +43,48 @@ from dataclasses import dataclass
 
 from . import config
 
-SYSTEM_PROMPT = """You write for Bridgewater State University's ResNet and IT Service Center staff about
-the Wepa print stations on campus. Your readers are busy, non-technical supervisors and student workers.
+SYSTEM_PROMPT = """You are the analyst built into ResNet Print Ops, Bridgewater State University's monitor for
+the Wepa print stations students use across campus (residence halls, the library, labs, the student union).
+You are an expert operations and data analyst, and you work for the people who keep those printers running:
+ResNet and the IT Service Center (supervisors, student workers, IT leadership).
 
-Rules:
-- Use ONLY the facts provided (and the wepa_query tool if available). Never invent stations, numbers,
-  causes or dates. Copy numbers exactly as given; don't recompute or round them differently.
-- If the facts don't answer the question, say so plainly and suggest what to look at in the dashboard.
-- Write like a thoughtful colleague: warm, direct, specific. Name the station or building. Say what it
-  meant for students (could they print somewhere nearby?) and what's worth doing next.
-- Be honest about uncertainty: a few days of data, small counts, or demo data must be mentioned when they
-  matter. Don't call something a trend from one or two data points.
-- No jargon (no "MTTR", "p-value", "regression" unless the reader asked). US units and 12-hour times.
-- Keep it short: 2-4 sentences for a summary, up to ~150 words for an answer. Plain text, no headings,
-  no bullet lists unless the question asks for a list. No emoji.
-- The data is about printers, never about people. Don't speculate about who caused a problem."""
+Why this exists: students need to print (papers, forms, tickets) and a broken printer at 11 PM before a
+deadline matters. The monitor reads Wepa's public status page about once a minute and turns it into
+availability, outages, faults, supplies, usage and workload, so staff can fix things faster, stock the
+right supplies, place printers where students need them, and report outcomes to the university.
+
+How you work:
+- You have read-only tools over all of the monitoring data and the campus context. Use them. For anything
+  beyond the fact sheet, look it up; for a "why" or "what should we do", look at more than one angle
+  (causes, timing vs desk hours, the calendar, backups nearby, supplies, the report card, statistics)
+  before you conclude. Start with data_overview when you need to know what the data covers.
+- Interpret, don't just repeat: say what the numbers mean for students and staff, what stands out, what's
+  normal for this campus, and the one or two most useful next steps. Rank by impact.
+
+Facts only. This is the most important rule:
+- Every number, name, date and cause you state must come from the fact sheet or a tool result in this
+  conversation. Copy figures as given (rounding is fine: 93.27% -> 93.3%). Never estimate, extrapolate or
+  invent a figure, station, cause or event. Never fill a gap with general knowledge about printers.
+- If the data can't answer, say so plainly and say what would answer it (or where in the dashboard to look).
+- Separate what the data shows from your interpretation ("the data shows X; that suggests Y").
+- Respect uncertainty: say when there are only a few days of data, few events, or wide intervals; don't
+  call one or two points a trend; correlation is not cause. Anything before monitoring began is unknown.
+- If the data is DEMO (synthetic), say so in your answer.
+
+Scope and ethics:
+- Stay within BSU's print stations, this data, and the university context around them (calendar, desk
+  hours, residence halls, buildings, class schedules). Politely decline anything else (other topics,
+  general chat, writing unrelated content) and steer back to what you can help with.
+- The data is about printers, never people. Never guess who caused a problem, never single out a staff
+  member or student, and don't infer anything about individuals. Be fair to the support teams: after-hours
+  outages reflect desk hours, not effort.
+- Don't overstate. Recommendations are suggestions for staff to weigh, not orders. No security, legal or
+  purchasing advice beyond what the data supports. Wepa's data is shown for internal operations.
+
+Style: a thoughtful senior colleague: warm, direct, specific, plain English. Name stations and buildings.
+No jargon unless asked (say "average time to fix", not "MTTR"). US units, 12-hour times, Eastern time.
+Short by default: 2-4 sentences for a summary, up to ~180 words for an answer, longer only when asked for a
+deep dive. Markdown is fine for a short list or bold key figure; no headings, no emoji, no tables."""
 
 
 @dataclass
@@ -62,6 +93,8 @@ class Reply:
     provider: str
     model: str
     seconds: float
+    tools_used: int = 0
+    unverified: tuple = ()      # figures in the reply that the fact check couldn't find in the data shown
 
 
 class AIError(Exception):
@@ -114,9 +147,12 @@ def _allow() -> bool:
         return True
 
 
-def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float = 45.0) -> Reply:
-    """One grounded completion. `tool(question) -> str` lets Copilot look things up itself.
-    Raises AIError when unavailable (callers fall back to rule-written text)."""
+def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float = 45.0, toolkit=None,
+        effort: str | None = None) -> Reply:
+    """One grounded completion. `toolkit` (an analyst.Toolkit) gives the model read-only tools over all
+    the data; `tool(question) -> str` is the older single lookup. Every reply is fact-checked: figures
+    that appear nowhere in the facts or the tool results get one rewrite, and any still unsupported are
+    reported on the Reply. Raises AIError when unavailable (callers fall back to rule-written text)."""
     if not enabled():
         raise AIError("AI is not configured")
     key = hashlib.sha256((cache_key or prompt + facts).encode()).hexdigest()
@@ -125,18 +161,23 @@ def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float 
         return hit[1]
     if not _allow():
         raise AIError("AI hourly limit reached")
+    tk = toolkit if toolkit is not None else (_QueryKit(tool) if tool is not None else None)
     t0 = time.time()
-    message = f"FACTS (computed by the monitor; the only source of truth):\n{facts}\n\nTASK:\n{prompt}"
+    message = (f"FACTS (computed by the monitor; with the tool results, the only source of truth):\n{facts}\n\n"
+               f"TASK:\n{prompt}")
     try:
-        p = provider()
-        if p == "copilot":
-            text = _copilot(message, tool, timeout)
-        elif p == "openai":
-            text = _openai(message, timeout)
-        elif p == "anthropic":
-            text = _anthropic(message, timeout, tool)
-        else:
-            text = _fake(message)
+        text = _complete(message, tk, timeout, effort)
+        bad = unsupported(text, [facts, prompt] + (tk.outputs if tk else []))
+        if bad and _allow():
+            _log(f"AI fact check: {len(bad)} figure(s) not in the data ({', '.join(bad[:5])}); asking for a fix", "warn")
+            text2 = _complete(f"{message}\n\nYOUR DRAFT ANSWER:\n{text}\n\nFACT CHECK: these figures in your draft "
+                              f"appear nowhere in the facts or your tool results: {', '.join(bad)}. Rewrite the "
+                              "answer using only figures you were given (look them up with the tools if needed); "
+                              "drop anything you can't support. Reply with the corrected answer only.",
+                              tk, timeout, effort)
+            if text2.strip():
+                text = text2
+                bad = unsupported(text, [facts, prompt] + (tk.outputs if tk else []))
     except AIError:
         raise
     except Exception as exc:  # noqa: BLE001 - any provider failure means "fall back"
@@ -146,15 +187,89 @@ def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float 
     text = (text or "").strip()
     if not text:
         raise AIError("empty reply")
-    reply = Reply(text, label(), os.environ.get("WEPA_AI_MODEL", "default"), time.time() - t0)
+    reply = Reply(text, label(), os.environ.get("WEPA_AI_MODEL", "default"), time.time() - t0,
+                  len(tk.calls) if tk else 0, tuple(bad))
     _state["last_ok"], _state["last_error"] = time.time(), ""
     _state["calls"] += 1
     _cache[key] = (time.time(), reply)
     if len(_cache) > 500:
         for k in sorted(_cache, key=lambda k: _cache[k][0])[:100]:
             _cache.pop(k, None)
-    _log(f"AI wrote a summary with {reply.provider} in {reply.seconds:.1f} s", "ai")
+    _log(f"AI answered with {reply.provider} in {reply.seconds:.1f} s"
+         + (f" after {reply.tools_used} data lookup(s)" if reply.tools_used else "")
+         + (f"; {len(bad)} figure(s) unverified" if bad else "; fact check passed"), "ai")
     return reply
+
+
+def _complete(message: str, tk, timeout: float, effort: str | None) -> str:
+    p = provider()
+    if p == "copilot":
+        return _copilot(message, tk, timeout)
+    if p == "openai":
+        return _openai(message, timeout, tk)
+    if p == "anthropic":
+        return _anthropic(message, timeout, tk, effort)
+    return _fake(message)
+
+
+class _QueryKit:
+    """Adapts a plain `question -> answer` function to the toolkit interface."""
+
+    def __init__(self, fn):
+        self.fn, self.outputs, self.calls = fn, [], []
+
+    def specs(self) -> list[dict]:
+        return [{"name": "wepa_query", "description": "Answer a plain-English question from the BSU print-station "
+                 "monitoring data (computed numbers, read-only).",
+                 "input_schema": {"type": "object", "properties": {"question": {"type": "string"}},
+                                  "required": ["question"]}}]
+
+    def run(self, name: str, args: dict) -> str:
+        self.calls.append((name, args))
+        try:
+            out = str(self.fn(str((args or {}).get("question", ""))))[:6000]
+        except Exception as exc:  # noqa: BLE001
+            out = f"Lookup failed: {exc}"
+        self.outputs.append(out)
+        return out
+
+
+# --- fact check -------------------------------------------------------------------------------------
+
+_NUM = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?")
+_SKIP = re.compile(r"\b\d{1,2}(?::\d{2})?\s?(?:AM|PM|am|pm|a\.m\.|p\.m\.)|\b\d{1,2}:\d{2}\b|"
+                   r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? \d{1,2}(?:st|nd|rd|th)?\b|"
+                   r"\b(?:19|20)\d{2}\b|\b\d{4}-\d{2}(?:-\d{2})?\b")
+# Ways a figure can be legitimately restated: minutes<->hours<->days, percent<->share, per day<->week/month.
+_RESTATE = (1, 60, 1 / 60, 24, 1 / 24, 100, 1 / 100, 7, 1 / 7, 30.44, 1 / 30.44, 1440, 1 / 1440)
+
+
+def _numbers(text: str) -> list[tuple[str, float]]:
+    out = []
+    for m in _NUM.finditer(text):
+        raw = m.group(0).rstrip(",")
+        try:
+            out.append((raw, float(raw.replace(",", ""))))
+        except ValueError:
+            pass
+    return out
+
+
+def unsupported(text: str, sources: list[str]) -> list[str]:
+    """Figures in `text` that can't be found in `sources` (allowing rounding and unit restatements).
+    Small whole numbers (0-10), years, dates and clock times are not checked."""
+    known = {v for src in sources for _, v in _numbers(src or "")}
+    bad = []
+    for raw, v in _numbers(_SKIP.sub(" ", text)):
+        if v <= 10 and v == int(v):
+            continue
+        decimals = len(raw.split(".")[1]) if "." in raw else 0
+        tol = 0.5 * 10 ** -decimals + 1e-9
+        if any(abs(v - k * f) <= max(tol, abs(v) * 0.005) for k in known for f in _RESTATE):
+            continue
+        if raw not in bad:
+            bad.append(raw)
+    return bad
 
 
 def _log(msg: str, kind: str) -> None:
@@ -168,48 +283,40 @@ def _log(msg: str, kind: str) -> None:
 # --- Claude (Anthropic API) -------------------------------------------------------------------------
 
 ANTHROPIC_DEFAULT_MODEL = "claude-opus-5-5"
-MAX_TOOL_ROUNDS = 4
-WEPA_QUERY_DESCRIPTION = ("Answer a plain-English question from the BSU print-station monitoring data "
-                          "(computed numbers, read-only), e.g. 'Which station was down the longest last week?'")
+MAX_TOOL_ROUNDS = 10
 
 
-def _anthropic(message: str, timeout: float, tool=None) -> str:
+def _anthropic(message: str, timeout: float, tk=None, effort: str | None = None) -> str:
     import anthropic
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("WEPA_AI_API_KEY"),
                                  timeout=timeout, max_retries=1)
-    tools = [{"name": "wepa_query", "description": WEPA_QUERY_DESCRIPTION,
-              "input_schema": {"type": "object", "properties": {"question": {"type": "string"}},
-                               "required": ["question"]}}] if tool is not None else []
+    tools = tk.specs() if tk is not None else []
     messages = [{"role": "user", "content": message}]
-    # Short summaries of computed facts: low effort is plenty. If a safety classifier declines, the
-    # server-side fallback lets another model answer instead of returning nothing. With a tool, Claude
-    # may look things up in the monitoring data (read-only) for a few rounds before answering.
+    # If a safety classifier declines, the server-side fallback lets another model answer instead of
+    # returning nothing. With tools, Claude looks things up in the data (read-only) before answering;
+    # automatic prompt caching means each lookup round re-reads the conversation so far at cache price.
     for _ in range(MAX_TOOL_ROUNDS + 1):
         r = client.beta.messages.create(
-            model=os.environ.get("WEPA_AI_MODEL", ANTHROPIC_DEFAULT_MODEL), max_tokens=4000,
-            system=SYSTEM_PROMPT, messages=messages, tools=tools,
-            output_config={"effort": os.environ.get("WEPA_AI_EFFORT", "low")},
+            model=os.environ.get("WEPA_AI_MODEL", ANTHROPIC_DEFAULT_MODEL), max_tokens=8000,
+            system=SYSTEM_PROMPT, messages=messages, tools=tools, cache_control={"type": "ephemeral"},
+            output_config={"effort": effort or os.environ.get("WEPA_AI_EFFORT", "low")},
             betas=["server-side-fallback-2026-07-01"], fallbacks="default")
         if r.stop_reason == "refusal":
             raise AIError("Claude declined to answer")
         if r.stop_reason != "tool_use":
             return "".join(b.text for b in r.content if b.type == "text")
         messages.append({"role": "assistant", "content": r.content})
-        results = []
-        for b in r.content:
-            if b.type == "tool_use":
-                try:
-                    out = tool(str(b.input.get("question", "")))[:6000]
-                except Exception as exc:  # noqa: BLE001
-                    out = f"Lookup failed: {exc}"
-                results.append({"type": "tool_result", "tool_use_id": b.id, "content": out})
-        messages.append({"role": "user", "content": results})
+        messages.append({"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": b.id, "content": tk.run(b.name, dict(b.input or {}))}
+            for b in r.content if b.type == "tool_use"]})
     raise AIError("Claude kept looking things up without answering")
 
 
 # --- OpenAI-compatible -------------------------------------------------------------------------
 
-def _openai(message: str, timeout: float) -> str:
+def _openai(message: str, timeout: float, tk=None) -> str:
+    import json
+
     import requests
     base = os.environ["WEPA_AI_BASE_URL"].rstrip("/")
     key = os.environ["WEPA_AI_API_KEY"]
@@ -217,14 +324,29 @@ def _openai(message: str, timeout: float) -> str:
     url = base if base.endswith("/chat/completions") or "chat/completions?" in base else base + "/chat/completions"
     headers = {"Content-Type": "application/json", "User-Agent": config.USER_AGENT}
     headers.update({"api-key": key} if azure else {"Authorization": f"Bearer {key}"})
-    body = {"messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": message}],
-            "temperature": 0.3, "max_tokens": 600}
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": message}]
+    body = {"temperature": 0.2, "max_tokens": 1200}
+    if tk is not None:
+        body["tools"] = [{"type": "function", "function": {"name": t["name"], "description": t["description"],
+                                                           "parameters": t["input_schema"]}} for t in tk.specs()]
     if os.environ.get("WEPA_AI_MODEL"):
         body["model"] = os.environ["WEPA_AI_MODEL"]
-    r = requests.post(url, json=body, headers=headers, timeout=timeout)
-    if r.status_code >= 400:
-        raise AIError(f"HTTP {r.status_code}: {r.text[:160]}")
-    return r.json()["choices"][0]["message"]["content"]
+    for _ in range(MAX_TOOL_ROUNDS + 1):
+        r = requests.post(url, json={**body, "messages": messages}, headers=headers, timeout=timeout)
+        if r.status_code >= 400:
+            raise AIError(f"HTTP {r.status_code}: {r.text[:160]}")
+        msg = r.json()["choices"][0]["message"]
+        calls = msg.get("tool_calls") or []
+        if not calls or tk is None:
+            return msg.get("content") or ""
+        messages.append({"role": "assistant", "content": msg.get("content"), "tool_calls": calls})
+        for c in calls:
+            try:
+                args = json.loads(c["function"].get("arguments") or "{}")
+            except ValueError:
+                args = {}
+            messages.append({"role": "tool", "tool_call_id": c["id"], "content": tk.run(c["function"]["name"], args)})
+    raise AIError("the model kept looking things up without answering")
 
 
 # --- GitHub Copilot SDK ------------------------------------------------------------------------------
@@ -269,26 +391,35 @@ def _deny(request, invocation):
     return PermissionDecisionReject("This assistant can only read printer data.")
 
 
-async def _copilot_async(message: str, tool) -> str:
+def _copilot_tools(tk):
+    """One Copilot SDK tool per toolkit tool, with a pydantic model built from its JSON schema."""
     from copilot import ToolSet, define_tool
-    from pydantic import BaseModel, Field
+    from pydantic import Field, create_model
+
+    types = {"string": str, "integer": int, "number": float}
+    tools, allowed = [], ToolSet()
+    for spec in tk.specs():
+        props = spec["input_schema"].get("properties", {})
+        fields = {k: (types.get(v.get("type"), str) | None,
+                      Field(None, description=v.get("description", "") +
+                            (f" One of: {', '.join(v['enum'])}." if v.get("enum") else "")))
+                  for k, v in props.items()}
+        model = create_model(f"Args_{spec['name']}", **fields)
+
+        def handler(params, inv, _name=spec["name"]):      # no annotations (postponed evaluation)
+            return tk.run(_name, params.model_dump(exclude_none=True))
+
+        tools.append(define_tool(spec["name"], description=spec["description"], handler=handler,
+                                 params_type=model, skip_permission=True))
+        allowed.add_custom(spec["name"])
+    return tools, allowed
+
+
+async def _copilot_async(message: str, tk, timeout: float) -> str:
+    from copilot import ToolSet
 
     client = await _get_client()
-    tools, allowed = [], ToolSet()
-    if tool is not None:
-        class Query(BaseModel):
-            question: str = Field(description="A plain-English question about BSU's print stations, e.g. "
-                                              "'Which station was down the longest last week?'")
-
-        def handler(params, inv):             # params_type below; no annotations (postponed evaluation)
-            try:
-                return tool(params.question)[:6000]
-            except Exception as exc:  # noqa: BLE001
-                return f"Lookup failed: {exc}"
-
-        tools.append(define_tool("wepa_query", description=WEPA_QUERY_DESCRIPTION, handler=handler,
-                                 params_type=Query, skip_permission=True))
-        allowed.add_custom("wepa_query")
+    tools, allowed = _copilot_tools(tk) if tk is not None else ([], ToolSet())
     kwargs = dict(on_permission_request=_deny, tools=tools, available_tools=allowed,
                   system_message={"mode": "replace", "content": SYSTEM_PROMPT}, streaming=False)
     if os.environ.get("WEPA_AI_MODEL"):
@@ -298,7 +429,7 @@ async def _copilot_async(message: str, tool) -> str:
                               "base_url": os.environ["WEPA_AI_BASE_URL"], "api_key": os.environ["WEPA_AI_API_KEY"]}
     session = await client.create_session(**kwargs)
     try:
-        event = await session.send_and_wait(message, timeout=40.0)
+        event = await session.send_and_wait(message, timeout=max(timeout - 5, 10))
         data = getattr(event, "data", None)
         return getattr(data, "content", "") or ""
     finally:
@@ -308,11 +439,11 @@ async def _copilot_async(message: str, tool) -> str:
             pass
 
 
-def _copilot(message: str, tool, timeout: float) -> str:
+def _copilot(message: str, tk, timeout: float) -> str:
     import importlib.util
     if importlib.util.find_spec("copilot") is None:
         raise AIError("the github-copilot-sdk package isn't installed")
-    fut = asyncio.run_coroutine_threadsafe(_copilot_async(message, tool), _event_loop())
+    fut = asyncio.run_coroutine_threadsafe(_copilot_async(message, tk, timeout), _event_loop())
     try:
         return fut.result(timeout=timeout)
     except TimeoutError as exc:

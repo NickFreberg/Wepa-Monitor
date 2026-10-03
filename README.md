@@ -390,6 +390,7 @@ wepa_monitor/
   support.py       ownership, desk hours, and desk-hours vs after-hours splits of downtime
   narrative.py     plain-language stories for any period
   ask.py           "Ask the data": a rule-based question interpreter (no AI model)
+  analyst.py       the AI analyst's read-only tools over all the data (used only when AI is on)
   campus.py        bridgew.edu parsers (academic calendar, residence halls, library hours) and day phases
   routing.py       Rounds planner: campus graph from OpenStreetMap, Dijkstra, stop ordering, van parking
   synth.py         demo-data simulator

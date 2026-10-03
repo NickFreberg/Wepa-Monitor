@@ -65,11 +65,19 @@ The script updates the cloud app, packages `data/live`, and uploads it to `data/
 the share. The cloud merges it with its own data and drops duplicate minutes; its own files are
 never changed. Running it again replaces the earlier import.
 
-## Turn on AI summaries (optional)
+## Turn on the AI analyst (optional)
 
-Insights can have answers and summaries written by AI. The AI only sees numbers the app has already
-computed about printers, and every answer shows the numbers behind it. Without this, the site uses
-its built-in, rule-written text.
+The Assistant pane, Insights answers and summaries, and the IT Outcomes copy can be written by an AI
+analyst. It never calculates anything itself: it reads a fact sheet and calls read-only tools
+(`wepa_monitor/analyst.py`) that run the dashboard's own computations: availability, outages and
+causes, repair times by desk, supplies and forecasts, usage, the report card, period comparisons,
+campus calendar and class schedules, and the statistics (failure rates, warning-to-outage, coverage
+gaps, staffing what-ifs). Its instructions (`SYSTEM_PROMPT` in `wepa_monitor/ai.py`) tell it to
+state only facts from those results, to say when the data can't answer, to stay on BSU's printers and
+campus, and never to discuss individuals. Every reply is then **fact-checked**: any figure that
+doesn't appear in what it was shown gets one rewrite, and anything still unsupported is flagged on
+the reply (the IT Outcomes page falls back to the built-in text instead). Without a provider, the
+site uses its built-in, rule-written text.
 
 **GitHub Copilot** (needs a GitHub account with a Copilot license; create a fine-grained token with
 the "Copilot Requests" permission):
@@ -90,7 +98,10 @@ az containerapp update -g rg-resnet-print-ops -n resnet-print-ops \
 ```
 
 The default model is Claude Opus 5.5; add `WEPA_AI_MODEL=claude-sonnet-5-5` or `claude-haiku-4-5` to
-the same command for a cheaper model.
+the same command for a cheaper model. An analyst answer usually makes a few data lookups, each a
+round trip to the model (prompt caching keeps the repeats cheap), so expect a few cents per Assistant
+answer on Opus and less on Sonnet or Haiku; summaries cost less. `WEPA_AI_MAX_PER_HOUR` caps the total,
+and the Claude Console's spend limit is the hard stop.
 
 **Or an OpenAI-compatible endpoint** (OpenAI, or Azure OpenAI in your BSU subscription):
 

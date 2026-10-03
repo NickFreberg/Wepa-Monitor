@@ -1,8 +1,9 @@
 """The assistant: a chat pane docked to the right of every page, opened from the header.
 
-It answers with the same machinery as Insights > Ask the data: the built-in rules always compute an
-answer from the monitoring data, and when an AI model is connected it writes the reply from those
-numbers (with the read-only lookup tool for follow-ups). The conversation lives in the browser tab
+The built-in rules always compute an answer from the monitoring data. When an AI model is connected
+it works as an analyst on top of that: it gets the fact sheet, the built-in answer and read-only
+tools over all of the data (analyst.Toolkit), digs in as far as the question needs, and every figure
+in its reply is checked against what it was shown. The conversation lives in the browser tab
 (session storage) and only the last few turns are sent along as context.
 """
 from __future__ import annotations
@@ -12,7 +13,7 @@ import hashlib
 import pandas as pd
 from dash import dcc, html
 
-from ... import ai, ask, metrics as M, narrative as N
+from ... import ai, analyst, ask, metrics as M, narrative as N
 from ..components import data_table, icon
 from .common import scope_ids, scope_label
 
@@ -111,19 +112,19 @@ def reply(ds: M.Dataset, question: str, scope, path: str | None, history: list[d
     prompt = (f"You are the chat assistant docked beside the dashboard. They are on the '{page}' page, "
               f"looking at {label_}.\n"
               + (f"\nThe conversation so far:\n{convo}\n" if convo else "")
-              + f"\nTheir new message: {question.strip()}\n\nThe monitor's own computed answer ({a.understood}): "
-              f"{msg['text']}\n\nReply to them conversationally using these facts. If they're following up on "
-              "something earlier, or the computed answer misread them, use the wepa_query tool to look it up.")
-    lookup = lambda q: N.to_text(ask.answer(ds, q, ids).paragraphs)  # noqa: E731
+              + f"\nTheir new message: {question.strip()}\n\nThe dashboard's built-in answer ({a.understood}): "
+              f"{msg['text']}\n\nReply as the expert analyst. Use the tools to check and go as deep as the "
+              "question needs (the built-in answer can misread follow-ups). If it's outside BSU's printers, this "
+              "data or the university context, say so kindly and offer what you can help with.")
     convo_key = hashlib.sha256(convo.encode()).hexdigest()[:16]
     try:
-        r = ai.ask(prompt, ai.facts(ds, ids, label_), tool=lookup,
-                   cache_key=f"assist|{question.strip().lower()}|{ids}|{convo_key}|"
-                             f"{ds.as_of.floor('15min').isoformat()}")
+        r = ai.ask(prompt, ai.facts(ds, ids, label_), toolkit=analyst.Toolkit(ds, ids), effort="medium",
+                   timeout=120, cache_key=f"assist|{question.strip().lower()}|{ids}|{convo_key}|"
+                                         f"{ds.as_of.floor('15min').isoformat()}")
     except ai.AIError:
         msg["note"] = "The AI model isn't available right now, so this is the built-in answer."
         return msg
-    msg.update(text=r.text, ai=True, by=r.provider)
+    msg.update(text=r.text, ai=True, by=r.provider, lookups=r.tools_used, unverified=list(r.unverified))
     return msg
 
 
@@ -168,12 +169,22 @@ def _bot(m: dict, last: bool):
     if details:
         body.append(html.Details([html.Summary("The numbers behind it")] + details, className="bubble__sources"))
     meta = html.Div([html.Span("AI-generated" if m.get("ai") else "Built-in answer", className="bubble__tag"),
-                     html.Span(m.get("by", ""), className="bubble__by") if m.get("ai") else None],
-                    className="bubble__meta")
+                     html.Span(m.get("by", ""), className="bubble__by") if m.get("ai") else None,
+                     _checked(m) if m.get("ai") else None], className="bubble__meta")
     chips = html.Div([html.Button(f, id={"type": "assist-ex", "q": f}, className="assist-chip", n_clicks=0)
                       for f in m.get("followups") or []], className="assist__chips") if last and m.get("followups") else None
     return html.Div([_avatar(), html.Div([html.Div(body, className="bubble bubble--bot"), meta, chips],
                                          className="turn__stack")], className="turn turn--bot")
+
+
+def _checked(m: dict):
+    if m.get("unverified"):
+        return html.Span([icon("alert"), f"Couldn't verify {', '.join(m['unverified'][:4])}"],
+                         className="bubble__check bubble__check--warn",
+                         title="These figures weren't in the data the assistant looked at. Check them before acting.")
+    n = m.get("lookups") or 0
+    return html.Span([icon("check"), f"Fact-checked{f' · {n} lookups' if n > 1 else ' · 1 lookup' if n else ''}"],
+                     className="bubble__check", title="Every figure in this reply was found in the monitoring data.")
 
 
 def _welcome(ds: M.Dataset, path: str | None):

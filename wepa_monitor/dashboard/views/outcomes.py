@@ -275,8 +275,13 @@ def _ai_copy(ds, year, scope, draft, when, paragraphs, numbers, busiest, quote) 
     if ds.is_demo:
         facts.append("- NOTE: this is DEMO DATA (synthetic); say it's a preview.")
     try:
+        from ... import analyst
+        from .common import scope_ids
         r = ai.ask(OUTCOMES_PROMPT.replace("{when}", when), "\n".join(facts),
-                   cache_key=f"outcomes|{year}|{scope}|{draft}|{ds.as_of.floor('1h').isoformat()}", timeout=60)
+                   cache_key=f"outcomes|{year}|{scope}|{draft}|{ds.as_of.floor('1h').isoformat()}", timeout=120,
+                   toolkit=analyst.Toolkit(ds, scope_ids(ds, scope)), effort="medium")
+        if r.unverified:            # a published report gets the built-in text rather than an unchecked figure
+            return None
         text = r.text.strip()
         text = text[text.find("{"): text.rfind("}") + 1]
         copy = _json.loads(text)

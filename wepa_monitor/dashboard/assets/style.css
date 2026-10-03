@@ -860,3 +860,11 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .bubble__sources .table-wrap { overflow-x: auto; margin-top: 6px; }
 .bubble__sources th:first-child, .bubble__sources td:first-child { min-width: 150px; overflow-wrap: normal; word-break: normal; }
 .bubble__sources th { white-space: normal; } .bubble__sources td:not(:first-child) { white-space: nowrap; }
+.bubble__check { display: inline-flex; align-items: center; gap: 4px; color: var(--good-text); }
+.bubble__check--warn { color: var(--warning-text); }
+.bubble__check .icon { width: 12px; height: 12px; }
+.fact-check { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--good-text); }
+.fact-check--warn { color: var(--warning-text); }
+.fact-check .icon { width: 13px; height: 13px; }
+.ai-note__text p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
+.ai-note__text ul, .ai-note__text ol { margin: 6px 0 0; padding-left: 20px; }

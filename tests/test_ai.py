@@ -96,7 +96,7 @@ def test_claude_can_look_things_up(monkeypatch):
             if len(calls) == 1:
                 assert kw["tools"][0]["name"] == "wepa_query"
                 return B(stop_reason="tool_use", content=[
-                    B(type="tool_use", id="t1", input={"question": "longest outage this week?"})])
+                    B(type="tool_use", id="t1", name="wepa_query", input={"question": "longest outage this week?"})])
             assert kw["messages"][-1]["content"][0]["content"] == "Library: 3 h"
             return B(stop_reason="end_turn", content=[B(type="text", text="The Library was down 3 hours.")])
 
@@ -129,3 +129,47 @@ def test_assistant_pane_answers_with_and_without_ai(monkeypatch, ds):
     m = assistant.reply(ds, "and today?", None, "/analytics", history)
     assert m["ai"] and m["text"] == "Two stations are down."
     assert "How was yesterday?" in seen[0] and "'/analytics' page" in seen[0]
+
+
+def test_analyst_tools_run_on_live_data(ds):
+    """Every analyst tool answers (or explains why not) without raising, and output is recorded."""
+    from wepa_monitor import analyst
+
+    tk = analyst.Toolkit(ds)
+    calls = [("data_overview", {}), ("list_stations", {}), ("availability", {"group_by": "station"}),
+             ("availability", {"group_by": "hour_of_day", "period": "today"}), ("incidents", {"kind": "outage"}),
+             ("incidents", {"kind": "fault", "group_by": "cause"}), ("repair_times", {}), ("supplies", {}),
+             ("usage", {"group_by": "building"}), ("report_card", {}), ("compare_periods", {"a": "today", "b": "all"}),
+             ("campus_context", {}), ("ask_dashboard", {"question": "What's down right now?"}),
+             ("availability", {"stations": "no such hall"}), ("nonsense", {})]
+    calls += [("statistics", {"kind": k}) for k in ("failure_rates", "warning_to_outage", "recent_changes",
+                                                     "coverage_gaps", "staffing_whatif", "by_phase", "downtime_drivers")]
+    sid = ds.stations.iloc[0]["station_id"]
+    calls.append(("station_profile", {"station": sid}))
+    for name, args in calls:
+        out = tk.run(name, args)
+        assert isinstance(out, str) and out and " failed (" not in out, (name, out)
+    assert "No station, building or area matches" in tk.outputs[13]
+    assert len(tk.outputs) == len(calls) and len(tk.specs()) == len(tk.tools)
+    s, e, label = analyst.parse_period(ds, "2026-10-01..2026-10-02")
+    assert s >= ds.data_start and e <= ds.as_of and label
+
+
+def test_fact_check_flags_invented_figures():
+    src = ["Availability 93.27% (42 printer-hours down); mean repair 710.8 min; Boyden (02144) had 19 outages."]
+    assert ai.unsupported("Boyden went down 19 times; availability 93.3%; about 11.8 hours to fix; 42 hours down.",
+                          src) == []
+    assert ai.unsupported("On Oct 12 at 9 PM in 2026, 3 stations were at 97.5% and 250 hours were lost.",
+                          src) == ["97.5", "250"]
+
+
+def test_unsupported_figures_get_one_rewrite(monkeypatch):
+    drafts = iter(["Availability was 97.5% this week.", "Availability was 93.3% this week."])
+    monkeypatch.setenv("WEPA_AI_PROVIDER", "fake")
+    monkeypatch.setattr(ai, "_fake", lambda message: next(drafts))
+    r = ai.ask("How was the week?", "Availability this week: 93.27%.", cache_key="fact-check-rewrite")
+    assert r.text == "Availability was 93.3% this week." and r.unverified == ()
+
+    monkeypatch.setattr(ai, "_fake", lambda message: "Availability was 99.1%.")
+    r = ai.ask("How was the week?", "Availability this week: 93.27%.", cache_key="fact-check-still-bad")
+    assert r.unverified == ("99.1",)

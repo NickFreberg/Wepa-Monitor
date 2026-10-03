@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dash import dcc, html
 
-from ... import ai, ask, metrics as M, narrative as N
+from ... import ai, analyst, ask, metrics as M, narrative as N
 from ..components import data_table, headline, icon, prose, segmented
 from .common import empty, scope_ids, scope_label
 from .overview import activity_list
@@ -81,14 +81,13 @@ def render_answer(ds: M.Dataset, question: str, scope):
     if ai.enabled():
         label_ = scope_label(ds, scope)
         computed = N.to_text(a.paragraphs)
-        lookup = lambda q: N.to_text(ask.answer(ds, q, ids).paragraphs)  # noqa: E731
         try:
-            r = ai.ask(f"Question from a staff member: {question.strip()}\n\nThe monitor's own computed answer "
-                       f"({a.understood}): {computed}\n\nAnswer the question for them using these facts. If the "
-                       "computed answer misread the question, use the wepa_query tool to look up what they meant.",
-                       ai.facts(ds, ids, label_), tool=lookup,
+            r = ai.ask(f"Question from a staff member: {question.strip()}\n\nThe dashboard's built-in answer "
+                       f"({a.understood}): {computed}\n\nAnswer them as an expert analyst. Use the tools to check and "
+                       "go deeper where it helps (the built-in answer can misread a question).",
+                       ai.facts(ds, ids, label_), toolkit=analyst.Toolkit(ds, ids), effort="medium", timeout=120,
                        cache_key=f"ask|{question.strip().lower()}|{ids}|{ds.as_of.floor('15min').isoformat()}")
-            return [ai_card(r.text, r.provider, "Answer"),
+            return [ai_card(r.text, r.provider, "Answer", r),
                     html.Details([html.Summary("The numbers behind it")] + rules_part, className="card__data ask__numbers"),
                     nxt]
         except ai.AIError:
@@ -107,12 +106,24 @@ def footnote() -> str:
             "time range.")
 
 
-def ai_card(text: str, provider: str, title: str = "In a nutshell") -> html.Div:
+def ai_card(text: str, provider: str, title: str = "In a nutshell", reply=None) -> html.Div:
     return html.Div(className="ai-note", role="note", children=[
-        html.Div([icon("sparkle"), html.Span(title), html.Span(f"written by {provider} from the numbers below",
+        html.Div([icon("sparkle"), html.Span(title), html.Span(f"written by {provider} from the monitoring data",
                                                                className="ai-note__by")], className="ai-note__head"),
-        html.Div([html.P(par) for par in text.split("\n") if par.strip()], className="ai-note__text"),
+        dcc.Markdown(text, className="ai-note__text"),
+        check_line(reply) if reply is not None else None,
     ])
+
+
+def check_line(r) -> html.Div:
+    """How the reply was grounded: data lookups made, and the fact check's result."""
+    looked = f"Looked at the data {r.tools_used} time{'s' if r.tools_used != 1 else ''}. " if r.tools_used else ""
+    if r.unverified:
+        return html.Div([icon("alert"), html.Span(f"{looked}Couldn't verify: {', '.join(r.unverified[:6])}. "
+                                                  "Check those figures before relying on them.")],
+                        className="fact-check fact-check--warn")
+    return html.Div([icon("check"), html.Span(f"{looked}Every figure checked against the data.")],
+                    className="fact-check")
 
 
 def render_story_ai(ds: M.Dataset, key: str, scope):
@@ -124,8 +135,10 @@ def render_story_ai(ds: M.Dataset, key: str, scope):
     stamp = ds.as_of.floor("15min").isoformat()
     try:
         r = ai.ask(f"In 2-4 sentences, tell a ResNet supervisor what {p.label} was like for {label_}: the one or two "
-                   "things that mattered most for students, and one practical next step. Don't repeat every number.",
-                   ai.facts(ds, ids, label_, p), cache_key=f"story|{key}|{scope}|{stamp}")
+                   "things that mattered most for students, and one practical next step. Don't repeat every number. "
+                   "Check the tools if something in the facts needs a reason or context.",
+                   ai.facts(ds, ids, label_, p), cache_key=f"story|{key}|{scope}|{stamp}",
+                   toolkit=analyst.Toolkit(ds, ids), timeout=90)
     except ai.AIError:
         return None
-    return ai_card(r.text, r.provider)
+    return ai_card(r.text, r.provider, reply=r)
