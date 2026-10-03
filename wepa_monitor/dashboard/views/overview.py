@@ -44,11 +44,11 @@ def status_headline(ds: M.Dataset, cur: pd.DataFrame, queue: pd.DataFrame) -> ht
                     (detail[:1].upper() + detail[1:] + ".") if extras else "Nothing needs attention right now.")
 
 
-def render(ds: M.Dataset, theme: str, sections, areas, basemap: str = "street"):
+def render(ds: M.Dataset, theme: str, scope, basemap: str = "street"):
     if ds.empty:
         return empty("No snapshots yet. Start the collector (python -m wepa_monitor start) or generate demo "
                      "data (python -m wepa_monitor demo).")
-    ids = scope_ids(ds, sections, areas)
+    ids = scope_ids(ds, scope)
     cur = ops.current_status(ds, ids)
     if cur.empty:
         return empty("No stations in this scope.")

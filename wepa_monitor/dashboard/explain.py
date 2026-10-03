@@ -56,6 +56,7 @@ class Context:
     end: pd.Timestamp
     period_label: str
     station_id: str | None = None
+    points: list = field(default_factory=list)   # every point under the click (all series at that x)
 
 
 def _local_day(x) -> pd.Timestamp:
@@ -436,10 +437,11 @@ EXPLAINERS = {
 }
 
 
-def explain(ds, chart: str, point: dict, ctx: Context) -> Explanation | None:
+def explain(ds, chart: str, point: dict, ctx: Context, points: list | None = None) -> Explanation | None:
     fn = EXPLAINERS.get(chart)
     if fn is None or not point:
         return None
+    ctx.points = points or [point]
     try:
         return fn(ds, point, ctx)
     except Exception as exc:  # noqa: BLE001 - an explanation must never break the page

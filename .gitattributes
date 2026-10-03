@@ -3,3 +3,4 @@ docs/ export-ignore
 tests/ export-ignore
 legacy/ export-ignore
 .github/ export-ignore
+scripts/ export-ignore

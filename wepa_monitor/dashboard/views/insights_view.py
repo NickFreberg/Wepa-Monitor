@@ -5,19 +5,8 @@ from dash import dcc, html
 
 from ... import ask, metrics as M, narrative as N
 from ..components import data_table, headline, icon, prose, segmented
-from .common import empty, scope_ids
+from .common import empty, scope_ids, scope_label
 from .overview import activity_list
-
-
-def scope_label(ds: M.Dataset, sections, areas) -> str:
-    chosen = (sections or []) + (areas or [])
-    if not chosen:
-        return "BSU print stations"
-    if len(chosen) == 1:
-        c = chosen[0]
-        return {"ResNet": "residence hall stations", "Student Computer Labs": "lab stations",
-                "Satellite Campuses": "satellite stations"}.get(c, f"{c} stations")
-    return "the selected stations"
 
 
 def layout(story_period: str = "yesterday"):
@@ -55,11 +44,11 @@ def layout(story_period: str = "yesterday"):
     ]
 
 
-def render_story(ds: M.Dataset, key: str, sections, areas):
+def render_story(ds: M.Dataset, key: str, scope):
     if ds.empty:
         return empty("No data yet.")
     p = N.period(ds, key or "yesterday")
-    st = N.story(ds, p, scope_ids(ds, sections, areas), scope_label(ds, sections, areas))
+    st = N.story(ds, p, scope_ids(ds, scope), scope_label(ds, scope))
     chips = html.Div([html.Div([html.Span(v, className="stat__value"), html.Span(k, className="stat__label")],
                                className="stat") for k, v in st.stats], className="stats")
     moments = st.moments
@@ -73,10 +62,10 @@ def render_story(ds: M.Dataset, key: str, sections, areas):
     ]
 
 
-def render_answer(ds: M.Dataset, question: str, sections, areas):
+def render_answer(ds: M.Dataset, question: str, scope):
     if not (question or "").strip():
         return html.P("Ask anything about the print stations, or pick an example above.", className="empty")
-    a = ask.answer(ds, question, scope_ids(ds, sections, areas))
+    a = ask.answer(ds, question, scope_ids(ds, scope))
     table = None
     if a.table is not None and len(a.table):
         table = data_table(a.table, [(c, h, None) for c, h in a.table_cols], max_rows=10,

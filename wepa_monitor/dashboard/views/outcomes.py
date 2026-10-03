@@ -1,0 +1,222 @@
+"""IT Outcomes: a ready-to-print feature page for the IT division's annual report.
+
+Laid out like the printed IT Outcomes issues (crimson and gold, a feature story in columns, a
+"By the Numbers" sidebar), with every number computed from the monitoring data for the chosen
+year. The headline, subtitle, credits and an optional quote come from reference/outcomes.json, so
+the page can be tailored without touching code. Print it, or save it as a PDF, from the browser.
+"""
+from __future__ import annotations
+
+import json
+
+import numpy as np
+import pandas as pd
+from dash import dcc, html
+
+from ... import config, metrics as M, narrative as N
+from .. import charts
+from ..components import icon
+from .common import empty, scope_ids, scope_label
+
+TZ = config.LOCAL_TZ
+SETTINGS = config.REFERENCE_DIR / "outcomes.json"
+
+
+def _settings() -> dict:
+    try:
+        return json.loads(SETTINGS.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def years(ds: M.Dataset) -> list[dict]:
+    if ds.data_start is None:
+        return [{"label": "All time", "value": "all"}]
+    first = ds.data_start.tz_convert(TZ).year
+    last = ds.as_of.tz_convert(TZ).year
+    opts = [{"label": "Since monitoring began", "value": "all"}]
+    opts += [{"label": str(y), "value": str(y)} for y in range(last, first - 1, -1)]
+    # Academic years (July-June), the way much of campus reports.
+    ay0 = ds.data_start.tz_convert(TZ)
+    ay0 = ay0.year if ay0.month >= 7 else ay0.year - 1
+    ay1 = ds.as_of.tz_convert(TZ)
+    ay1 = ay1.year if ay1.month >= 7 else ay1.year - 1
+    opts += [{"label": f"Academic year {y}–{str(y + 1)[2:]}", "value": f"ay{y}"} for y in range(ay1, ay0 - 1, -1)]
+    return opts
+
+
+def window(ds: M.Dataset, year: str | None):
+    start, end = M.window(ds, None)
+    if not year or year == "all":
+        return start, end, "since monitoring began"
+    if year.startswith("ay"):
+        y = int(year[2:])
+        a = pd.Timestamp(year=y, month=7, day=1, tz=TZ).tz_convert("UTC")
+        b = pd.Timestamp(year=y + 1, month=7, day=1, tz=TZ).tz_convert("UTC")
+        label = f"in the {y}–{str(y + 1)[2:]} academic year"
+    else:
+        y = int(year)
+        a = pd.Timestamp(year=y, month=1, day=1, tz=TZ).tz_convert("UTC")
+        b = pd.Timestamp(year=y + 1, month=1, day=1, tz=TZ).tz_convert("UTC")
+        label = f"in {y}"
+    return max(a, start), min(b, end), label
+
+
+def layout(ds: M.Dataset):
+    opts = years(ds)
+    return [html.Div(className="toolbar no-print", children=[
+        dcc.Dropdown(id="oc-year", options=opts, value=opts[0]["value"], clearable=False, className="dropdown",
+                     style={"minWidth": "260px"}, persistence=True, persistence_type="session"),
+        html.Button([icon("printer"), "Print or save as PDF"], id="oc-print", className="btn",
+                    **{"data-print": "1"}),
+        html.Span("Tip: in the print dialog choose “Save as PDF”, Letter, and turn on background graphics.",
+                  className="toolbar__hint"),
+    ]), dcc.Loading(html.Div(id="oc-body"), type="dot", delay_show=400)]
+
+
+def _num(n: float) -> str:
+    if n >= 1e6:
+        return f"{n / 1e6:.1f}M"
+    if n >= 10_000:
+        return f"{n / 1000:.0f}K"
+    return f"{n:,.0f}"
+
+
+def render(ds: M.Dataset, theme: str, year, scope):
+    if ds.empty:
+        return empty("No data yet.")
+    ids = scope_ids(ds, scope)
+    start, end, when = window(ds, year)
+    if end <= start:
+        return empty("No monitoring data in that period.")
+    s = _settings()
+    st = ds.stations if ids is None else ds.stations[ds.stations["station_id"].isin(ids)]
+    log = ds.log[(ds.log["attempt_ts"] >= start) & (ds.log["attempt_ts"] < end) & ds.log["ok"]]
+    checks = float(log["n_stations"].sum())
+    days = (end - start).total_seconds() / 86400
+    a = M.availability(ds, start, end, ids)
+    inc = M._in(ds.sev_inc, "start", start, end, ids)
+    red = inc[inc["severity"] == "red"]
+    res = M._resolved(red)
+    after = (~red["in_hours"].astype(bool)).mean() if len(red) else np.nan
+    med_fix = res["duration_s"].median() if len(res) else np.nan
+    desk_fix = res["staffed_s"].median() if len(res) else np.nan
+    faults = M.faults_in(ds, start, end, ids)
+    top_fault = faults["label"].value_counts() if len(faults) else pd.Series(dtype=int)
+    trays = M._in(ds.tray_inc, "start", start, end, ids)
+    use = M.usage_in(ds, start, end, ids)
+    toner_units = use[use["component"].str.startswith("toner")]["used"].sum() / 100
+    usage = M.usage_by_station(ds, start, end, ids)
+    usage = usage[usage["usage_per_day"].notna()]
+    scope_txt = scope_label(ds, scope)
+    n = len(st)
+    halls = int((st["station_type"] == "residence").sum())
+
+    # --- the story -----------------------------------------------------------------------------
+    p1 = (f"Bridgewater State's {n} Wepa print stations, {halls} of them in residence halls and the rest in "
+          "labs, the library and the student union, are where students turn in papers, print boarding passes "
+          "and pick up last-minute study guides. For years the only window into them was Wepa's own status "
+          "page: a list of green, yellow and red rows that showed the moment, but never the pattern.")
+    p2 = (f"ResNet Print Ops changed that. It reads the status page once a minute, every minute, and keeps "
+          f"what it sees: {_num(checks)} station check-ins over {days:,.0f} days {when}. From those readings it "
+          "works out when each printer went down, why, how long it took to fix, which supplies are about to run "
+          "out, and which printers are busiest, then explains it in plain language for anyone at BSU.")
+    findings = []
+    if a.value is not None:
+        findings.append(f"Across {scope_txt}, printers could print {a.value:.1f}% of the time")
+    if len(red):
+        findings.append(f"the monitor caught {len(red):,} outages" +
+                        (f", typically back up in {N.dur(med_fix)}" if np.isfinite(med_fix) else ""))
+    p3 = (("; ".join(findings) + ". ") if findings else "")
+    if np.isfinite(after) and len(red) >= 5:
+        p3 += (f"Its clearest lesson is about timing: {after:.0%} of outages began after the support desks "
+               f"had closed for the day. Once someone was on shift, the typical fix took {N.dur(desk_fix)} of desk "
+               "time; most of the downtime was waiting for the next shift to start. ")
+    if len(top_fault):
+        p3 += (f"The most common problem was {top_fault.index[0].lower()} ({top_fault.iloc[0]:,} times), "
+               "a pattern that now shapes which supplies go on every round.")
+    p4 = ("Three tools put those findings to work. Rounds plans the fastest walking or transit-van route to every "
+          "printer that needs a visit, starting from the ResNet office or the IT Service Center. Each station's page "
+          "points students to the nearest working printer they can walk into, with the distance in feet or miles. "
+          "And a report card grades every printer on reliability, faults and supply cost for its workload, "
+          "so managers can see at a glance which machines are great and which are a problem.")
+    p5 = ("Everything is computed only from time the monitor actually saw, gaps are reported rather than "
+          "guessed, and nothing identifies a student: the data is about printers, not people.")
+
+    quote = s.get("quote", "").strip()
+    pull = (html.Blockquote([html.Span("“", className="oc__qmark"), html.P(quote),
+                             html.Cite(s.get("quote_by", ""))], className="oc__quote") if quote else
+            html.Blockquote([html.Span("“", className="oc__qmark"),
+                             html.P(f"{after:.0%} of outages began after the support desks had closed."
+                                    if np.isfinite(after) and len(red) >= 5 else
+                                    f"{_num(checks)} printer check-ins, one every minute."),
+                             html.Cite("From the monitoring data")], className="oc__quote"))
+
+    # --- by the numbers ------------------------------------------------------------------------
+    numbers = [
+        ("printer", f"{n}", "Print stations watched around the clock"),
+        ("history", _num(checks), "Station check-ins recorded"),
+        ("check", f"{a.value:.1f}%" if a.value is not None else "—", "Of the time printers could print"),
+        ("alert", f"{len(red):,}", "Outages caught and timed"),
+        ("trend", N.dur(med_fix) if np.isfinite(med_fix) else "—", "Typical time to repair"),
+        ("calendar", f"{after:.0%}" if np.isfinite(after) else "—", "Of outages began after desk hours"),
+        ("box", f"{toner_units:,.0f}", "Toner cartridges' worth of printing"),
+        ("file", f"{len(trays):,}", "Empty paper trays spotted"),
+    ]
+    stats = html.Aside(className="oc__numbers", children=[
+        html.H3([html.Span(str(_year_word(year, ds))), html.Br(), "Print Stations", html.Br(), "By the Numbers"]),
+        *[html.Div(className="oc__num", children=[
+            html.Span(icon(ic), className="oc__num-icon"),
+            html.Div([html.Div(v, className=f"oc__num-value oc__num-value--{'gold' if i % 2 else 'crimson'}"),
+                      html.Div(lbl, className="oc__num-label")])]) for i, (ic, v, lbl) in enumerate(numbers)],
+    ])
+
+    # --- one chart: availability by month -----------------------------------------------------------
+    months = []
+    for p in pd.period_range(start.tz_convert(TZ).tz_localize(None).to_period("M"),
+                             (end - pd.Timedelta(seconds=1)).tz_convert(TZ).tz_localize(None).to_period("M"), freq="M"):
+        a0 = max(p.start_time.tz_localize(TZ).tz_convert("UTC"), start)
+        a1 = min((p + 1).start_time.tz_localize(TZ).tz_convert("UTC"), end)
+        m = M.availability(ds, a0, a1, ids)
+        months.append((p.strftime("%b %Y"), m.value if m.value is not None else np.nan,
+                       a0 > p.start_time.tz_localize(TZ).tz_convert("UTC") or a1 < (p + 1).start_time.tz_localize(TZ).tz_convert("UTC")))
+    fig = charts.monthly_bars("crimson", [m[0] for m in months], [m[1] for m in months], "%", [m[2] for m in months])
+    fig.update_layout(height=220)
+
+    credits = s.get("credits", "").strip()
+    busiest = usage.head(1)
+    feature = html.Article(className="oc", children=[
+        html.Div(s.get("kicker", "Opportunities. Collaborations. Results."), className="oc__kicker"),
+        html.H1(s.get("title", "Every Printer, Every Minute"), className="oc__title"),
+        html.P(s.get("subtitle", ""), className="oc__subtitle"),
+        html.P(s.get("byline", ""), className="oc__byline") if s.get("byline") else None,
+        html.Div(className="oc__layout", children=[
+            html.Div(className="oc__story", children=[
+                html.P(p1, className="oc__lede"), html.P(p2), html.P(p3), pull, html.P(p4), html.P(p5),
+                html.Figure([dcc.Graph(figure=fig, config={"displayModeBar": False, "staticPlot": True},
+                                       style={"height": "220px"}),
+                             html.Figcaption("Share of the time printers could print, by month. Lighter bars are "
+                                             "partial months.")], className="oc__figure"),
+                html.Div(className="oc__credit", children=[
+                    html.Span(icon("award"), className="oc__credit-icon"),
+                    html.P([credits] + ([" Busiest printer " + when + ": ", html.B(busiest.iloc[0]["description"]),
+                                         f" ({busiest.iloc[0]['relative']:.1f}× the typical station)."]
+                                        if len(busiest) else []))]) if credits else None,
+            ]),
+            stats,
+        ]),
+        html.Div([html.Span(s.get("kicker", "")), " // ", html.Span("IT Outcomes")], className="oc__foot"),
+    ])
+    return [feature, html.P("Every figure is computed from the monitoring data for the period chosen above. Edit the "
+                            "headline, subtitle, credits or quote in reference/outcomes.json.",
+                            className="footnote no-print")]
+
+
+def _year_word(year, ds) -> str:
+    if not year or year == "all":
+        return f"{ds.data_start.tz_convert(TZ):%Y}–{ds.as_of.tz_convert(TZ):%y}" \
+            if ds.data_start.tz_convert(TZ).year != ds.as_of.tz_convert(TZ).year else f"{ds.as_of.tz_convert(TZ):%Y}"
+    if str(year).startswith("ay"):
+        y = int(year[2:])
+        return f"{y}–{str(y + 1)[2:]}"
+    return str(year)

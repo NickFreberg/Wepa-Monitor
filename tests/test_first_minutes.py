@@ -11,8 +11,8 @@ from pathlib import Path
 import pytest
 
 from wepa_monitor import ask, metrics, narrative as N
-from wepa_monitor.dashboard.views import (activity_log, analytics, executive, insights_view, overview, rounds,
-                                          station, stations)
+from wepa_monitor.dashboard.views import (activity_log, analytics, executive, insights_view, outcomes, overview,
+                                          rounds, station, stations, system)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "live_first_minutes"
 
@@ -30,20 +30,26 @@ def test_loads(ds):
 
 def test_pages_render(ds):
     sid = ds.stations["station_id"].iloc[0]
-    overview.render(ds, "light", None, None)
-    stations.render(ds, None, None)
+    overview.render(ds, "light", None)
+    stations.render(ds, None)
+    stations.render(ds, {"stations": [sid]}, "", "all")
     station.render(ds, "light", sid, "30")
     for tab in ("reliability", "faults", "consumables", "stats", "quality"):
-        analytics.render(ds, "light", None, None, "30", tab)
-    executive.render(ds, "light", executive.default_month(ds), None, None)
-    activity_log.render(ds, None, None, "30", ["Status", "Parts", "Monitoring"], "")
+        analytics.render(ds, "light", None, "30", tab)
+    executive.render(ds, "light", executive.default_month(ds), None)
+    activity_log.render(ds, None, None, None, ["Status", "Parts", "Monitoring"], "")
+    activity_log.layout(ds, {})
+    for year in [o["value"] for o in outcomes.years(ds)]:
+        outcomes.render(ds, "light", year, None)
+    system.render(ds, "light")
+    assert system.terminal_lines(ds)
     for team in ("ResNet", "IT Service Center"):
         rounds.render(ds, "light", team, None, "walk", ["red", "yellow", "tray", "consumable_now"], "urgent", "loop")
 
 
 @pytest.mark.parametrize("key", [k for k, _ in N.PERIOD_KEYS])
 def test_stories(ds, key):
-    insights_view.render_story(ds, key, None, None)
+    insights_view.render_story(ds, key, None)
 
 
 def test_questions(ds):

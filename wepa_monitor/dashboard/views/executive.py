@@ -46,10 +46,10 @@ def default_month(ds: M.Dataset) -> int | None:
     return len(ms) - 2 if len(ms) > 1 and ms[-1].label.endswith("(to date)") else len(ms) - 1
 
 
-def render(ds: M.Dataset, theme: str, month_idx, sections, areas):
+def render(ds: M.Dataset, theme: str, month_idx, scope):
     if ds.empty:
         return empty("No data yet.")
-    ids = scope_ids(ds, sections, areas)
+    ids = scope_ids(ds, scope)
     ms = insights.months(ds)
     month_idx = default_month(ds) if month_idx is None or month_idx >= len(ms) else month_idx
     cur = ms[month_idx]

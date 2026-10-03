@@ -31,10 +31,10 @@ def _hour(h: int) -> str:
     return f"{(h % 12) or 12} {'am' if h < 12 else 'pm'}"
 
 
-def render(ds: M.Dataset, theme: str, sections, areas, period, tab: str, burn_unit: str = "per_week"):
+def render(ds: M.Dataset, theme: str, scope, period, tab: str, burn_unit: str = "per_week"):
     if ds.empty:
         return empty("No data yet.")
-    ids = scope_ids(ds, sections, areas)
+    ids = scope_ids(ds, scope)
     if ids is not None and not ids:
         return empty("No stations in this scope.")
     start, end = period_window(ds, period)

@@ -1,0 +1,11 @@
+component,unit_cost_usd,source
+toner_k,95,estimate - replace with BSU's contract price
+toner_c,125,estimate - replace with BSU's contract price
+toner_m,125,estimate - replace with BSU's contract price
+toner_y,125,estimate - replace with BSU's contract price
+drum_k,160,estimate - replace with BSU's contract price
+drum_c,160,estimate - replace with BSU's contract price
+drum_m,160,estimate - replace with BSU's contract price
+drum_y,160,estimate - replace with BSU's contract price
+belt,210,estimate - replace with BSU's contract price
+fuser,260,estimate - replace with BSU's contract price
