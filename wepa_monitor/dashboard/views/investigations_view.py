@@ -10,7 +10,7 @@ from ... import accounts, config, investigations as I, metrics as M, refs, rules
 from ..components import chart_card, data_table, icon, segmented
 from .common import empty
 
-FILTERS = [("open", "Open"), ("closed", "Closed"), ("archived", "Archived"), ("all", "All")]
+FILTERS = [("open", "Open"), ("closed", "Closed"), ("archived", "Archived"), ("all", "All"), ("metrics", "Metrics")]
 STATE_TONE = {I.NEW: "info", I.ANALYZE: "warning", I.RESPOND: "warning", I.REVIEW: "serious",
               I.CLOSED_COMPLETE: "good", I.CLOSED_CANCELLED: "neutral", I.CLOSED_INCOMPLETE: "neutral"}
 ACTION_LABEL = {I.ANALYZE: "Escalate to Analyze", I.RESPOND: "Move to Respond", I.REVIEW: "Submit for Review",
@@ -84,6 +84,8 @@ def layout(ds: M.Dataset, params: dict):
 
 
 def render_list(ds: M.Dataset, show: str, q: str):
+    if show == "metrics":
+        return render_metrics(ds)
     t = I.table(ds.data_dir)
     ok, chain = I.verify(ds.data_dir)
     counts = t[~t["archived"].fillna(False).astype(bool)]["state"].value_counts() if len(t) else pd.Series(dtype=int)
@@ -217,7 +219,7 @@ def render_detail(ds: M.Dataset, ref: str):
     actions = html.Div(className="inv-actions", children=[
         dcc.Textarea(id="inv-decision-note", placeholder="Reason / note for this decision (required to close, "
                      "cancel or send back)", className="inv-note-input", style=None if nexts else {"display": "none"}),
-        html.Div([html.Button("Send back to Respond" if (state == I.REVIEW and to == I.RESPOND) else ACTION_LABEL[to],
+        html.Div([html.Button(f"Send back to {to}" if I.is_backward(state, to) else ACTION_LABEL[to],
                               id={"type": "inv-go", "to": to}, n_clicks=0,
                               className="btn " + ("btn--primary" if to in (I.ANALYZE, I.RESPOND, I.REVIEW, I.CLOSED_COMPLETE)
                                                   else "")) for to in nexts], className="inv-buttons"),
@@ -290,8 +292,112 @@ def render_detail(ds: M.Dataset, ref: str):
                        body=data_table(trail, [("when", "When", None), ("who", "Who", None), ("what", "What changed", None),
                                                ("note", "Reason / note", None), ("hash", "Fingerprint", None)],
                                        max_rows=500), wide=True, icon_name=("shield", "green" if ok else "crimson"))
-    return [head, _who(), facts, html.Div(className="grid", children=[workflow, details, impact_card, linked_card,
-                                                                      note_card, audit])]
+    return [head, _who(), facts, html.Div(className="grid", children=[workflow, lifecycle_card(ds, r), details,
+                                                                      impact_card, linked_card, note_card, audit])]
+
+
+def _tile(label: str, value: str, sub: str = "") -> html.Div:
+    return html.Div([html.Div(label, className="inv-tile__label"), html.Div(value, className="inv-tile__value"),
+                     html.Div(sub, className="inv-tile__sub") if sub else None], className="inv-tile")
+
+
+def _ordinal(n: int) -> str:
+    return f"{n}{'th' if 10 <= n % 100 <= 20 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
+
+
+def lifecycle_card(ds: M.Dataset, r: dict):
+    """How long it has spent where, how often it went back, who held it, and the outages behind it."""
+    m = I.metrics(ds, r)
+    f = I.fmt_dur
+    ps = m["per_state"]
+    tiles = html.Div(className="inv-tiles", children=[
+        _tile("Open for" if not m["is_closed"] else "Took", f(m["open_seconds"]),
+              "since it was opened" if not m["is_closed"] else "from opening to closing"),
+        _tile("To assign", f(m["time_to_assign"])), _tile("To escalate", f(m["time_to_escalate"])),
+        _tile("Sent back", str(m["sent_back"]), "times"),
+        _tile("Reassigned", str(m["reassignments"]), f"{m['assignees']} assignee{'s' if m['assignees'] != 1 else ''}"),
+        _tile("People involved", str(len(m["people"])), ", ".join(m["people"])[:60]),
+        _tile("Linked outages", str(m["linked_outages"]), f"{f(m['outage_seconds'])} out of service in total"),
+        _tile("First outage to " + ("close" if m["is_closed"] else "now"), f(m["end_to_end"]),
+              f"opened {f(m['detection_lag'])} after the first outage" if m["detection_lag"] is not None else ""),
+        _tile("Outages", f"{m['before_opened']} · {m['during']} · " + ("—" if m["after_closed"] is None else str(m["after_closed"])),
+              "before opening · during · after closing"),
+    ] + ([_tile("Did the fix hold?", "Yes" if m["recurred_after_close"] == 0 else "No",
+                f"{m['recurred_after_close']} new {r.get('category')} outage(s) on this printer since closing")]
+         if m["recurred_after_close"] is not None else []))
+    totals = pd.DataFrame([{"state": st, "visits": d["visits"], "total": f(d["seconds"]) if d["visits"] else "—",
+                            "desk": f(d["staffed_seconds"]) if d["visits"] else "—",
+                            "back": d["sent_back_into"], "first": _when(d["first_entered"])} for st, d in ps.items()])
+    v = m["visits"]
+    stays = v.assign(which=v["instance"].map(_ordinal) + " time", entered=v["entered_at"].map(_when),
+                     left=[("—" if st in I.CLOSED else "now (current)" if c else _when(x))
+                           for st, c, x in zip(v["state"], v["current"], v["left_at"])],
+                     dur=[("—" if pd.isna(x) else f(x)) for x in v["seconds"]],
+                     desk=[("—" if pd.isna(x) else f(x)) for x in v["staffed_seconds"]]) if len(v) else v
+    return chart_card(
+        "Lifecycle metrics", "Every figure comes from the recorded changes below: when it entered and left each state, "
+        "and who moved it.", wide=True, icon_name=("clock", "blue"),
+        body=html.Div([
+            tiles,
+            html.H4("Time in each state", className="inv-subhead"),
+            data_table(totals, [("state", "State", None), ("visits", "Times in it", None), ("back", "Sent back into it", None),
+                                ("first", "First entered", None), ("total", "Total time", None),
+                                ("desk", "Of which desk hours", None)]),
+            html.H4("Every stay, in order", className="inv-subhead"),
+            data_table(stays, [("state", "State", None), ("which", "Instance", None), ("how", "How it got there", None),
+                               ("entered", "Entered", None), ("entered_by", "By", None), ("left", "Left", None),
+                               ("next", "Then", None), ("dur", "Time", None), ("desk", "Desk hours", None),
+                               ("reason", "Reason given", None)], max_rows=200),
+        ]),
+        explain=["Desk hours count only the time the responsible support desk (ResNet or the IT Service Center) was "
+                 "staffed, so a weekend in Respond doesn't look like neglect.",
+                 "'Did the fix hold?' counts new outages of the same category on this printer after closing, linked or "
+                 "not. Closed states have no duration."])
+
+
+def render_metrics(ds: M.Dataset):
+    """Across every investigation: where time goes, how often work goes backwards, and outcomes."""
+    t = I.metrics_table(ds)
+    if t.empty:
+        return [empty("No investigations yet, so nothing to measure.", big=False)]
+    f = I.fmt_dur
+    closed = t[t["state"].isin(I.CLOSED)]
+    open_ = t[~t["state"].isin(I.CLOSED)]
+    complete = t[t["state"] == I.CLOSED_COMPLETE]
+    held = complete["after_closed"].dropna()
+    tiles = html.Div(className="inv-tiles", children=[
+        _tile("Open now", str(len(open_)), f"{len(closed)} closed"),
+        _tile("Median time to escalate", f(t["to_escalate_s"].dropna().median()) if t["to_escalate_s"].notna().any() else "—"),
+        _tile("Median time to close", f(closed["to_close_s"].median()) if len(closed) else "—"),
+        _tile("Sent back at least once", f"{(t['sent_back'] > 0).mean():.0%}", f"{int(t['sent_back'].sum())} times in all"),
+        _tile("Reassigned at least once", f"{(t['reassignments'] > 0).mean():.0%}", f"{int(t['reassignments'].sum())} reassignments"),
+        _tile("Linked outage time", f(t["outage_s"].sum()), f"{int(t['linked_outages'].sum())} outages"),
+        _tile("Fixes that held", f"{(held == 0).mean():.0%}" if len(held) else "—",
+              f"of {len(held)} closed complete: no new outages of that kind since" if len(held) else "none closed complete yet"),
+    ])
+    summary = I.state_summary(t)
+    summary = summary.assign(med=summary["median_s"].map(f), mx=summary["max_s"].map(f), desk=summary["median_staffed_s"].map(f))
+    per = t.assign(open_h=t["open_s"].map(f), esc=t["to_escalate_s"].map(f), new=t["new_s"].map(f), an=t["analyze_s"].map(f),
+                   rs=t["respond_s"].map(f), rv=t["review_s"].map(f), out=t["outage_s"].map(f),
+                   visits=t["analyze_visits"].astype(str) + " / " + t["respond_visits"].astype(str) + " / " + t["review_visits"].astype(str),
+                   held=t["after_closed"].map(lambda x: "—" if pd.isna(x) else ("Yes" if x == 0 else f"No ({int(x)})")))
+    rows = [html.Tr([html.Td(dcc.Link(x.ref, href=f"/investigations/{x.ref}", className="link mono")), html.Td(state_pill(x.state)),
+                     html.Td(x.open_h), html.Td(x.esc), html.Td(x.new), html.Td(x.an), html.Td(x.rs), html.Td(x.rv),
+                     html.Td(x.visits), html.Td(str(x.sent_back)), html.Td(str(x.reassignments)), html.Td(str(x.people)),
+                     html.Td(f"{x.linked_outages} · {x.out}"), html.Td(x.held)]) for x in per.itertuples()]
+    head = ["Reference", "State", "Open / took", "To escalate", "In New", "In Analyze", "In Respond", "In Review",
+            "Times in Analyze / Respond / Review", "Sent back", "Reassigned", "People", "Linked outages · time", "Fix held"]
+    return [tiles,
+            chart_card("Where the time goes", "For each state: how many investigations entered it, how many stays in all "
+                       "(repeat stays are rework), and the median and longest total time spent there.", wide=True,
+                       icon_name=("clock", "blue"),
+                       body=data_table(summary, [("state", "State", None), ("investigations", "Investigations", None),
+                                                 ("visits", "Stays", None), ("repeat_visits", "Repeat stays", None),
+                                                 ("med", "Median time", None), ("desk", "Median desk hours", None),
+                                                 ("mx", "Longest", None)])),
+            chart_card("Every investigation", "Download it with Export → Investigations.", wide=True, icon_name=("file", "gray"),
+                       body=html.Div(html.Table([html.Thead(html.Tr([html.Th(h) for h in head])), html.Tbody(rows)],
+                                                className="table"), className="table-wrap"))]
 
 
 def _hidden_controls():
@@ -395,6 +501,20 @@ def evidence_pdf(ds: M.Dataset, ref: str) -> bytes | None:
     h("Impact factors")
     for f in imp.get("factors", []):
         line(f"{f[0]}: {f[1]} (score {f[2]} of 3)")
+    m = I.metrics(ds, r)
+    h("Lifecycle")
+    line(f"{'Took' if m['is_closed'] else 'Open for'} {I.fmt_dur(m['open_seconds'])}; to assign {I.fmt_dur(m['time_to_assign'])}; "
+         f"to escalate {I.fmt_dur(m['time_to_escalate'])}; sent back {m['sent_back']} time(s); reassigned "
+         f"{m['reassignments']} time(s); people involved: {', '.join(m['people']) or '-'}.")
+    for x in m["visits"].itertuples():
+        left = "current" if x.current else _when(x.left_at)
+        dur = "" if pd.isna(x.seconds) else f" - {I.fmt_dur(x.seconds)} ({I.fmt_dur(x.staffed_seconds)} desk hours)"
+        line(f"{x.state} ({_ordinal(x.instance)} time, {x.how.lower()}): {_when(x.entered_at)} to {left}{dur}"
+             + (f" - reason: {x.reason}" if x.reason else ""))
+    if m["linked_outages"]:
+        line(f"Linked outages: {m['linked_outages']} ({I.fmt_dur(m['outage_seconds'])} out of service); {m['before_opened']} "
+             f"before opening, {m['during']} during" + (f", {m['after_closed']} after closing" if m["after_closed"] is not None else "")
+             + (f". New outages of this kind since closing: {m['recurred_after_close']}." if m["recurred_after_close"] is not None else "."))
     h("Linked outages (from the monitor's minute-by-minute record of Wepa's status page)")
     linked = r.get("linked") or []
     inc = ds.sev_inc[ds.sev_inc["ref"].isin(linked)].sort_values("start") if "ref" in ds.sev_inc and linked else None

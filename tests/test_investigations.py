@@ -169,3 +169,46 @@ def test_cli_local_mode(tmp_path, capsys, monkeypatch):
     assert accounts.get("alee")["active"] is False and accounts.get("alee")["must_change"]
     assert main(["--data-dir", str(tmp_path), "users", "update", "alee", "--resident", "no", "--local"]) == 0
     assert accounts.get("alee")["hall"] is None
+
+
+def test_lifecycle_metrics_count_every_stay(ds, monkeypatch):
+    from wepa_monitor import export
+    d = ds.data_dir
+    clock = [1_790_000_000.0]
+    monkeypatch.setattr(I.time, "time", lambda: clock[0])
+
+    def later(h):
+        clock[0] += h * 3600
+    ref = I.create(d, A, "00412", "Faults", "x")
+    later(2)
+    I.update(d, ref, A, {"assignee": "jsmith"})
+    later(1)
+    I.transition(d, ref, A, I.ANALYZE)
+    later(10)
+    I.update(d, ref, A, {"assignee": "alee", "root_cause": "Fuser", "root_cause_status": "Suspected"})
+    I.transition(d, ref, A, I.RESPOND)
+    later(5)
+    with pytest.raises(I.InvestigationError, match="reason"):
+        I.transition(d, ref, B, I.ANALYZE)
+    I.transition(d, ref, B, I.ANALYZE, "Root cause didn't hold")
+    later(4)
+    I.transition(d, ref, B, I.RESPOND)
+    later(6)
+    I.update(d, ref, B, {"action_taken": "Wepa case 1"})
+    I.transition(d, ref, B, I.REVIEW)
+    later(1)
+    I.transition(d, ref, A, I.ANALYZE, "Need more evidence")
+    later(2)
+    m = I.metrics(ds, I.get(d, ref), now=clock[0])
+    v = m["visits"]
+    analyze = v[v["state"] == I.ANALYZE]
+    assert list(analyze["instance"]) == [1, 2, 3] and list(analyze["how"]) == ["Forward", "Sent back", "Sent back"]
+    assert analyze["reason"].iloc[1] == "Root cause didn't hold" and bool(analyze["current"].iloc[-1])
+    assert m["per_state"][I.ANALYZE]["seconds"] == (10 + 4 + 2) * 3600 and m["per_state"][I.ANALYZE]["visits"] == 3
+    assert m["per_state"][I.RESPOND]["visits"] == 2 and m["per_state"][I.NEW]["seconds"] == 3 * 3600
+    assert m["sent_back"] == 2 and m["reassignments"] == 1 and m["time_to_assign"] == 2 * 3600
+    assert m["time_to_escalate"] == 3 * 3600 and m["people"] == ["Alex Lee", "Jordan Smith"]
+    t = export.table(ds, "investigations", None, None, None)
+    assert t.loc[0, "Times sent back"] == 2 and t.loc[0, "Hours in Analyze"] == 16.0
+    s = export.table(ds, "investigation_states", None, None, None)
+    assert len(s) == len(v) and s["Reason"].str.contains("Need more evidence").any()

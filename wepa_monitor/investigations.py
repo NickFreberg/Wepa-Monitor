@@ -14,12 +14,13 @@ Lifecycle and governance
     New -> Analyze -> Respond -> Review -> Closed Complete
        \\-> Closed Cancelled   (from New or Analyze)
             Analyze/Respond -> Closed Incomplete
-            Review -> Closed Complete | Closed Incomplete | back to Respond
+            Review -> Closed Complete | Closed Incomplete | back to Respond or Analyze
+            Respond -> back to Analyze (the root cause didn't hold up)
 
 * Entering Analyze needs an assignee and sets the escalation date.
 * Entering Respond needs a root cause, marked suspected or confirmed.
 * Entering Review needs the action taken (e.g. "Opened Wepa case …", "Fuser replaced").
-* Closing, cancelling or sending back needs a written reason.
+* Closing, cancelling or sending back (to Respond or Analyze) needs a written reason.
 * Separation of duties: whoever moved it into Review can't close it from Review; a second person reviews.
 * Fields can be edited only in New, Analyze and Respond. Review and closed records are locked; notes
   can still be added to closed records (e.g. Wepa's reply), never to archived ones.
@@ -62,9 +63,14 @@ EDITABLE_IN = {NEW, ANALYZE, RESPOND}
 TRANSITIONS = {
     NEW: [ANALYZE, CLOSED_CANCELLED],
     ANALYZE: [RESPOND, CLOSED_CANCELLED, CLOSED_INCOMPLETE],
-    RESPOND: [REVIEW, CLOSED_INCOMPLETE],
-    REVIEW: [CLOSED_COMPLETE, CLOSED_INCOMPLETE, RESPOND],
+    RESPOND: [REVIEW, ANALYZE, CLOSED_INCOMPLETE],
+    REVIEW: [CLOSED_COMPLETE, CLOSED_INCOMPLETE, RESPOND, ANALYZE],
 }
+ORDER = {s: i for i, s in enumerate(STATES)}
+
+
+def is_backward(cur: str, to: str) -> bool:
+    return to not in CLOSED and ORDER[to] < ORDER[cur]
 EDITABLE = ["title", "description", "assignee", "root_cause", "root_cause_status", "action_taken",
             "itsm_ref", "wepa_case", "impact_override", "impact_reason"]
 FIELD_LABEL = {"title": "Name", "description": "Description", "assignee": "Assigned to",
@@ -259,7 +265,7 @@ def transition(data_dir, ref: str, user: dict, to: str, note: str = "", impact_n
         raise InvestigationError("Record the root cause (and whether it's suspected or confirmed) before Respond.")
     if to == REVIEW and not r.get("action_taken"):
         raise InvestigationError("Record the action taken before sending it for review.")
-    if (to in CLOSED or (cur == REVIEW and to == RESPOND)) and not note:
+    if (to in CLOSED or is_backward(cur, to)) and not note:
         raise InvestigationError("Write the reason for this decision.")
     if cur == REVIEW and to in CLOSED and r.get("submitted_for_review_by") == user["username"]:
         raise InvestigationError("Someone other than the person who submitted it for review has to close it.")
@@ -415,3 +421,166 @@ def archive_due(data_dir) -> None:
     for r in all_records(data_dir).values():
         if r.get("archived") and not any(e["action"] == "archive" for e in r["events"]):
             _append(data_dir, r["ref"], SYSTEM, "archive", {}, "Closed more than two years ago: moved to the archive.")
+
+
+# --- lifecycle metrics (all derived from the event log, so they're facts, not estimates) ----------------
+
+def fmt_dur(seconds) -> str:
+    if seconds is None or (isinstance(seconds, float) and not np.isfinite(seconds)):
+        return "—"
+    s = max(float(seconds), 0.0)
+    d, rem = divmod(s, 86400)
+    h, rem = divmod(rem, 3600)
+    m = rem // 60
+    nb = "\u00a0"                                   # keep "3 d 4 h" on one line
+    if d:
+        return f"{int(d)}{nb}d{nb}{int(h)}{nb}h"
+    if h:
+        return f"{int(h)}{nb}h{nb}{int(m)}{nb}m"
+    return f"{int(m)}{nb}m"
+
+
+def _owner(ds, station_id):
+    from . import support
+    st = ds.stations.set_index("station_id")
+    return support.owner(st.at[station_id, "section"]) if station_id in st.index else config.DEFAULT_OWNER
+
+
+def state_visits(r: dict, ds=None, now: float | None = None) -> pd.DataFrame:
+    """One row per stay in a state: which state, which time in it (instance), when and by whom it was
+    entered, how (opened / forward / sent back / closed), the reason, when it was left and for what, and
+    how long it lasted, in calendar time and in the responsible desk's staffed hours."""
+    from . import support
+    now = now or time.time()
+    owner = _owner(ds, r.get("station_id")) if ds is not None and r.get("station_id") else None
+    rows, counts, prev = [], {}, None
+    for e in r["events"]:
+        if not e.get("state"):
+            continue
+        to = e["state"]
+        frm = (e.get("changes", {}).get("state") or [None, None])[0]
+        if e["action"] == "create":
+            how = "Opened"
+        elif to in CLOSED:
+            how = "Closed"
+        elif frm and is_backward(frm, to):
+            how = "Sent back"
+        else:
+            how = "Forward"
+        if prev is not None:
+            prev["left_at"], prev["left_by"], prev["next"] = e["ts"], e.get("user_name", e["user"]), to
+        counts[to] = counts.get(to, 0) + 1
+        prev = {"state": to, "instance": counts[to], "entered_at": e["ts"], "entered_by": e.get("user_name", e["user"]),
+                "how": how, "reason": e.get("note", ""), "left_at": None, "left_by": "", "next": ""}
+        rows.append(prev)
+    df = pd.DataFrame(rows, columns=["state", "instance", "entered_at", "entered_by", "how", "reason", "left_at",
+                                     "left_by", "next"])
+    if df.empty:
+        return df.assign(seconds=[], staffed_seconds=[], current=[])
+    end = df["left_at"].where(df["left_at"].notna(), now).astype(float)
+    df["current"] = df["left_at"].isna()
+    df["seconds"] = np.where(df["state"].isin(CLOSED), np.nan, end - df["entered_at"])
+    if owner:
+        df["staffed_seconds"] = [np.nan if st in CLOSED else support.staffed_seconds(
+            owner, pd.Timestamp(a, unit="s", tz="UTC"), pd.Timestamp(b, unit="s", tz="UTC"))
+            for st, a, b in zip(df["state"], df["entered_at"], end)]
+    else:
+        df["staffed_seconds"] = np.nan
+    return df
+
+
+def metrics(ds, r: dict, now: float | None = None) -> dict:
+    """A holistic view of one investigation: lifecycle timing, rework, ownership changes, effort, and
+    the outages behind it (before, during and after the investigation)."""
+    now = now or time.time()
+    v = state_visits(r, ds, now)
+    created = r.get("created_at") or (r["events"][0]["ts"] if r["events"] else now)
+    closed = r.get("closed_at") if r.get("state") in CLOSED else None
+    end = closed or now
+    per_state = {}
+    for st in (NEW, ANALYZE, RESPOND, REVIEW):
+        sv = v[v["state"] == st]
+        per_state[st] = {"visits": int(len(sv)), "seconds": float(sv["seconds"].sum()) if len(sv) else 0.0,
+                         "staffed_seconds": float(sv["staffed_seconds"].sum()) if len(sv) else 0.0,
+                         "sent_back_into": int((sv["how"] == "Sent back").sum()),
+                         "first_entered": float(sv["entered_at"].min()) if len(sv) else None}
+    assignee_changes = [e["changes"]["assignee"] for e in r["events"] if "assignee" in e.get("changes", {})]
+    reassignments = sum(1 for old, new in assignee_changes if old and new and old != new)
+    first_assigned = next((e["ts"] for e in r["events"] if (e.get("changes", {}).get("assignee") or [None, None])[1]), None)
+    people = sorted({e.get("user_name", e["user"]) for e in r["events"] if e["user"] != "system"})
+    out = {
+        "open_seconds": end - created, "is_closed": bool(closed), "created_at": created, "closed_at": closed,
+        "time_to_assign": (first_assigned - created) if first_assigned else None,
+        "time_to_escalate": (r["escalated_at"] - created) if r.get("escalated_at") else None,
+        "time_to_close": (closed - created) if closed else None,
+        "per_state": per_state, "visits": v,
+        "sent_back": int((v["how"] == "Sent back").sum()) if len(v) else 0,
+        "reassignments": reassignments, "assignees": len({n for _, n in assignee_changes if n}),
+        "changes": sum(1 for e in r["events"] if e["action"] in ("update", "transition")),
+        "notes": len(r["notes"]), "people": people,
+    }
+    # The outages behind it.
+    linked = r.get("linked") or []
+    inc = ds.sev_inc[ds.sev_inc["ref"].isin(linked)] if ds is not None and "ref" in ds.sev_inc and linked else None
+    if inc is not None and len(inc):
+        dur = inc["duration_s"].where(inc["end"].notna(), (ds.as_of - inc["start"]).dt.total_seconds()).clip(lower=0)
+        c_ts = pd.Timestamp(created, unit="s", tz="UTC")
+        cl_ts = pd.Timestamp(closed, unit="s", tz="UTC") if closed else None
+        first = inc["start"].min()
+        out.update(linked_outages=int(len(inc)), outage_seconds=float(dur.sum()), first_outage=first,
+                   last_outage=inc["start"].max(),
+                   before_opened=int((inc["start"] < c_ts).sum()),
+                   during=int(((inc["start"] >= c_ts) & ((inc["start"] < cl_ts) if cl_ts is not None else True)).sum()),
+                   after_closed=int((inc["start"] >= cl_ts).sum()) if cl_ts is not None else None,
+                   detection_lag=float((c_ts - first).total_seconds()),
+                   end_to_end=float((pd.Timestamp(end, unit="s", tz="UTC") - first).total_seconds()))
+    else:
+        out.update(linked_outages=0, outage_seconds=0.0, first_outage=None, last_outage=None, before_opened=0,
+                   during=0, after_closed=None, detection_lag=None, end_to_end=None)
+    # Did the fix hold? Same printer, same category, any outages since closing (linked or not).
+    if closed and ds is not None and "ref" in ds.sev_inc and r.get("station_id"):
+        after = ds.sev_inc[(ds.sev_inc["station_id"] == r["station_id"]) & (ds.sev_inc["severity"] == "red")
+                           & (ds.sev_inc["ref"].astype(str).str[:3] == (r.get("category") or ""))
+                           & (ds.sev_inc["start"] >= pd.Timestamp(closed, unit="s", tz="UTC"))]
+        out["recurred_after_close"] = int(len(after))
+    else:
+        out["recurred_after_close"] = None
+    return out
+
+
+def metrics_table(ds) -> pd.DataFrame:
+    """One row per investigation, every lifecycle measure in seconds (for sorting and export)."""
+    rows = []
+    for r in all_records(ds.data_dir).values():
+        m = metrics(ds, r)
+        row = {"ref": r["ref"], "title": r.get("title"), "state": r.get("state"), "location": r.get("location"),
+               "assignee": r.get("assignee"), "archived": r.get("archived", False),
+               "opened": pd.Timestamp(m["created_at"], unit="s", tz="UTC"),
+               "closed": pd.Timestamp(m["closed_at"], unit="s", tz="UTC") if m["closed_at"] else pd.NaT,
+               "open_s": m["open_seconds"], "to_assign_s": m["time_to_assign"], "to_escalate_s": m["time_to_escalate"],
+               "to_close_s": m["time_to_close"], "sent_back": m["sent_back"], "reassignments": m["reassignments"],
+               "changes": m["changes"], "notes": m["notes"], "people": len(m["people"]),
+               "linked_outages": m["linked_outages"], "outage_s": m["outage_seconds"], "during": m["during"],
+               "after_closed": m["recurred_after_close"], "detection_lag_s": m["detection_lag"],
+               "end_to_end_s": m["end_to_end"]}
+        for st, d in m["per_state"].items():
+            key = st.lower()
+            row[f"{key}_s"], row[f"{key}_visits"], row[f"{key}_staffed_s"] = d["seconds"], d["visits"], d["staffed_seconds"]
+        rows.append(row)
+    return pd.DataFrame(rows).sort_values("ref", ascending=False).reset_index(drop=True) if rows else pd.DataFrame()
+
+
+def state_summary(table: pd.DataFrame) -> pd.DataFrame:
+    """Across investigations: for each state, how many entered it, visits, median and longest total time."""
+    out = []
+    for st in (NEW, ANALYZE, RESPOND, REVIEW):
+        k = st.lower()
+        if table.empty or f"{k}_s" not in table:
+            continue
+        t = table[table[f"{k}_visits"] > 0]
+        out.append({"state": st, "investigations": int(len(t)), "visits": int(t[f"{k}_visits"].sum()),
+                    "repeat_visits": int((t[f"{k}_visits"] - 1).clip(lower=0).sum()),
+                    "median_s": float(t[f"{k}_s"].median()) if len(t) else np.nan,
+                    "max_s": float(t[f"{k}_s"].max()) if len(t) else np.nan,
+                    "median_staffed_s": float(t[f"{k}_staffed_s"].median()) if len(t) else np.nan})
+    return pd.DataFrame(out)

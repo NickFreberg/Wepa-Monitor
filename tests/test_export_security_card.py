@@ -34,11 +34,11 @@ def test_every_format(ds, fmt):
     data, name, _ = export.build(ds, "everything", fmt, None, "BSU print stations", "all")
     if fmt == "json":
         doc = json.loads(data)
-        assert doc["about"]["stations"] == "BSU print stations" and len(doc["tables"]) == 6
+        assert doc["about"]["stations"] == "BSU print stations" and len(doc["tables"]) == len(export.DATASETS) - 1
     elif fmt == "csv":
-        assert len(zipfile.ZipFile(io.BytesIO(data)).namelist()) == 7
+        assert len(zipfile.ZipFile(io.BytesIO(data)).namelist()) == len(export.DATASETS)
     elif fmt == "xlsx":
-        assert len(pd.ExcelFile(io.BytesIO(data)).sheet_names) == 7
+        assert len(pd.ExcelFile(io.BytesIO(data)).sheet_names) == len(export.DATASETS)
     else:
         assert data[:4] == b"%PDF"
 

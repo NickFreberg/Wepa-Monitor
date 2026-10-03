@@ -24,6 +24,8 @@ DATASETS = {
     "consumables": "Supplies: levels and forecasts",
     "usage": "Usage by printer",
     "activity": "Activity log",
+    "investigations": "Investigations: lifecycle metrics",
+    "investigation_states": "Investigations: every stay in every state",
     "everything": "All of these tables",
 }
 FORMATS = {"csv": "CSV", "xlsx": "Excel", "json": "JSON", "pdf": "PDF"}
@@ -76,6 +78,44 @@ def table(ds: M.Dataset, what: str, ids, start, end) -> pd.DataFrame:
             "Cause": [cause.get((s, t), "") for s, t in zip(inc["station_id"], inc["start"])],
             "Began during desk hours": inc["in_hours"].map({True: "Yes", False: "No"}),
             "Supported by": inc["owner"]}).sort_values("Started", ascending=False)
+    if what in ("investigations", "investigation_states"):
+        from . import investigations as INV
+        h = lambda v: round(v / 3600, 2) if v is not None and pd.notna(v) else None  # noqa: E731
+        if what == "investigations":
+            t = INV.metrics_table(ds)
+            if t.empty:
+                return pd.DataFrame(columns=["Reference"])
+            cols = {"ref": "Reference", "title": "Name", "state": "State", "location": "Kiosk location",
+                    "assignee": "Assigned to", "opened": "Opened", "closed": "Closed"}
+            out = t[list(cols)].rename(columns=cols)
+            out["Opened"], out["Closed"] = _local(t["opened"]), _local(t["closed"]).where(t["closed"].notna(), "")
+            for k, lab in [("open_s", "Hours open"), ("to_assign_s", "Hours to assign"), ("to_escalate_s", "Hours to escalate"),
+                           ("to_close_s", "Hours to close"), ("new_s", "Hours in New"), ("analyze_s", "Hours in Analyze"),
+                           ("respond_s", "Hours in Respond"), ("review_s", "Hours in Review"),
+                           ("analyze_staffed_s", "Desk hours in Analyze"), ("respond_staffed_s", "Desk hours in Respond"),
+                           ("outage_s", "Outage hours (linked)"), ("detection_lag_s", "Hours from first outage to opening"),
+                           ("end_to_end_s", "Hours from first outage to close (or now)")]:
+                out[lab] = t[k].map(h)
+            for k, lab in [("analyze_visits", "Times in Analyze"), ("respond_visits", "Times in Respond"),
+                           ("review_visits", "Times in Review"), ("sent_back", "Times sent back"),
+                           ("reassignments", "Reassignments"), ("people", "People involved"), ("changes", "Changes"),
+                           ("notes", "Notes"), ("linked_outages", "Linked outages"), ("during", "Outages during"),
+                           ("after_closed", "Outages after closing")]:
+                out[lab] = t[k]
+            return out
+        rows = []
+        for r in INV.all_records(ds.data_dir).values():
+            v = INV.state_visits(r, ds)
+            for x in v.itertuples():
+                rows.append({"Reference": r["ref"], "State": x.state, "Instance": x.instance, "How it got here": x.how,
+                             "Entered": pd.Timestamp(x.entered_at, unit="s", tz="UTC"), "Entered by": x.entered_by,
+                             "Reason": x.reason, "Left": pd.Timestamp(x.left_at, unit="s", tz="UTC") if pd.notna(x.left_at) else pd.NaT,
+                             "Next state": x.next, "Hours": h(x.seconds), "Desk hours": h(x.staffed_seconds)})
+        out = pd.DataFrame(rows)
+        if out.empty:
+            return pd.DataFrame(columns=["Reference"])
+        out["Entered"], out["Left"] = _local(out["Entered"]), _local(out["Left"]).where(out["Left"].notna(), "current")
+        return out
     if what == "faults":
         f = M._in(ds.fault_inc, "start", start, end, ids)
         return pd.DataFrame({

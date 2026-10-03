@@ -33,11 +33,12 @@ A gap in the monitor's own data ("No signal") isn't an outage and gets no number
 
 ```
 New ──► Analyze ──► Respond ──► Review ──► Closed Complete
- │         │           │          │  └───► Closed Incomplete
- │         │           │          └──────► back to Respond (with a reason)
- │         │           └─────────────────► Closed Incomplete
- │         ├─────────────────────────────► Closed Cancelled / Closed Incomplete
- └───────────────────────────────────────► Closed Cancelled
+ │        ▲  │        ▲  │ ▲       │  └───► Closed Incomplete
+ │        │  │        │  │ └───────┤        (Review can send it back to Respond or Analyze)
+ │        └──┼────────┼──┘         │        (Respond can send it back to Analyze)
+ │           │        └────────────┘
+ │           ├──────────────────────────► Closed Cancelled / Closed Incomplete
+ └──────────────────────────────────────► Closed Cancelled
 ```
 
 | To enter | Requires |
@@ -45,7 +46,7 @@ New ──► Analyze ──► Respond ──► Review ──► Closed Comple
 | Analyze | An assignee. Sets the **escalation date**. |
 | Respond | A root cause, marked **Suspected** or **Confirmed** |
 | Review | The action taken (e.g. "Opened Wepa case 55821", "Fuser replaced") |
-| Any Closed state, or back to Respond | A written reason |
+| Any Closed state, or any send-back (to Analyze or Respond) | A written reason |
 | Closed (from Review) | A **different person** from the one who submitted it for review |
 
 * **Editing:** fields can change only in New, Analyze and Respond. Review and closed records are
@@ -65,6 +66,29 @@ New ──► Analyze ──► Respond ──► Review ──► Closed Comple
 
 An automatic investigation that isn't worth pursuing is closed as **Closed Cancelled** with a reason.
 That is a decision on the record, not a deletion.
+
+## Lifecycle metrics
+
+Every investigation page shows, and **Investigations → Metrics** summarizes across all of them, figures
+computed only from the recorded changes:
+
+* **Every stay in every state:** which state, which time it's been there (1st, 2nd, 3rd), how it got
+  there (opened, forward, sent back, closed), who moved it, the reason given, when it entered and left,
+  and how long it stayed, in calendar time and in the responsible desk's **staffed hours**.
+* **Per state:** times entered, times sent back into it, first entry, and total time.
+* **Timing:** time to assign, to escalate, and to close (or open so far).
+* **Rework and ownership:** times sent back and reassignments (a change of assignee after the first).
+* **Effort:** number of changes and notes, and the people involved.
+* **The outages behind it:** linked outages and their total out-of-service time; how many came before
+  it was opened, during, and after closing; how long after the first outage it was opened; first outage
+  to close.
+* **Did the fix hold?** New outages of the same category on the same printer after it closed, linked
+  or not.
+
+Across investigations: open and closed counts; median time to escalate and to close; the share sent
+back or reassigned at least once; total linked outage time; the share of completed fixes that held;
+and, per state, stays, repeat stays (rework), and the median and longest time spent. Both tables
+download from **Export → Investigations**.
 
 ## Impact
 
