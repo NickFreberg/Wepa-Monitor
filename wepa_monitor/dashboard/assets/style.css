@@ -740,3 +740,11 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .ai-note__text p { margin: 6px 0 0; font-size: 15px; line-height: 1.55; }
 .ai-note-slot:empty { display: none; }
 .ask__numbers { margin-top: 4px; }
+
+/* planning scenarios */
+.scenarios { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.scenario { padding: 14px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--hairline); }
+.scenario__name { font-weight: 700; }
+.scenario__big { margin: 6px 0 2px; color: var(--ink-2); }
+.scenario__value { font-size: 28px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; margin-right: 4px; }
+.scenario__meta { font-size: 12.5px; color: var(--muted); }

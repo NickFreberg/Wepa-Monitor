@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import campus, config, scrape, store
+from . import courses, campus, config, scrape, store
 
 
 def scrape_once(data_dir: Path, archive_html: bool = False, quiet: bool = False) -> bool:
@@ -32,6 +32,7 @@ def collect_forever(data_dir: Path, archive_html: bool = False, quiet: bool = Fa
                 # Campus context from bridgew.edu: a no-op unless something is due
                 # (academic calendar yearly, library hours weekly); failures keep the old files.
                 campus.refresh(log=lambda m: print(m, flush=True))
+                courses.refresh(log=lambda m: print(m, flush=True))      # monthly; a no-op otherwise
                 last_compact = today
         except Exception as exc:  # noqa: BLE001 - a disk hiccup must not kill the collector thread
             print(f"collector error: {type(exc).__name__}: {exc}", flush=True)

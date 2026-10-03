@@ -738,3 +738,69 @@ def blank(height: int = 60) -> go.Figure:
     """An empty, invisible plot (keeps a graph slot in the page when there's nothing to draw)."""
     return go.Figure().update_layout(height=height, xaxis_visible=False, yaxis_visible=False, margin=dict(l=0, r=0, t=0, b=0),
                                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+
+
+# --- planning & advanced statistics -----------------------------------------------------------------
+
+def forest(theme: str, b: pd.DataFrame, campus_rate: float, n: int = 31) -> go.Figure:
+    """Each printer's estimated outages per week with its 90% credible interval; campus rate dotted."""
+    t = TOKENS[theme]
+    d = b.head(n).iloc[::-1]
+    colors = [STATUS["critical"] if a else t["series"][0] if not bl else STATUS["good"]
+              for a, bl in zip(d["above_campus"], d["below_campus"])]
+    fig = go.Figure(go.Scatter(
+        x=d["mean"], y=d["label"], mode="markers",
+        marker=dict(size=9, color=colors, line=dict(color=t["surface"], width=1.5)),
+        error_x=dict(type="data", symmetric=False, array=d["hi"] - d["mean"], arrayminus=d["mean"] - d["lo"],
+                     color=t["axis"], thickness=1.5, width=0),
+        customdata=np.stack([d["station_id"], d["lo"], d["hi"], d["n"], d["weeks"]], axis=1),
+        hovertemplate="<b>%{y}</b><br>about %{x:.2f} outages a week (likely %{customdata[1]:.2f}–%{customdata[2]:.2f})"
+                      "<br>%{customdata[3]} outages in %{customdata[4]:.1f} weeks<extra></extra>"))
+    fig.add_vline(x=campus_rate, line=dict(color=t["secondary"], width=1, dash="dot"),
+                  annotation_text=f"campus {campus_rate:.2f}/week", annotation_position="top",
+                  annotation_font=dict(size=11, color=t["secondary"]))
+    fig.update_layout(**layout(theme, max(320, 22 * len(d) + 70), margin=dict(t=30),
+                               xaxis=dict(showgrid=True, title=dict(text="outages per week"), rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"], size=11))))
+    return fig
+
+
+def walk_bars(theme: str, cov: pd.DataFrame, alert_min: float) -> go.Figure:
+    """Walk to the nearest printer anyone can use, for printers that are alone in their building."""
+    t = TOKENS[theme]
+    d = cov[(cov["same_building"] == 0) & cov["walk_min"].notna()].sort_values("walk_min")
+    fig = go.Figure(go.Bar(
+        y=d["label"], x=d["walk_min"], orientation="h",
+        marker=dict(color=[STATUS["critical"] if g else t["series"][0] for g in d["gap"]]),
+        text=[f"{m:.0f} min · {nearby_fmt(mt)}" for m, mt in zip(d["walk_min"], d["meters"])],
+        textposition="outside", cliponaxis=False, textfont=dict(color=t["secondary"], size=11),
+        customdata=np.stack([d["station_id"], d["nearest"], d["down_h"]], axis=1),
+        hovertemplate="<b>%{y}</b><br>%{x:.0f}-minute walk to %{customdata[1]}<br>down %{customdata[2]:.0f} h in "
+                      "this period<extra></extra>"))
+    fig.add_vline(x=alert_min, line=dict(color=STATUS["critical"], width=1, dash="dot"),
+                  annotation_text=f"{alert_min:.0f} min", annotation_position="top",
+                  annotation_font=dict(size=11, color=t["secondary"]))
+    fig.update_layout(**layout(theme, max(240, 24 * len(d) + 70), margin=dict(r=110, t=30),
+                               xaxis=dict(showgrid=True, title=dict(text="minutes' walk to a backup"), rangemode="tozero"),
+                               yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"], size=11))))
+    return fig
+
+
+def nearby_fmt(meters) -> str:
+    from .. import nearby
+    return nearby.fmt_distance(meters)
+
+
+def classes_printing(theme: str, hours: pd.DataFrame) -> go.Figure:
+    """Weekday class activity and printing by hour, each indexed to its own average (= 100)."""
+    t = TOKENS[theme]
+    fig = go.Figure()
+    names = [f"{(h % 12) or 12}{'a' if h < 12 else 'p'}" for h in hours["hour"]]
+    for col, name, i in (("sections_idx", "Classes in session", 2), ("printing_idx", "Printing", 0)):
+        fig.add_scatter(x=names, y=hours[col], mode="lines+markers", name=name,
+                        line=dict(width=2.5, color=t["series"][i]), marker=dict(size=7, color=t["series"][i]),
+                        hovertemplate="%{y:.0f} (100 = its own weekday average)<extra>" + name + "</extra>")
+    fig.add_hline(y=100, line=dict(color=t["grid"], width=1))
+    fig.update_layout(**layout(theme, 300, hovermode="x unified",
+                               yaxis=dict(title=dict(text="vs its own average (100)"), rangemode="tozero")))
+    return fig

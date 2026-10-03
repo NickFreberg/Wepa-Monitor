@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     exp = sub.add_parser("export", help="package local data as import files for another collector's data folder")
     exp.add_argument("--tag", default="import", help="letters/digits naming this source, e.g. mac")
     exp.add_argument("-o", "--output", type=Path, default=Path("wepa-export"))
-    camp = sub.add_parser("campus", help="refresh academic calendar, residence-hall and library data from bridgew.edu")
+    camp = sub.add_parser("campus", help="refresh academic calendar, residence-hall, library and class-schedule data from bridgew.edu")
     camp.add_argument("--force", action="store_true", help="refresh even if the files are recent")
     demo = sub.add_parser("demo", help="generate synthetic demo history")
     demo.add_argument("--days", type=int, default=120)
@@ -106,8 +106,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.cmd == "campus":
-        from . import campus
+        from . import campus, courses
         result = campus.refresh(force=args.force)
+        result["courses"] = courses.refresh(force=args.force)
         for name, outcome in result.items():
             print(f"{name}: {'up to date' if outcome == 'fresh' else outcome}")
         return 1 if any(v.startswith("failed") for v in result.values()) else 0

@@ -14,7 +14,8 @@ from .common import empty, needs_days, period_label, period_window, scope_ids
 
 TABS = [{"label": "Reliability", "value": "reliability"}, {"label": "Faults", "value": "faults"},
         {"label": "Supplies", "value": "consumables"}, {"label": "Usage", "value": "usage"},
-        {"label": "Report card", "value": "report"}, {"label": "Forecasts & statistics", "value": "stats"}]
+        {"label": "Report card", "value": "report"}, {"label": "Planning", "value": "planning"},
+        {"label": "Forecasts & statistics", "value": "stats"}]
 BURN_UNITS = {"per_day": "day", "per_week": "week", "per_month": "month", "per_year": "year"}
 MTTR_UNITS = {"D": "Day", "W": "Week", "M": "Month"}
 
@@ -42,7 +43,7 @@ def render(ds: M.Dataset, theme: str, scope, period, tab: str, burn_unit: str = 
     start, end = period_window(ds, period)
     plabel = period_label(period)
     fn = {"reliability": _reliability, "faults": _faults, "consumables": _consumables, "usage": _usage,
-          "report": _report, "stats": _stats}.get(tab, _reliability)
+          "report": _report, "planning": _planning, "stats": _stats}.get(tab, _reliability)
     return fn(ds, theme, ids, start, end, plabel, {"burn": burn_unit, "mttr": mttr_unit})
 
 
@@ -437,6 +438,11 @@ def _usage(ds, theme, ids, start, end, plabel, _):
     ])]
 
 
+def _planning(ds, theme, ids, start, end, plabel, _):
+    from . import planning
+    return planning.render(ds, theme, ids, start, end, plabel)
+
+
 def prose_line(segments):
     from ..components import prose
     return prose([segments], className="prose prose--inline")
@@ -562,7 +568,7 @@ def _stats(ds, theme, ids, start, end, plabel, _):
         day, night = ttf.medians[names[0]], ttf.medians[names[1]]
         if ttf.p_value < 0.05 and np.isfinite(day) and np.isfinite(night) and night > day:
             findings.append(f"Outages that start after support-desk hours take {night / day:.1f}× longer to fix "
-                            f"(median {night:.1f} h vs {day:.1f} h, {_p(ttf.p_value)})")
+                            f"(typically {night:.1f} hours vs {day:.1f})")
     if cc is not None:
         findings.append(f"{len(cc.signals)} control-chart signal{'s' if len(cc.signals) != 1 else ''} "
                         f"in daily faults" if cc.signals else "Daily faults stayed within normal limits")
@@ -664,6 +670,8 @@ def _stats(ds, theme, ids, start, end, plabel, _):
                                ("r2", "Fit R²", lambda v: "—" if pd.isna(v) else f"{v:.2f}"),
                                ("method", "Method", None)], link_col=("station", "station_id"))))
 
+    from . import planning
+    cards += planning.stats_extras(ds, theme, ids, start, end, plabel)
     caveat = html.P("Statistical results describe the selected period and scope. On demo data the models mostly "
                     "rediscover patterns built into the simulator; on live data they become genuine findings as "
                     "history accumulates.", className="footnote")
