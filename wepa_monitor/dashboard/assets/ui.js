@@ -1,6 +1,21 @@
 // Small behaviours Dash doesn't provide: keyboard and outside-click dismissal of panels, the
 // print button, the live log scrolling, and chart tooltips kept inside the screen on phones.
 (function () {
+  // A session that ended (idle timeout, sign-out elsewhere, password change) answers Dash's requests with
+  // 401: go to the sign-in page, then come back here.
+  if (window.fetch && !window.__wepaFetch) {
+    window.__wepaFetch = window.fetch;
+    window.fetch = function (input, init) {
+      return window.__wepaFetch(input, init).then(function (resp) {
+        var url = (typeof input === "string" ? input : (input && input.url)) || "";
+        if (resp.status === 401 && (url.indexOf("_dash") >= 0 || url.indexOf("_session") >= 0)) {
+          window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname + window.location.search);
+        }
+        return resp;
+      });
+    };
+  }
+
   function openPopovers() { return Array.prototype.slice.call(document.querySelectorAll("details.popover[open]")); }
 
   // Escape closes whichever panel is open: a popover, notifications, or "What this means".

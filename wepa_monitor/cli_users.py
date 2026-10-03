@@ -1,16 +1,19 @@
-"""`python -m wepa_monitor users …`: manage staff accounts on the running app from your workstation.
+"""`python -m wepa_monitor users …`: the administrator's tool for the staff directory, run from your
+workstation against the running app.
 
-    python -m wepa_monitor users add jsmith --name "Jordan Smith" --url https://<your app>
-    python -m wepa_monitor users list --url https://<your app>
-    python -m wepa_monitor users disable jsmith --url …      (accounts are never deleted)
-    python -m wepa_monitor users enable jsmith --url …
-    python -m wepa_monitor users reset jsmith --url …        (new password)
+    users add jsmith --name "Jordan Smith" --email jsmith@bridgew.edu [--role viewer]
+                     [--resident yes --hall "Scott Hall"]
+    users update jsmith [--name …] [--email …] [--role …] [--resident yes|no] [--hall …]
+    users deactivate jsmith         (signs them out everywhere; accounts are never deleted)
+    users activate jsmith
+    users reset jsmith              (new temporary password; they choose their own at next sign-in)
+    users list
+    users show jsmith
+    users halls                     (the residence halls you can assign)
 
-It asks for the shared administrator's password (or reads WEPA_ADMIN_PASSWORD) and talks to the app's
-admin API over HTTPS. The new user's password is generated and printed once, unless you choose to
-type one (--ask-password); hand it over in person or through a password manager, not by email.
---url can also come from WEPA_URL. --local edits the accounts in --data-dir directly instead (for a
-copy running on this computer).
+Add --url https://<the app> (or set WEPA_URL). It asks for the administrator's password (or reads
+WEPA_ADMIN_PASSWORD) and talks to the app's admin API over HTTPS. New and reset passwords are generated,
+printed once, and temporary. --local edits the accounts in --data-dir directly (a copy on this computer).
 """
 from __future__ import annotations
 
@@ -19,31 +22,21 @@ import os
 import sys
 
 DEFAULT_ADMIN = "bsuresnet"
+ACTIONS = ["add", "update", "activate", "deactivate", "reset", "list", "show", "halls", "enable", "disable"]
 
 
 def add_parser(sub) -> None:
-    p = sub.add_parser("users", help="create, list, disable or reset staff accounts on the running app")
-    p.add_argument("action", choices=["add", "list", "disable", "enable", "reset"])
+    p = sub.add_parser("users", help="manage the staff directory on the running app (administrator)")
+    p.add_argument("action", choices=ACTIONS)
     p.add_argument("username", nargs="?")
-    p.add_argument("--name", help="display name shown on every change, e.g. 'Jordan Smith' (add)")
-    p.add_argument("--role", choices=["staff", "viewer"], default="staff",
-                   help="staff can work investigations; viewer can only read (add)")
+    p.add_argument("--name", help="full name, shown on every change they make")
+    p.add_argument("--email", help="their email address")
+    p.add_argument("--role", choices=["staff", "viewer"], help="staff can work investigations; viewer reads only")
+    p.add_argument("--resident", choices=["yes", "no"], help="is this person a resident student?")
+    p.add_argument("--hall", help="home residence hall (with --resident yes)")
     p.add_argument("--url", default=os.environ.get("WEPA_URL", ""), help="the app's address (or WEPA_URL)")
     p.add_argument("--admin", default=DEFAULT_ADMIN, help=f"administrator username (default {DEFAULT_ADMIN})")
-    p.add_argument("--ask-password", action="store_true", help="type the new password instead of generating one")
     p.add_argument("--local", action="store_true", help="edit accounts in --data-dir directly")
-
-
-def _new_password(args) -> str:
-    from .accounts import MIN_PASSWORD, generate_password
-    if not args.ask_password:
-        return generate_password()
-    while True:
-        a = getpass.getpass(f"New password for {args.username} (at least {MIN_PASSWORD} characters): ")
-        if a != getpass.getpass("Again: "):
-            print("They didn't match; try again.")
-            continue
-        return a
 
 
 def _remote(args, method: str, path: str, body: dict | None = None) -> dict:
@@ -57,10 +50,10 @@ def _remote(args, method: str, path: str, body: dict | None = None) -> dict:
     pw = os.environ.get("WEPA_ADMIN_PASSWORD") or getpass.getpass(f"Password for administrator '{args.admin}': ")
     try:
         r = requests.request(method, url + path, json=body, auth=(args.admin, pw), timeout=30,
-                             headers={"X-Wepa-Admin": "1"})
+                             headers={"X-Wepa-Admin": "1"}, allow_redirects=False)
     except requests.RequestException as exc:
         sys.exit(f"Couldn't reach {url}: {exc}")
-    if r.status_code == 401:
+    if r.status_code in (401, 403) and "sign-in" in r.text:
         sys.exit("Sign-in failed: check the administrator username and password.")
     if r.status_code == 429:
         sys.exit("Too many failed sign-ins from this network; wait 15 minutes and try again.")
@@ -73,54 +66,73 @@ def _remote(args, method: str, path: str, body: dict | None = None) -> dict:
     return data
 
 
+def _fmt(u: dict) -> str:
+    res = f"resident · {u['hall']}" if u.get("resident") else "not a resident"
+    return (f"  {u['username']:<16} {u['name']:<24} {u.get('email') or '(no email)':<28} {u['role']:<7} "
+            f"{'active' if u.get('active', True) else 'INACTIVE':<9} {res}")
+
+
 def run(args) -> int:
     from . import accounts, config
-    need_user = args.action != "list"
-    if need_user and not args.username:
+    action = {"enable": "activate", "disable": "deactivate"}.get(args.action, args.action)
+    if action not in ("list", "halls") and not args.username:
         sys.exit(f"'users {args.action}' needs a username.")
-    if args.action == "add" and not args.name:
-        sys.exit("Give the person's name with --name \"First Last\" (it appears on every change they make).")
-
+    if action == "add" and not (args.name and args.email):
+        sys.exit('Give --name "First Last" and --email (the administrator sets both).')
     if args.local:
         from pathlib import Path
         d = Path(args.data_dir or config.LIVE_DATA_DIR)
         accounts.configure(d.parent / "security" if d.name == "live" else d / "security")
 
-    def call(action, body=None):
-        if args.local:
-            if action == "list":
-                return {"users": accounts.users()}
-            if action == "add":
-                return {"user": accounts.create(args.username, body["name"], body["password"], body["role"], by="cli")}
-            return {"user": accounts.update(args.username, by="cli", **body)}
-        if action == "list":
-            return _remote(args, "GET", "/_admin/users")
-        if action == "add":
-            return _remote(args, "POST", "/_admin/users", {"username": args.username, **body})
-        return _remote(args, "POST", f"/_admin/users/{args.username}", body)
+    fields = {}
+    for k in ("name", "email", "role", "hall"):
+        if getattr(args, k):
+            fields[k] = getattr(args, k)
+    if args.resident:
+        fields["resident"] = args.resident == "yes"
 
     try:
-        if args.action == "list":
-            rows = call("list")["users"]
+        if action in ("list", "halls", "show"):
+            data = ({"users": accounts.users(), "halls": accounts.residence_halls()} if args.local
+                    else _remote(args, "GET", "/_admin/users"))
+            if action == "halls":
+                print("\n".join(f"  {h}" for h in data["halls"]) or "  (none known)")
+                return 0
+            rows = data["users"] if action == "list" else [u for u in data["users"] if u["username"] == args.username]
+            if action == "show" and not rows:
+                sys.exit(f"No account '{args.username}'.")
             if not rows:
-                print("No staff accounts yet. Add one with: users add <username> --name \"First Last\"")
+                print('No staff accounts yet. Add one with: users add <username> --name "First Last" --email …')
             for u in rows:
-                print(f"  {u['username']:<20} {u['name']:<28} {u['role']:<7} {'DISABLED' if u.get('disabled') else 'active'}")
+                print(_fmt(u))
+                if action == "show":
+                    print(f"    phone {u.get('phone') or '-'} · photo {'yes' if u.get('photo') else 'no'} · "
+                          f"must change password {'yes' if u.get('must_change') else 'no'}")
             return 0
-        if args.action == "add":
-            pw = _new_password(args)
-            u = call("add", {"name": args.name, "role": args.role, "password": pw})["user"]
-            print(f"Created {u['username']} ({u['name']}, {u['role']}).")
-        elif args.action in ("disable", "enable"):
-            call(args.action, {"disabled": args.action == "disable"})
-            print(f"{args.username} is now {'disabled' if args.action == 'disable' else 'active'}.")
+        if action == "add":
+            pw = accounts.generate_password()
+            body = {"username": args.username, "password": pw, "role": args.role or "staff", **fields}
+            u = (accounts.create(args.username, fields["name"], pw, body["role"], by="cli", email=fields["email"],
+                                 resident=fields.get("resident", False), hall=fields.get("hall"))
+                 if args.local else _remote(args, "POST", "/_admin/users", body)["user"])
+            print(f"Created:\n{_fmt(u)}")
+            print(f"Temporary password (shown once; share it in person or via a password manager): {pw}")
+            print("They'll choose their own password the first time they sign in.")
             return 0
-        else:   # reset
-            pw = _new_password(args)
-            call("reset", {"password": pw})
-            print(f"Password reset for {args.username}.")
-        if not args.ask_password:
-            print(f"Their password (shown once; share it in person or via a password manager): {pw}")
+        if action == "reset":
+            pw = accounts.generate_password()
+            fields = {"password": pw}
+        elif action in ("activate", "deactivate"):
+            fields = {"active": action == "activate"}
+        elif not fields:
+            sys.exit("Nothing to update: give --name, --email, --role, --resident or --hall.")
+        u = (accounts.admin_update(args.username, by="cli", **fields) if args.local
+             else _remote(args, "POST", f"/_admin/users/{args.username}", fields)["user"])
+        print(_fmt(u))
+        if action == "reset":
+            print(f"Temporary password (shown once): {pw}\nThey're signed out everywhere and must choose a new one.")
+        if action == "deactivate":
+            print("Deactivated and signed out everywhere.")
         return 0
     except accounts.AccountError as exc:
         sys.exit(f"Not done: {exc}")

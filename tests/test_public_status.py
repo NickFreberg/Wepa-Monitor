@@ -44,7 +44,7 @@ def test_pages_show_status_and_backups(tmp_path, monkeypatch):
 def test_login_stays_unless_made_public(tmp_path, monkeypatch):
     c, ds = _client(tmp_path, monkeypatch, public=False)
     sid = ds.stations.iloc[0]["station_id"]
-    assert c.get(f"/status/{sid}").status_code == 401
+    assert c.get(f"/status/{sid}").status_code == 302          # sent to sign in
 
 
 def test_public_switch_opens_student_pages_only(tmp_path, monkeypatch):
@@ -52,5 +52,5 @@ def test_public_switch_opens_student_pages_only(tmp_path, monkeypatch):
     sid = ds.stations.iloc[0]["station_id"]
     assert c.get(f"/status/{sid}").status_code == 200
     assert c.get("/status").status_code == 200
-    assert c.get("/status/signs").status_code == 401      # staff printout stays private
-    assert c.get("/").status_code == 401                  # the dashboard stays private
+    assert c.get("/status/signs").status_code == 302      # staff printout stays private
+    assert c.get("/").status_code == 302                  # the dashboard stays private

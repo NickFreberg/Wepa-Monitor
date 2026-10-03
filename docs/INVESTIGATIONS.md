@@ -94,19 +94,5 @@ reason, and both are recorded. The impact at the moment of closing is saved with
 
 ## Staff accounts
 
-Accounts are created from the command line by whoever holds the shared administrator password,
-against the running app, over HTTPS:
-
-```bash
-python -m wepa_monitor users add jsmith --name "Jordan Smith" --url https://<the app's address>
-python -m wepa_monitor users list    --url https://…
-python -m wepa_monitor users disable jsmith --url https://…     # never deleted: the audit trail refers to them
-python -m wepa_monitor users enable  jsmith --url https://…
-python -m wepa_monitor users reset   jsmith --url https://…     # new password
-```
-
-The tool asks for the administrator's password, or reads `WEPA_ADMIN_PASSWORD`. It generates the new
-person's password and prints it once; hand it over in person or through a password manager. Use
-`--role viewer` for read-only access, and `--ask-password` to type a password instead. `--url` can
-come from `WEPA_URL`. Passwords are stored only as salted hashes. Every account change made through the app is written to
-the System page's audit log. (`--local` edits a copy on your own computer directly, for testing.)
+Changes need a named staff account; the shared administrator and viewers read only. Accounts, sign-in
+rules and the command-line tool are described in [ACCOUNTS.md](ACCOUNTS.md).

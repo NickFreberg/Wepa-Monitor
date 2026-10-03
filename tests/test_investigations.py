@@ -12,6 +12,8 @@ import pandas as pd
 import pytest
 from werkzeug.security import generate_password_hash
 
+from conftest import login
+
 from wepa_monitor import accounts, investigations as I, metrics, refs, security
 
 FIXTURE = Path(__file__).parent / "fixtures" / "live_first_minutes"
@@ -133,18 +135,23 @@ def test_accounts_admin_api_and_sign_in(tmp_path, monkeypatch):
     monkeypatch.setenv("WEPA_BASIC_AUTH", "bsuresnet:" + generate_password_hash("admin password 123"))
     monkeypatch.setattr(security, "_failures", {})
     monkeypatch.setattr(security, "_locked_until", {})
+    monkeypatch.setattr(accounts, "_fail", {})
+    monkeypatch.setattr(accounts, "_locked", {})
     from wepa_monitor.dashboard.app import create_app
     c = create_app(tmp_path).server.test_client()
     adm = {**_basic("bsuresnet", "admin password 123"), "X-Wepa-Admin": "1"}
-    body = {"username": "jsmith", "name": "Jordan Smith", "password": "a good long password"}
+    body = {"username": "jsmith", "name": "Jordan Smith", "email": "jsmith@bridgew.edu", "password": "a good long password"}
     assert c.post("/_admin/users", json=body, headers=_basic("bsuresnet", "admin password 123")).status_code == 400
+    assert c.post("/_admin/users", json=body, headers=_basic("bsuresnet", "wrong")).status_code in (401, 403, 400)
     assert c.post("/_admin/users", json=body, headers=adm).status_code == 201
     assert c.post("/_admin/users", json=body, headers=adm).status_code == 409
-    assert c.post("/_admin/users", json={**body, "username": "short", "password": "short"}, headers=adm).status_code == 400
-    assert c.get("/", headers=_basic("jsmith", "a good long password")).status_code == 200
+    assert c.post("/_admin/users", json={**body, "username": "short", "email": "short@bridgew.edu", "password": "short"}, headers=adm).status_code == 400
+    bad_hall = {**body, "username": "x2", "email": "x2@bridgew.edu", "resident": True, "hall": "Nowhere Hall"}
+    assert c.post("/_admin/users", json=bad_hall, headers=adm).status_code == 400
+    assert login(c, "jsmith", "a good long password").status_code == 302
     assert c.get("/_admin/users", headers={**_basic("jsmith", "a good long password"), "X-Wepa-Admin": "1"}).status_code == 403
-    assert c.post("/_admin/users/jsmith", json={"disabled": True}, headers=adm).status_code == 200
-    assert c.get("/", headers=_basic("jsmith", "a good long password")).status_code == 401
+    assert c.post("/_admin/users/jsmith", json={"active": False}, headers=adm).status_code == 200
+    assert c.get("/").status_code == 302                                  # deactivated: signed out
     stored = json.loads((tmp_path / "security" / "users.json").read_text())
     assert "a good long password" not in json.dumps(stored) and stored["jsmith"]["hash"].startswith(("scrypt", "pbkdf2"))
 
@@ -152,10 +159,13 @@ def test_accounts_admin_api_and_sign_in(tmp_path, monkeypatch):
 def test_cli_local_mode(tmp_path, capsys, monkeypatch):
     from wepa_monitor.__main__ import main
     monkeypatch.delenv("WEPA_BASIC_AUTH", raising=False)
-    assert main(["--data-dir", str(tmp_path), "users", "add", "alee", "--name", "Alex Lee", "--local"]) == 0
+    assert main(["--data-dir", str(tmp_path), "users", "add", "alee", "--name", "Alex Lee", "--email",
+                 "alee@bridgew.edu", "--resident", "yes", "--hall", "Scott Hall", "--local"]) == 0
     out = capsys.readouterr().out
-    assert "Created alee" in out and "shown once" in out
+    assert "Created" in out and "alee" in out and "shown once" in out and "Scott Hall" in out
     accounts.configure(tmp_path / "security")
     assert accounts.get("alee")["name"] == "Alex Lee"
-    assert main(["--data-dir", str(tmp_path), "users", "disable", "alee", "--local"]) == 0
-    assert accounts.get("alee")["disabled"]
+    assert main(["--data-dir", str(tmp_path), "users", "deactivate", "alee", "--local"]) == 0
+    assert accounts.get("alee")["active"] is False and accounts.get("alee")["must_change"]
+    assert main(["--data-dir", str(tmp_path), "users", "update", "alee", "--resident", "no", "--local"]) == 0
+    assert accounts.get("alee")["hall"] is None

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+from conftest import csrf_of
 from werkzeug.security import generate_password_hash
 
 from wepa_monitor import export, metrics as M, report_card, security
@@ -61,19 +62,26 @@ def test_failed_sign_ins_are_recorded_and_blocked(tmp_path, monkeypatch):
     monkeypatch.setattr(security, "_failures", {})
     monkeypatch.setattr(security, "_locked_until", {})
     from wepa_monitor.dashboard.app import create_app
+    from wepa_monitor import accounts
+    monkeypatch.setattr(accounts, "_fail", {})
+    monkeypatch.setattr(accounts, "_locked", {})
     c = create_app(tmp_path).server.test_client()
-    assert c.get("/").status_code == 401                       # no credentials yet: not a failure
+    assert c.get("/").status_code == 302                       # not signed in: sent to the sign-in page
+
+    def attempt(user, pw, ip):
+        token = csrf_of(c, "/login")
+        return c.post("/login", data={"username": user, "password": pw, "csrf": token},
+                      environ_base={"REMOTE_ADDR": ip})
     for i in range(security.MAX_FAILURES):
         monkeypatch.setattr(security.time, "time", lambda i=i: 1_000_000 + i * 10)
-        c.get("/", headers=_auth(f"guess{i}", "nope"), environ_base={"REMOTE_ADDR": "203.0.113.9"})
+        attempt(f"guess{i}", "nope", "203.0.113.9")
     fails = security.events_frame()
     assert (fails["kind"] == "login_failed").sum() >= security.MAX_FAILURES
     assert "nope" not in fails.to_string()                     # passwords never recorded
     assert (fails["network"] == "203.0.113.x").any()
-    r = c.get("/", headers=_auth("bsuresnet", "a long test password"), environ_base={"REMOTE_ADDR": "203.0.113.9"})
-    assert r.status_code == 429                                # the network is blocked for a while
-    ok = c.get("/", headers=_auth("bsuresnet", "a long test password"), environ_base={"REMOTE_ADDR": "198.51.100.4"})
-    assert ok.status_code == 200 and ok.headers["X-Content-Type-Options"] == "nosniff"
+    assert attempt("bsuresnet", "a long test password", "203.0.113.9").status_code == 429   # network blocked
+    ok = attempt("bsuresnet", "a long test password", "198.51.100.4")
+    assert ok.status_code == 302 and ok.headers["X-Content-Type-Options"] == "nosniff"
 
 
 def test_visits_are_anonymized(tmp_path, monkeypatch):

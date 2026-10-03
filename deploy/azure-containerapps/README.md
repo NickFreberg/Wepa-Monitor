@@ -65,18 +65,21 @@ The script updates the cloud app, packages `data/live`, and uploads it to `data/
 the share. The cloud merges it with its own data and drops duplicate minutes; its own files are
 never changed. Running it again replaces the earlier import.
 
-## Staff accounts (for Investigations)
+## Staff accounts
 
-Changes to investigations need a named account. With the app running, from your own computer:
+People sign in on the app's sign-in page with their own accounts. The administrator (`bsuresnet`,
+from `WEPA_BASIC_AUTH`) creates them from your own computer, with the app running:
 
 ```bash
-python -m wepa_monitor users add jsmith --name "Jordan Smith" \
-  --url https://$(az containerapp show -g rg-resnet-print-ops -n resnet-print-ops --query properties.configuration.ingress.fqdn -o tsv)
+export WEPA_URL=https://$(az containerapp show -g rg-resnet-print-ops -n resnet-print-ops --query properties.configuration.ingress.fqdn -o tsv)
+python -m wepa_monitor users add jsmith --name "Jordan Smith" --email jsmith@bridgew.edu
+python -m wepa_monitor users add alee --name "Alex Lee" --email alee@bridgew.edu --resident yes --hall "Scott Hall"
 ```
 
-It asks for the `bsuresnet` administrator password and prints the new person's password once. Also
-`users list`, `users disable`, `users enable` and `users reset`. Details: `docs/INVESTIGATIONS.md`.
-Accounts are kept in the file share's `security/users.json` (hashed passwords), so they survive deploys.
+It asks for the `bsuresnet` password and prints a temporary password once. Accounts and pictures live
+on the file share (`security/`), so they survive deploys. Optional: set a `WEPA_SECRET_KEY` secret
+(any long random string) to sign sessions; otherwise one is generated and kept on the share. Full
+rules: `docs/ACCOUNTS.md`.
 
 ## Turn on the AI analyst (optional)
 

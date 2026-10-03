@@ -136,6 +136,11 @@ any chart, and every chart carries a one-line takeaway in plain words.
   accounts, a tamper-evident audit trail, automatic detection, an impact score, two-year archiving and a
   PDF evidence packet for Wepa. It complements BSU's ITSM ticketing; it doesn't replace it. Rules and
   account setup: [docs/INVESTIGATIONS.md](docs/INVESTIGATIONS.md).
+- **Accounts and sign-in**: a real sign-in page with sessions, NIST-style password rules (including a
+  breached-password check), lockouts, timeouts and forced change of temporary passwords; one central
+  directory (name, email, role, active, resident student and hall) managed by the administrator from
+  the command line; people set their own picture, phone and password under **My account**. See
+  [docs/ACCOUNTS.md](docs/ACCOUNTS.md).
 - **Student status pages** (`/status`, `/status/<printer>`): a fast phone page per printer showing
   whether it works right now and the nearest working printers with walk times, opened from a QR sign
   on the printer (print them from Stations → "Printable QR signs"). They stay behind the login unless

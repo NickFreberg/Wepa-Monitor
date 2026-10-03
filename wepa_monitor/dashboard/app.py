@@ -19,7 +19,7 @@ from .. import activity, config, export, geo, metrics as M, routing, security
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
-from .views import assistant, investigations_view
+from .views import account_view, assistant, investigations_view
 from .views import (activity_log, analytics, executive, insights_view, outcomes, overview, rounds, station,
                     stations, system)
 from .views.common import PERIODS, area_key
@@ -40,6 +40,8 @@ PAGE_META = {
     "/system": ("System", "Is the monitor healthy? Data quality, the live log, and who's using the site."),
     "/activity": ("Activity", "Everything that happened, newest first."),
     "/investigations": ("Investigations", "Root-cause work on recurring printer problems, with a permanent audit trail."),
+    "/account": ("My account", "Your picture, contact phone and password."),
+    "/directory": ("Directory", "Everyone with an account, managed centrally by the administrator."),
     "/investigation": ("Investigation", "One investigation: its record, decisions and audit trail."),
 }
 USES_PERIOD = {"/analytics", "/station"}
@@ -256,6 +258,7 @@ def _shell(ds: M.Dataset):
                                 id="bell", className="topbar__icon-btn", title="Notifications"),
                     _appearance_panel(),
                     assistant.button(),
+                    account_view.user_menu(),
                 ]),
             ]),
             html.Div(id="banner"),
@@ -429,6 +432,10 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return system.layout()
         if route == "/investigations":
             return investigations_view.layout(ds, params)
+        if route == "/account":
+            return account_view.layout(params)
+        if route == "/directory":
+            return account_view.directory()
         if route == "/investigation":
             return investigations_view.detail_layout((path or "").rstrip("/").rsplit("/", 1)[-1])
         return html.Div([html.P("That page doesn't exist."), dcc.Link("Go to the overview", href="/", className="link")],
@@ -641,6 +648,42 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return no_update, str(exc)
         security.audit("export", f"{what}.{fmt}")
         return dcc.send_bytes(data, filename, type=mime), f"Downloaded {filename}"
+
+    # --- my account ----------------------------------------------------------------------------------
+    @app.callback(Output("acct-body", "children"), Input("url", "pathname"))
+    def acct_body(path):
+        if _route(path) != "/account":
+            raise PreventUpdate
+        return account_view.render()
+
+    @app.callback(Output("acct-body", "children", allow_duplicate=True), Output("acct-msg", "children"),
+                  Input("acct-photo-upload", "contents"), Input("acct-photo-remove", "n_clicks"),
+                  Input("acct-phone-save", "n_clicks"), State("acct-phone", "value"), prevent_initial_call=True)
+    def acct_act(contents, _rm, _save, phone):
+        import base64
+
+        from .. import accounts
+        me = accounts.current()
+        trig = ctx.triggered_id
+        if not me.get("username") or me["role"] == "admin" or not (ctx.triggered and ctx.triggered[0].get("value")):
+            raise PreventUpdate
+        try:
+            if trig == "acct-photo-upload":
+                accounts.set_photo(me["username"], base64.b64decode(contents.split(",", 1)[1]))
+                security.audit("profile picture changed", me["username"])
+                msg = html.Span("Picture updated. It appears everywhere after the next page load.", className="inv-ok")
+            elif trig == "acct-photo-remove":
+                accounts.remove_photo(me["username"])
+                msg = html.Span("Picture removed.", className="inv-ok")
+            elif trig == "acct-phone-save":
+                u = accounts.set_phone(me["username"], phone)
+                security.audit("phone changed", me["username"])
+                msg = html.Span(f"Phone saved: {u['phone'] or 'none'}.", className="inv-ok")
+            else:
+                raise PreventUpdate
+        except accounts.AccountError as exc:
+            return no_update, html.Span(str(exc), className="inv-err")
+        return account_view.render(), msg
 
     # --- investigations -----------------------------------------------------------------------------
     @app.callback(Output("inv-list", "children"), Input("inv-filter", "value"), Input("inv-q", "value"),

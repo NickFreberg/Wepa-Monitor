@@ -1,4 +1,4 @@
-"""Site security and usage: the optional login, sign-in protection, security headers, who is using
+"""Site security and usage: sign-in protection (the sign-in itself is in auth.py and accounts.py), security headers, who is using
 the site, and a small audit trail. All of it powers the System page.
 
 Privacy by design (this records people, so it records as little as possible):
@@ -174,8 +174,7 @@ def install(server, data_dir: Path | None = None) -> None:
     """Security headers on every response; the optional login (WEPA_BASIC_AUTH = "user:<werkzeug
     hash>"); the session heartbeat endpoint; persistent records next to the data."""
     global _store
-    from flask import Response, jsonify, request
-    from werkzeug.security import check_password_hash
+    from flask import jsonify, request
 
     if data_dir is not None and _store is None:
         _store = Path(data_dir).parent / "security" if Path(data_dir).name == "live" else Path(data_dir) / "security"
@@ -187,30 +186,8 @@ def install(server, data_dir: Path | None = None) -> None:
                            else Path(data_dir) / "security")
     accounts.install_admin_api(server)
 
-    setting = os.environ.get("WEPA_BASIC_AUTH", "")
-    user, _, pw_hash = setting.partition(":")
-
-    @server.before_request
-    def _check():
-        if not setting:
-            return None
-        from .dashboard.public import is_public
-        if is_public(request.path):
-            return None
-        ip = client_ip(request)
-        net = truncate_ip(ip)
-        if _is_locked(net):
-            return Response("Too many failed sign-ins. Try again in a few minutes.", 429,
-                            {"Retry-After": str(LOCKOUT_FOR)})
-        a = request.authorization
-        if a and a.username == user and a.password and check_password_hash(pw_hash, a.password):
-            return None
-        if a and a.username and a.username != user and a.password and accounts.check(a.username, a.password):
-            return None
-        if a and (a.username or a.password):
-            _failed(net, a.username or "", ip, request.headers.get("User-Agent", ""))
-        return Response("Sign in to view ResNet Print Ops.", 401,
-                        {"WWW-Authenticate": 'Basic realm="ResNet Print Ops", charset="UTF-8"'})
+    from . import auth
+    auth.install(server, accounts.store_dir())
 
     @server.after_request
     def _headers(resp):
@@ -234,12 +211,13 @@ def install(server, data_dir: Path | None = None) -> None:
             return jsonify(ok=False), 400
         now = time.time()
         ip = client_ip(request)
-        a = request.authorization
+        from . import accounts
+        me = accounts.current()
         with _lock:
             s = _sessions.get(tab)
             if s is None or now - s["last"] > SESSION_GAP:
                 s = {"tab": tab, "first": now, "last": now, "pages": 0,
-                     "user": (a.username if a and setting else "") or ("signed in" if setting else "open access"),
+                     "user": (me["username"] if os.environ.get("WEPA_BASIC_AUTH") else "open access") or "signed in",
                      "network": truncate_ip(ip), "where": where(ip),
                      "device": device(request.headers.get("User-Agent", ""))}
                 _sessions[tab] = s
