@@ -194,11 +194,13 @@ class Toolkit:
                  "class schedules.", {"period": P}, self.campus_context),
             Tool("statistics", "Deeper analysis: which stations fail more than chance explains (Bayesian rates), "
                  "how often warnings turn into outages, recent significant changes, times several printers went "
-                 "down together (shared network/Wepa/building causes), coverage gaps when a station is "
+                 "down together (shared network/Wepa/building causes), whether humid weather goes with more jams, downtime "
+                 "weighted by how busy the printer usually is, coverage gaps when a station is "
                  "down, what evening staffing would save, and availability by academic phase.",
                  {"kind": {"type": "string", "enum": ["failure_rates", "warning_to_outage", "recent_changes",
                                                       "coverage_gaps", "staffing_whatif", "by_phase",
-                                                      "downtime_drivers", "shared_outages"]},
+                                                      "downtime_drivers", "shared_outages", "weather_jams",
+                                                      "busy_downtime"]},
                   "period": P, "stations": S}, self.statistics, ["kind"]),
             Tool("outage_risk", "The machine-learning outage-risk model: whether it is live (has proven itself "
                  "against a simple baseline on held-out weeks), its test scores and track record, and, if live, each "
@@ -581,6 +583,20 @@ class Toolkit:
             return _table(p, {"label": "academic phase", "days": "days", "availability": "availability %",
                               "outages_per_day": "outages per day", "faults_per_day": "faults per day",
                               "toner_k_per_day": "black cartridges used per day"}, title=head)
+        if kind == "weather_jams":
+            from . import weather as W
+            r = W.jams_vs_humidity(self.ds, start, end, ids)
+            out = head + " " + W.sentence(r) + " (Outdoor humidity; an association, not proof of a cause.)"
+            if r and r.get("status") == "ok":
+                out += "\n" + _table(r["bands"], {"band": "humidity band", "humidity": "average humidity %",
+                                                  "hours": "hours", "jams": "jams", "per100": "jams per 100 toner points"})
+            return out
+        if kind == "busy_downtime":
+            from . import impact
+            t = impact.by_station(self.ds, start, end, ids)
+            return head + " " + impact.summary(t) + " (Weighted by usual printing at that hour; not a count of " \
+                "people.)\n" + _table(t, {"label": "station", "down_h": "hours down", "weighted_h": "busy-weighted hours",
+                                          "rank_plain": "rank by hours", "rank_busy": "rank weighted"}, n=15)
         if kind == "shared_outages":
             from . import correlated as C
             c = C.clusters(self.ds, start, end, ids)

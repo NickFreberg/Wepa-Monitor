@@ -45,10 +45,35 @@ def render(ds: M.Dataset, theme: str, scope, period, tab: str, burn_unit: str = 
     fn = {"reliability": _reliability, "faults": _faults, "consumables": _consumables, "usage": _usage,
           "report": _report, "planning": _planning, "stats": _stats}.get(tab, _reliability)
     out = fn(ds, theme, ids, start, end, plabel, {"burn": burn_unit, "mttr": mttr_unit})
+    if fn is _faults and isinstance(out, list):
+        out.append(html.Div(className="grid", children=[_weather_jams(ds, theme, ids, start, end, plabel)]))
     if fn is _reliability and isinstance(out, list):
         out.append(html.Div(className="grid", children=[_busy_downtime(ds, theme, ids, start, end, plabel),
                                                         _shared_outages(ds, ids, start, end, plabel)]))
     return out
+
+
+def _weather_jams(ds, theme, ids, start, end, plabel):
+    from ... import weather as W
+    r = W.jams_vs_humidity(ds, start, end, ids)
+    ok = r is not None and r.get("status") == "ok"
+    return chart_card(
+        "Does humid weather mean more paper jams?", f"Jams per unit of printing in dry, middle and humid hours "
+        f"(outdoor humidity in Bridgewater), last {plabel}.",
+        charts.humidity_bands(theme, r["bands"]) if ok else None,
+        body=None if ok else empty(W.sentence(r), big=False), graph_id="weather-jams" if ok else None,
+        story=[W.sentence(r)] if ok else None, icon_name=("droplet", "blue"),
+        explain=["Damp paper curls and sticks, a common cause of jams. Each hour is sorted by Bridgewater's outdoor "
+                 "humidity into thirds (dry, middle, humid); bars are jams per 100 points of toner used, so busy "
+                 "hours don't count extra just for being busy.",
+                 "Caveats: this is outdoor humidity (heating and air conditioning change it indoors), one reading "
+                 "for the whole campus, and a link is not proof of a cause."],
+        nerd=["Weather: Open-Meteo hourly relative humidity (ERA5 reanalysis for past days, forecast-model past "
+              "days for the last week), CC BY 4.0. Humid vs dry thirds are compared with a Mantel-Haenszel rate "
+              "ratio stratified by 6-hour block of the day x weekday/weekend, with toner used as exposure; 95% "
+              "interval from the Greenland-Robins variance. Needs 14 days and 30 jams."]
+             + ([f"This period: {r['hours']:,} hours, {r['jams']:,} jams; dry ≤ {r['dry_max']:.0f}% humidity, humid "
+                 f"≥ {r['humid_min']:.0f}%."] if ok else []))
 
 
 def _busy_downtime(ds, theme, ids, start, end, plabel):

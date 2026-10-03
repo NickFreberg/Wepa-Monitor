@@ -18,6 +18,20 @@ def scrape_once(data_dir: Path, archive_html: bool = False, quiet: bool = False)
     return result.ok
 
 
+def _refresh_weather(data_dir: Path) -> None:
+    """Daily: cache any missing hours of Bridgewater weather (for the humidity vs jams analysis)."""
+    try:
+        import pandas as pd
+
+        from . import metrics, weather
+        ds = metrics.load(data_dir)
+        if ds.data_start is not None:
+            weather.refresh(data_dir, ds.data_start, pd.Timestamp.now(tz="UTC"),
+                            log=lambda m: print(m, flush=True))
+    except Exception as exc:  # noqa: BLE001 - optional context
+        print(f"weather refresh skipped: {type(exc).__name__}: {exc}", flush=True)
+
+
 def _retrain_risk(data_dir: Path) -> None:
     """Nightly: retrain the outage-risk model in the background (it decides whether it's good enough)."""
     try:
@@ -43,6 +57,7 @@ def collect_forever(data_dir: Path, archive_html: bool = False, quiet: bool = Fa
                 # (academic calendar yearly, library hours weekly); failures keep the old files.
                 campus.refresh(log=lambda m: print(m, flush=True))
                 courses.refresh(log=lambda m: print(m, flush=True))      # monthly; a no-op otherwise
+                _refresh_weather(data_dir)
                 _retrain_risk(data_dir)
                 last_compact = today
         except Exception as exc:  # noqa: BLE001 - a disk hiccup must not kill the collector thread

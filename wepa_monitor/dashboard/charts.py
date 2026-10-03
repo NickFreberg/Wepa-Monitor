@@ -879,3 +879,19 @@ def impact_bars(theme: str, t: pd.DataFrame, n: int = 8) -> go.Figure:
                                xaxis=dict(showgrid=True, title=dict(text="hours"), rangemode="tozero"),
                                yaxis=dict(showgrid=False, tickfont=dict(color=tk["secondary"]))))
     return fig
+
+
+def humidity_bands(theme: str, bands: pd.DataFrame) -> go.Figure:
+    t = TOKENS[theme]
+    d = bands.dropna(subset=["per100"])
+    labels = [f"{b.capitalize()}<br><span style='font-size:11px'>avg {h:.0f}% humidity</span>"
+              for b, h in zip(d["band"], d["humidity"])]
+    fig = go.Figure(go.Bar(
+        x=labels, y=d["per100"], marker=dict(color=[t["series"][2], t["neutral_bar"], t["series"][0]][:len(d)]),
+        text=[f"{v:.2f}" for v in d["per100"]], textposition="outside", cliponaxis=False,
+        textfont=dict(color=t["secondary"], size=11), customdata=np.stack([d["jams"], d["hours"]], axis=1),
+        hovertemplate="%{customdata[0]:,.0f} jams in %{customdata[1]:,} hours<br>%{y:.2f} per 100 toner points"
+                      "<extra></extra>"))
+    fig.update_layout(**layout(theme, 260, yaxis=dict(title=dict(text="jams per 100 toner points"),
+                                                      rangemode="tozero")))
+    return fig

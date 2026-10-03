@@ -143,7 +143,7 @@ def test_analyst_tools_run_on_live_data(ds):
              ("campus_context", {}), ("outage_risk", {}), ("ask_dashboard", {"question": "What's down right now?"}),
              ("availability", {"stations": "no such hall"}), ("nonsense", {})]
     calls += [("statistics", {"kind": k}) for k in ("failure_rates", "warning_to_outage", "recent_changes",
-                                                     "coverage_gaps", "staffing_whatif", "by_phase", "downtime_drivers", "shared_outages")]
+                                                     "coverage_gaps", "staffing_whatif", "by_phase", "downtime_drivers", "shared_outages", "weather_jams", "busy_downtime")]
     sid = ds.stations.iloc[0]["station_id"]
     calls.append(("station_profile", {"station": sid}))
     for name, args in calls:
