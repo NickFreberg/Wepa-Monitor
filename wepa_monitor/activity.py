@@ -75,13 +75,15 @@ def events(ds: Dataset, since: pd.Timestamp | None = None, ids=None) -> pd.DataF
     for r in inc.itertuples(index=False):
         name = label.get(r.station_id, r.station_id)
         why = cause.get((r.station_id, r.start), "")
+        ref = getattr(r, "ref", "") or ""
+        tag = f"{ref} · " if ref else ""
         if r.severity == "red":
             if r.start >= since and not r.censored_start:
                 add(r.start, "down", "critical", r.station_id, f"{name}: out of service",
-                    (why or "No cause reported") + unstaffed(r.station_id, r.start))
+                    tag + (why or "No cause reported") + unstaffed(r.station_id, r.start))
             if r.status == "resolved" and r.end >= since:
                 add(r.end, "recovered", "good", r.station_id, f"{name}: resolved",
-                    f"Out of service for {_dur(r.duration_s)}" + (f" ({why})" if why else ""))
+                    tag + f"Out of service for {_dur(r.duration_s)}" + (f" ({why})" if why else ""))
         else:
             if r.start >= since and not r.censored_start:
                 add(r.start, "warning", "warning", r.station_id, f"{name}: degraded",

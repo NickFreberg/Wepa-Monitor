@@ -67,6 +67,7 @@ def table(ds: M.Dataset, what: str, ids, start, end) -> pd.DataFrame:
             lambda d: f" ({d})" if d else ""))
         cause = f.groupby(["station_id", "start"])["what"].agg(lambda s: "; ".join(sorted(set(s))))
         return pd.DataFrame({
+            "Reference": inc["ref"] if "ref" in inc else "",
             "Station": inc["station_id"].map(names), "Station #": inc["station_id"],
             "Type": inc["severity"].map({"red": "Outage", "yellow": "Degraded"}),
             "Started": _local(inc["start"]), "Ended": _local(inc["end"]).where(inc["end"].notna(), ""),

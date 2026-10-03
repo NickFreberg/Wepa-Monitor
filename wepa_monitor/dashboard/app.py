@@ -19,7 +19,7 @@ from .. import activity, config, export, geo, metrics as M, routing, security
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
-from .views import assistant
+from .views import assistant, investigations_view
 from .views import (activity_log, analytics, executive, insights_view, outcomes, overview, rounds, station,
                     stations, system)
 from .views.common import PERIODS, area_key
@@ -27,6 +27,7 @@ from .views.common import PERIODS, area_key
 NAV = [("/", "Overview", "home"), ("/insights", "Insights", "sparkle"), ("/rounds", "Rounds", "route"),
        ("/stations", "Stations", "grid"), ("/analytics", "Analytics", "chart"),
        ("/executive", "Executive", "briefcase"), ("/outcomes", "IT Outcomes", "award"),
+       ("/investigations", "Investigations", "search"),
        ("/system", "System", "pulse")]
 PAGE_META = {
     "/": ("Overview", "What needs attention right now."),
@@ -38,6 +39,8 @@ PAGE_META = {
     "/outcomes": ("IT Outcomes", "A ready-to-print page for the IT annual report."),
     "/system": ("System", "Is the monitor healthy? Data quality, the live log, and who's using the site."),
     "/activity": ("Activity", "Everything that happened, newest first."),
+    "/investigations": ("Investigations", "Root-cause work on recurring printer problems, with a permanent audit trail."),
+    "/investigation": ("Investigation", "One investigation: its record, decisions and audit trail."),
 }
 USES_PERIOD = {"/analytics", "/station"}
 USES_SCOPE = {"/", "/insights", "/stations", "/analytics", "/executive", "/activity", "/outcomes"}
@@ -45,6 +48,18 @@ THEMES = [("auto", "Match my device", "Light or dark, following your system sett
           ("light", "Light", "Clean and bright"),
           ("dark", "Dark", "Easy on the eyes at night"),
           ("crimson", "BSU", "Bridgewater crimson and stone")]
+
+
+def attach_refs(ds: M.Dataset) -> None:
+    """Every outage's permanent reference number (OUT/JAM/PAP/SUP/ERR), as a 'ref' column."""
+    from .. import refs
+    try:
+        ds.sev_inc = ds.sev_inc.assign(ref=refs.sync(ds))
+        from .. import investigations
+        investigations.detect(ds)
+    except Exception as exc:  # noqa: BLE001 - numbering must never stop the dashboard loading
+        print(f"reference numbers not assigned: {type(exc).__name__}: {exc}", flush=True)
+        ds.sev_inc = ds.sev_inc.assign(ref="")
 
 
 class DataCache:
@@ -90,6 +105,7 @@ class DataCache:
             ds = M.load(self.data_dir, rollups=self.rollups)
             if not ds.empty:
                 models.eol_forecast(ds)       # warm the one forecast nearly every page uses
+                attach_refs(ds)
             self.ds, self.sig = ds, sig       # a single assignment: readers see old or new, never half
             self.loaded_at, self.load_s = time.time(), time.time() - t0
             return True
@@ -116,6 +132,8 @@ def _route(path: str | None) -> str:
     path = (path or "/").rstrip("/") or "/"
     if path.startswith("/station/"):
         return "/station"
+    if path.startswith("/investigations/"):
+        return "/investigation"
     return {"/management": "/analytics", "/operations": "/", "/quality": "/system"}.get(path, path)
 
 
@@ -287,6 +305,16 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     from . import public
     public.register(app.server, cache)
 
+    @app.server.get("/investigations/<ref>/evidence.pdf")
+    def _evidence(ref):
+        from flask import Response, abort
+        data = investigations_view.evidence_pdf(cache.get(), ref)
+        if data is None:
+            abort(404)
+        security.audit("evidence packet", ref)
+        return Response(data, mimetype="application/pdf",
+                        headers={"Content-Disposition": f'attachment; filename="{ref}-evidence.pdf"'})
+
     # --- appearance: OS default until the person chooses; text size, spacing, motion, contrast ------
     app.clientside_callback(
         """
@@ -313,7 +341,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         route = _route(path)
         links = [dcc.Link([icon(ic), html.Span(label)], href=href, title=label,
                           className="nav__link" + (" is-active" if route == href or
-                                                   (href == "/stations" and route == "/station") else ""))
+                                                   (href == "/stations" and route == "/station") or
+                                                   (href == "/investigations" and route == "/investigation") else ""))
                  for href, label, ic in NAV]
         if route == "/station":
             title, sub = "Station", "Status, history and consumables for one print station."
@@ -398,6 +427,10 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return outcomes.layout(ds)
         if route == "/system":
             return system.layout()
+        if route == "/investigations":
+            return investigations_view.layout(ds, params)
+        if route == "/investigation":
+            return investigations_view.detail_layout((path or "").rstrip("/").rsplit("/", 1)[-1])
         return html.Div([html.P("That page doesn't exist."), dcc.Link("Go to the overview", href="/", className="link")],
                         className="empty empty--page")
 
@@ -608,6 +641,66 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return no_update, str(exc)
         security.audit("export", f"{what}.{fmt}")
         return dcc.send_bytes(data, filename, type=mime), f"Downloaded {filename}"
+
+    # --- investigations -----------------------------------------------------------------------------
+    @app.callback(Output("inv-list", "children"), Input("inv-filter", "value"), Input("inv-q", "value"),
+                  Input("inv-new-msg", "children"))
+    def inv_list(show, q, _):
+        return investigations_view.render_list(cache.get(), show or "open", q or "")
+
+    @app.callback(Output("inv-new-link", "options"), Input("inv-new-station", "value"))
+    def inv_link_opts(sid):
+        return investigations_view.link_options(cache.get(), sid)
+
+    @app.callback(Output("inv-new-msg", "children"), Input("inv-new-go", "n_clicks"),
+                  State("inv-new-station", "value"), State("inv-new-cat", "value"), State("inv-new-title", "value"),
+                  State("inv-new-desc", "value"), State("inv-new-link", "value"), prevent_initial_call=True)
+    def inv_create(n, sid, cat, title, desc, linked):
+        if not n:
+            raise PreventUpdate
+        from .. import investigations as INV
+        try:
+            ref = investigations_view.create_manual(cache.get(), sid, cat, title, desc, linked)
+        except INV.InvestigationError as exc:
+            return html.Span(str(exc), className="inv-err")
+        return html.Span(["Opened ", dcc.Link(ref, href=f"/investigations/{ref}", className="link mono"), "."])
+
+    @app.callback(Output("inv-body", "children"), Input("inv-ref", "data"))
+    def inv_detail(ref):
+        return investigations_view.render_detail(cache.get(), ref)
+
+    @app.callback(Output("inv-body", "children", allow_duplicate=True), Output("inv-msg", "children"),
+                  Input("inv-save", "n_clicks"), Input({"type": "inv-go", "to": ALL}, "n_clicks"),
+                  Input("inv-note-go", "n_clicks"), State("inv-ref", "data"),
+                  State({"type": "inv-field", "name": ALL}, "value"), State({"type": "inv-field", "name": ALL}, "id"),
+                  State("inv-decision-note", "value"), State("inv-note-text", "value"), prevent_initial_call=True)
+    def inv_act(_save, _go, _note, ref, values, ids, decision, note_text):
+        from .. import accounts, investigations as INV
+        trig = ctx.triggered_id
+        if not (ctx.triggered and ctx.triggered[0].get("value")):
+            raise PreventUpdate                      # buttons appearing after a re-render, not clicks
+        ds = cache.get()
+        user = accounts.current()
+        pending = {i["name"]: v for i, v in zip(ids or [], values or [])}
+        try:
+            if trig == "inv-save":
+                INV.update(ds.data_dir, ref, user, pending)
+                msg = html.Span("Saved.", className="inv-ok")
+            elif isinstance(trig, dict) and trig.get("type") == "inv-go":
+                r = INV.get(ds.data_dir, ref)
+                level = INV.impact(ds, r["station_id"])["level"] if r and r.get("station_id") else None
+                if r and r["state"] in INV.EDITABLE_IN and pending and user.get("can_edit"):
+                    INV.update(ds.data_dir, ref, user, pending)     # keep what's on screen
+                INV.transition(ds.data_dir, ref, user, trig["to"], decision or "", impact_now=level)
+                msg = html.Span(f"Moved to {trig['to']}.", className="inv-ok")
+            elif trig == "inv-note-go":
+                INV.add_note(ds.data_dir, ref, user, note_text or "")
+                msg = html.Span("Note added.", className="inv-ok")
+            else:
+                raise PreventUpdate
+        except INV.InvestigationError as exc:
+            return no_update, html.Span(str(exc), className="inv-err")
+        return investigations_view.render_detail(ds, ref), msg
 
     # --- assistant pane ------------------------------------------------------------------------------
     app.clientside_callback(

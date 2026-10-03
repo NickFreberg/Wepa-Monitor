@@ -181,6 +181,11 @@ def install(server, data_dir: Path | None = None) -> None:
         _store = Path(data_dir).parent / "security" if Path(data_dir).name == "live" else Path(data_dir) / "security"
         if _store.exists():
             _load(_store)
+    from . import accounts
+    if data_dir is not None:
+        accounts.configure(Path(data_dir).parent / "security" if Path(data_dir).name == "live"
+                           else Path(data_dir) / "security")
+    accounts.install_admin_api(server)
 
     setting = os.environ.get("WEPA_BASIC_AUTH", "")
     user, _, pw_hash = setting.partition(":")
@@ -200,6 +205,8 @@ def install(server, data_dir: Path | None = None) -> None:
         a = request.authorization
         if a and a.username == user and a.password and check_password_hash(pw_hash, a.password):
             return None
+        if a and a.username and a.username != user and a.password and accounts.check(a.username, a.password):
+            return None
         if a and (a.username or a.password):
             _failed(net, a.username or "", ip, request.headers.get("User-Agent", ""))
         return Response("Sign in to view ResNet Print Ops.", 401,
@@ -215,7 +222,7 @@ def install(server, data_dir: Path | None = None) -> None:
         h.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         if request.headers.get("X-Forwarded-Proto", request.scheme) == "https":
             h.setdefault("Strict-Transport-Security", "max-age=31536000")
-        if request.path.startswith(("/_dash-update-component", "/_session")):
+        if request.path.startswith(("/_dash-update-component", "/_session", "/_admin")):
             h.setdefault("Cache-Control", "no-store")
         return resp
 

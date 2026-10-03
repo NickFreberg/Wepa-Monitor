@@ -31,6 +31,7 @@ when one went down. It answered "what's broken right now in my area" and nothing
 | Machine learning | Outage-risk model (logistic regression, gradient-boosted trees, small neural network) that must beat a baseline on walk-forward weeks before it is shown | `risk.py` |
 | AI | An analyst agent with read-only tools over all of the above; every figure in its replies is fact-checked against what it was shown | `ai.py`, `analyst.py` |
 | Product | Dash dashboard for staff, managers and executives; a student status page per printer with QR signs; exports (CSV, Excel, JSON, PDF) | `dashboard/` |
+| Governance | Permanent reference numbers on every outage; Investigations with a governed lifecycle, named accounts, separation of duties, a hash-chained audit trail and PDF evidence packets | `refs.py`, `investigations.py`, `accounts.py`, `docs/INVESTIGATIONS.md` |
 | Operations | Azure Container Apps with rolling, zero-downtime deploys; login with lockout; anonymized visit records; CI (lint + tests) | `deploy/`, `security.py`, `.github/workflows/ci.yml` |
 
 ```mermaid

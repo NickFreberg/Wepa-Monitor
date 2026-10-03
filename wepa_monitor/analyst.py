@@ -206,6 +206,10 @@ class Toolkit:
                  "against a simple baseline on held-out weeks), its test scores and track record, and, if live, each "
                  "printer's chance of going down in the next 24 hours with the main reasons.",
                  {"stations": S}, self.outage_risk),
+            Tool("investigations", "Documented investigations (INV numbers) into recurring printer problems: state, "
+                 "location, root cause, actions, Wepa case and ITSM references. Read-only. Give a reference for one "
+                 "investigation's full record, or nothing for the list.",
+                 {"ref": {"type": "string", "description": "Optional: an INV reference"}}, self.investigations),
             Tool("ask_dashboard", "The dashboard's own built-in answer to a plain-English question (a quick "
                  "cross-check, or for things like hall support contacts).",
                  {"question": {"type": "string"}}, self.ask_dashboard, ["question"]),
@@ -641,6 +645,25 @@ class Toolkit:
                                 "band": "band", "reasons": "mostly because of"}, n=15,
                             title="Current risk (printers that are up):"))
         return "\n".join(lines)
+
+    def investigations(self, ref=None) -> str:
+        from . import investigations as INV
+        if ref:
+            r = INV.get(self.ds.data_dir, str(ref).strip().upper())
+            if not r:
+                return f"No investigation {ref}."
+            keys = ["title", "state", "location", "category", "first_occurrence", "assignee", "root_cause",
+                    "root_cause_status", "action_taken", "itsm_ref", "wepa_case", "impact_override", "linked"]
+            lines = [f"{r['ref']}: " + "; ".join(f"{k}: {r.get(k)}" for k in keys if r.get(k))]
+            lines += [f"Note ({_when(pd.Timestamp(e['ts'], unit='s', tz='UTC'))}, {e.get('user_name')}): {e['note']}"
+                      for e in r["notes"]]
+            return "\n".join(lines)
+        t = INV.table(self.ds.data_dir)
+        if t.empty:
+            return "No investigations have been opened."
+        return _table(t, {"ref": "reference", "title": "name", "state": "state", "location": "kiosk location",
+                          "assignee": "assigned to", "archived": "archived"}, n=40,
+                      title=f"{len(t)} investigation(s), newest first.")
 
     def ask_dashboard(self, question) -> str:
         from . import ask, narrative as N

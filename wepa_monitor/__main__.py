@@ -37,6 +37,8 @@ def main(argv: list[str] | None = None) -> int:
                        help="also keep a gzipped copy of each raw page (about 7 MB/day)")
     sub.add_parser("compact", help="compact finished days to parquet")
     sub.add_parser("train-risk", help="train and evaluate the outage-risk model now")
+    from . import cli_users
+    cli_users.add_parser(sub)
     sub.add_parser("network", help="rebuild the campus walking/driving network from OpenStreetMap")
     exp = sub.add_parser("export", help="package local data as import files for another collector's data folder")
     exp.add_argument("--tag", default="import", help="letters/digits naming this source, e.g. mac")
@@ -119,6 +121,9 @@ def main(argv: list[str] | None = None) -> int:
         done = store.compact(args.data_dir or config.LIVE_DATA_DIR)
         print(f"compacted {len(done)} file(s)")
         return 0
+
+    if args.cmd == "users":
+        return cli_users.run(args)
 
     if args.cmd == "train-risk":
         from . import metrics, risk

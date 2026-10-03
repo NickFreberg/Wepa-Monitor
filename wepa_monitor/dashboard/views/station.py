@@ -173,9 +173,11 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
         chart_card("When it goes wrong", "Fault incidents by local hour of day.",
                    charts.hour_bars(theme, faults["hour"], "faults") if len(faults) else None, graph_id={"type": "xg", "chart": "station_hours"},
                    body=None if len(faults) else empty("No faults in this period.", big=False)),
-        chart_card("Incident history", f"Every red and yellow incident, last {plabel}.", wide=True,
-                   body=data_table(hist, [("when", "Started", None), ("sev", "Type", None), ("cause", "Cause", None),
-                                          ("lasted", "Lasted", None)], max_rows=100,
+        chart_card("Incident history", f"Every outage and degraded period, last {plabel}. Outages carry a "
+                   "permanent reference number; degraded periods (warnings) don't.", wide=True,
+                   body=data_table(hist.assign(ref=hist["ref"].fillna("") if "ref" in hist else ""),
+                                   [("ref", "Reference", None), ("when", "Started", None), ("sev", "Type", None),
+                                    ("cause", "Cause", None), ("lasted", "Lasted", None)], max_rows=100,
                                    empty="No incidents in this period.")),
     ]
 

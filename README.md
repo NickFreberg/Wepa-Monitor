@@ -27,6 +27,10 @@ Satellite Campuses (1).
 |---|---|
 | ![Insights](docs/screenshots/insights.png) | ![Explain panel](docs/screenshots/explain.png) |
 
+| An investigation (governed lifecycle, audit trail, evidence packet) |
+|---|
+| ![Investigation](docs/screenshots/investigation.png) |
+
 | The Assistant pane | Student status page (phone) |
 |---|---|
 | ![Assistant](docs/screenshots/assistant.png) | <img src="docs/screenshots/student-status.png" alt="Student status page" width="260"> |
@@ -126,6 +130,12 @@ any chart, and every chart carries a one-line takeaway in plain words.
   it hasn't seen, retrains nightly, and logs every prediction to build a live track record. It stays
   in "learning" (and shows nothing on other pages) until it passes every check; once live, Overview
   gets a "Likely to go down in the next 24 hours" list. Run it by hand with `python -m wepa_monitor train-risk`.
+- **Investigations** (`/investigations`): documented root-cause work on recurring network drop-offs and
+  hardware faults, with permanent reference numbers on every outage (`OUT`/`JAM`/`PAP`/`SUP`/`ERR`, and
+  `INV` for investigations), a governed lifecycle (New → Analyze → Respond → Review → Closed), named staff
+  accounts, a tamper-evident audit trail, automatic detection, an impact score, two-year archiving and a
+  PDF evidence packet for Wepa. It complements BSU's ITSM ticketing; it doesn't replace it. Rules and
+  account setup: [docs/INVESTIGATIONS.md](docs/INVESTIGATIONS.md).
 - **Student status pages** (`/status`, `/status/<printer>`): a fast phone page per printer showing
   whether it works right now and the nearest working printers with walk times, opened from a QR sign
   on the printer (print them from Stations → "Printable QR signs"). They stay behind the login unless
