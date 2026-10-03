@@ -138,7 +138,7 @@ def render(ds: M.Dataset, theme: str, year, scope):
     p4 = ("Three tools put those findings to work. Rounds plans the fastest walking or transit-van route to every "
           "printer that needs a visit, starting from the ResNet office or the IT Service Center. Each station's page "
           "points students to the nearest working printer they can walk into, with the distance in feet or miles. "
-          "And a report card grades every printer on reliability, faults and supply cost for its workload, "
+          "And a report card grades every printer on reliability, faults and parts wear for its workload, "
           "so managers can see at a glance which machines are great and which are a problem.")
     p5 = ("Everything is computed only from time the monitor actually saw, gaps are reported rather than "
           "guessed, and nothing identifies a student: the data is about printers, not people.")

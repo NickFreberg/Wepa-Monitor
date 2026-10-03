@@ -131,7 +131,7 @@ any chart, and every chart carries a one-line takeaway in plain words.
   year), Faults (clean fault types built from Wepa's codes *and* the printer's own messages), Supplies,
   **Usage** (busiest and quietest printers, with suggestions for adding or moving printers),
   **Report card** (a sortable, filterable grade for every printer: availability, outages, and faults
-  and supply cost *for its workload*; being busy never lowers a grade), **Planning** (parts to stock
+  and parts wear *for its workload*, counted in parts rather than dollars; being busy never lowers a grade), **Planning** (parts to stock
   at 50/90/95% confidence, what extra coverage would save, coverage gaps, where one more printer would
   help, and printing vs the class schedule) and **Forecasts & statistics** (survival curves, control
   chart, Bayesian outage rates, warnings that turn into outages, recent changes, before/after studies

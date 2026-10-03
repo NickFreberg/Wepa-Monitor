@@ -317,13 +317,9 @@ def _consumables(ds, theme, ids, start, end, plabel, opts):
     cum = M.cumulative_usage(ds, start, end, ids)
     repl = M.replacements(ds, start, end, ids)
     k = burn.set_index("component")
-    price = RC.costs()
-    monthly_cost = float(sum(k.loc[c, "per_month"] / 100 * price.get(c, 0) for c in k.index
-                             if np.isfinite(k.loc[c, "per_month"])))
     hl = headline("info", f"BSU print stations used {k.loc['toner_k', 'used_units']:.1f} black toner cartridges' worth "
                           f"in the last {plabel}",
                   f"At this rate that's about {k.loc['toner_k', 'per_month'] / 100:.1f} black cartridges a month"
-                  + (f" and roughly ${monthly_cost:,.0f} a month in supplies" if monthly_cost else "")
                   + f". {len(repl)} parts were replaced in this period.")
     toner_repl = repl[repl["component"].str.startswith("toner")]
     repl_note = (f"Toner was replaced at an average of {toner_repl['level_before'].mean():.1f}% remaining "
@@ -477,17 +473,17 @@ def _report(ds, theme, ids, start, end, plabel, _):
     t = TOKENS[theme]
     rows = card.assign(
         score_r=card["score"].round(0), avail=card["availability"].round(1), outw=card["outages_per_week"].round(2),
-        fr=card["faults_ratio"].round(2), cr=card["cost_ratio"].round(2), use=card["usage_relative"].round(1),
-        cost=card["cost_per_month"].round(0), warn=(card["warning_share"] * 100).round(1),
+        fr=card["faults_ratio"].round(2), cr=card["wear_ratio"].round(2), use=card["usage_relative"].round(1),
+        cost=card["parts_per_month"].round(2), warn=(card["warning_share"] * 100).round(1),
         station=card["label"], link=card["station_id"].map(lambda s: f"[Open](/station/{s})"))
     cols = [{"name": "Station", "id": "station"}, {"name": "Grade", "id": "grade"},
             {"name": "Score", "id": "score_r", "type": "numeric"}, {"name": "Verdict", "id": "verdict"},
             {"name": "Main reason", "id": "why"}, {"name": "Available %", "id": "avail", "type": "numeric"},
             {"name": "Outages / week", "id": "outw", "type": "numeric"},
             {"name": "Faults vs campus*", "id": "fr", "type": "numeric"},
-            {"name": "Supply cost vs campus*", "id": "cr", "type": "numeric"},
+            {"name": "Parts wear vs campus*", "id": "cr", "type": "numeric"},
             {"name": "Usage vs typical", "id": "use", "type": "numeric"},
-            {"name": "Supplies $/month (est.)", "id": "cost", "type": "numeric"},
+            {"name": "Drums/belt/fuser per month", "id": "cost", "type": "numeric"},
             {"name": "In warning %", "id": "warn", "type": "numeric"},
             {"name": "Area", "id": "area"}, {"name": "Supported by", "id": "owner"},
             {"name": "", "id": "link", "presentation": "markdown"}]
@@ -515,21 +511,21 @@ def _report(ds, theme, ids, start, end, plabel, _):
         chart_card("Station report card", "Every printer, worst first. Click a column to sort; type in the row under "
                    "the headings to filter (e.g. F in Grade, or Weygand in Station).", wide=True, body=table,
                    story=["A busy printer isn't a bad printer: grades reward being able to print and penalize going "
-                          "down, faulting, and eating supplies ", ("b", "more than its workload explains"), "."],
+                          "down, faulting, and wearing out parts ", ("b", "more than its workload explains"), "."],
                    explain=["Grades: A 90+ (great), B 80+ (good), C 70+ (fair), D 60+ (needs attention), F below 60 "
                             "(a problem). 'Main reason' names the biggest drag on the grade.",
                             "* 'vs campus' compares each printer with the campus average for the same amount of "
-                            "printing: 1.0 is average, 2.0 is twice as often (or as costly)."],
+                            "printing: 1.0 is average, 2.0 is twice as often (or as fast)."],
                    nerd=[f"Score = {weights}.",
                          "Availability: 85% scores 0, 99.5% scores 100 (linear). Outages: 4+ a week scores 0, none "
                          "scores 100. Warnings: 25%+ of the time scores 0.",
-                         "Workload-adjusted faults and cost: each printer's rate per black-toner point, shrunk toward "
+                         "Workload-adjusted faults and parts wear (drums, belt and fuser used, in parts): each "
+                         "printer's rate per black-toner point, shrunk toward "
                          f"the campus rate with the weight of {RC.PRIOR_USE:.0f} points of use (an empirical-Bayes "
                          "style prior), divided by the campus rate. Half the campus rate or better scores 100; equal "
                          "scores 80; double 40; triple 0.",
-                         f"Printers observed under {RC.MIN_DAYS} days get no grade. Supply prices: "
-                         "reference/consumable_costs.csv" + (" (estimates until replaced)." if RC.prices_are_estimates()
-                                                               else ".")]),
+                         f"Printers observed under {RC.MIN_DAYS} days get no grade. No prices are used: printer "
+                         "models and part sources vary, so wear is counted in parts, not dollars."]),
     ])]
 
 

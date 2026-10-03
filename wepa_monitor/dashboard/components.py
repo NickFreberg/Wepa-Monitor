@@ -41,6 +41,50 @@ def icon(name: str, label: str | None = None) -> html.Span:
     return html.Span(className=f"icon icon--{name}", **attrs)
 
 
+# Card and tile icons: picked from the title, first match wins. (icon, tone)
+_ICON_RULES = [
+    (("report card", "grade", "scorecard", "busiest three", "strongest"), ("award", "gold")),
+    (("quietest",), ("trend", "blue")),
+    (("through the day",), ("sun", "gold")),
+    (("cost the most", "lost"), ("bolt", "crimson")),
+    (("time to repair", "mttr", "time to clear", "how long", "refill time", "tray empty time"), ("wrench", "blue")),
+    (("warnings",), ("alert", "gold")),
+    (("needs attention", "down", "outage", "unusual", "warning shows"), ("alert", "crimson")),
+    (("between failures",), ("clock", "blue")),
+    (("when problems", "when faults", "when it goes", "hour"), ("clock", "gold")),
+    (("fault", "problem", "what goes wrong", "jam"), ("alert", "crimson")),
+    (("desk", "coverage would", "visit", "active now", "devices", "typical visit"), ("users", "blue")),
+    (("backup", "walk", "one more printer", "coverage", "if this printer"), ("pin", "green")),
+    (("map", "route", "the route"), ("map", "green")),
+    (("bring",), ("box", "gold")),
+    (("academic year", "class", "calendar"), ("school", "gold")),
+    (("stock", "supplies", "toner", "drum", "belt", "fuser", "parts", "consumable", "end of life",
+      "end-of-life", "replacement", "cumulative"), ("droplet", "gold")),
+    (("usage", "every printer", "busier"), ("trend", "blue")),
+    (("suggest", "story", "nutshell", "observations"), ("sparkle", "crimson")),
+    (("activity", "recent"), ("history", "blue")),
+    (("live log",), ("terminal", "gray")),
+    (("how it works",), ("compass", "green")),
+    (("data quality", "readings", "failed reads", "freshness", "captured"), ("gauge", "green")),
+    (("security", "sign-in"), ("shield", "gray")),
+    (("normal", "changed", "change work", "really", "statistic", "forecast"), ("target", "blue")),
+    (("paper", "tray"), ("paper", "gold")),
+    (("availability", "printing", "print", "available", "building coverage"), ("printer", "green")),
+]
+
+
+def auto_icon(text: str) -> tuple[str, str]:
+    t = (text or "").lower()
+    for keys, result in _ICON_RULES:
+        if any(k in t for k in keys):
+            return result
+    return ("chart", "gray")
+
+
+def badge(name: str, tone: str = "gray") -> html.Span:
+    return html.Span(icon(name), className=f"badge-icon badge-icon--{tone}", **{"aria-hidden": "true"})
+
+
 def headline(tone: str, title: str, detail: str = "") -> html.Div:
     """The one-sentence answer at the top of a page: what is going on, in plain words."""
     glyph = {"good": "check", "warning": "alert", "critical": "x", "serious": "alert", "info": "info"}[tone]
@@ -58,8 +102,9 @@ def station_link(station_id: str, text: str, className: str = "link") -> dcc.Lin
 def tile(label: str, value: str, sub: str = "", ok: bool = True, help_text: str = "",
          tone: str | None = None, compare: str = "", href: str | None = None):
     classes = "tile" + ("" if ok else " tile--muted") + (f" tile--{tone}" if tone else "")
+    ic, ic_tone = auto_icon(label)
     children = [
-        html.Div(label, className="tile__label"),
+        html.Div([html.Span(label), badge(ic, ic_tone)], className="tile__label"),
         html.Div(value, className="tile__value"),
         html.Div(compare, className="tile__compare") if compare else None,
         html.Div(sub, className="tile__sub"),
@@ -143,10 +188,12 @@ def nerd_toggle(text) -> html.Details:
 
 def chart_card(title: str, subtitle: str, figure=None, body=None, table: html.Div | None = None,
                wide: bool = False, note: str = "", graph_id=None, action=None, explain=None, story=None,
-               nerd=None) -> html.Section:
+               nerd=None, icon_name=None) -> html.Section:
     """A titled card. `story` is the one-sentence takeaway shown above the chart (segments, see
     prose()); `explain` is 'How to read this'; `nerd` is the method, behind 'For nerds'."""
-    head = [html.Div([html.H3(title), html.P(subtitle, className="card__sub") if subtitle else None])]
+    ic, ic_tone = icon_name if isinstance(icon_name, tuple) else (icon_name, "gray") if icon_name else auto_icon(title)
+    head = [html.Div([html.Div([badge(ic, ic_tone), html.H3(title)], className="card__title"),
+                      html.P(subtitle, className="card__sub") if subtitle else None])]
     tools = []
     if action is not None:
         tools.append(html.Div(action, className="card__action"))

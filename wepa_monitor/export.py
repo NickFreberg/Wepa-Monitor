@@ -56,8 +56,8 @@ def table(ds: M.Dataset, what: str, ids, start, end) -> pd.DataFrame:
             "Grade": c["grade"], "Score (0-100)": c["score"].round(1), "Verdict": c["verdict"],
             "Availability %": c["availability"].round(2), "Outages per week": c["outages_per_week"].round(2),
             "Faults vs campus (workload-adjusted)": c["faults_ratio"].round(2),
-            "Supply cost vs campus (workload-adjusted)": c["cost_ratio"].round(2),
-            "Supply cost per month (USD, est.)": c["cost_per_month"].round(0),
+            "Parts wear vs campus (workload-adjusted)": c["wear_ratio"].round(2),
+            "Drums/belt/fuser used per month (parts)": c["parts_per_month"].round(2),
             "Time in warning %": (c["warning_share"] * 100).round(1),
             "Usage vs typical printer": c["usage_relative"].round(2), "Main reason": c["why"],
             "Days observed": c["observed_days"].round(1)})
@@ -124,9 +124,8 @@ def build(ds: M.Dataset, what: str, fmt: str, ids, scope_text: str, period: str)
         "generated": f"{datetime.now(ZoneInfo(TZ)):%Y-%m-%d %H:%M %Z}",
         "data_as_of": f"{stamp:%Y-%m-%d %H:%M %Z}",
         "source": "Wepa status page, collected every minute by ResNet Print Ops",
-        "notes": "Times are US Eastern. Usage is toner burned (Wepa publishes no page counts). Supply costs use "
-                 "the price list in reference/consumable_costs.csv" +
-                 (" (estimates)." if report_card.prices_are_estimates() else "."),
+        "notes": "Times are US Eastern. Usage is toner burned (Wepa publishes no page counts). Supplies are "
+                 "counted in parts, not dollars.",
     }
     base = f"bsu-print-{what.replace('_', '-')}-{stamp:%Y%m%d-%H%M}"
     if fmt == "csv":

@@ -748,3 +748,24 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .scenario__big { margin: 6px 0 2px; color: var(--ink-2); }
 .scenario__value { font-size: 28px; font-weight: 800; color: var(--accent); letter-spacing: -0.02em; margin-right: 4px; }
 .scenario__meta { font-size: 12.5px; color: var(--muted); }
+
+/* card & tile icons: a small tinted badge, picked from the card's subject */
+.card__title { display: flex; align-items: center; gap: 9px; }
+.badge-icon { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; flex: none;
+  background: color-mix(in srgb, var(--bt) 14%, var(--surface)); color: var(--bt);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--bt) 22%, transparent); }
+.badge-icon .icon { width: 16px; height: 16px; }
+.badge-icon--crimson { --bt: #b5122b; }
+.badge-icon--gold { --bt: #a87405; }
+.badge-icon--blue { --bt: #00558c; }
+.badge-icon--green { --bt: #0f8c62; }
+.badge-icon--gray { --bt: var(--ink-2); }
+:root[data-theme="dark"] .badge-icon--crimson { --bt: #f07a86; }
+:root[data-theme="dark"] .badge-icon--gold { --bt: #e0b44a; }
+:root[data-theme="dark"] .badge-icon--blue { --bt: #6fb3e6; }
+:root[data-theme="dark"] .badge-icon--green { --bt: #4fc79a; }
+.tile__label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tile__label .badge-icon { width: 26px; height: 26px; border-radius: 8px; }
+.tile__label .badge-icon .icon { width: 15px; height: 15px; }
+.card:hover .card__title .badge-icon { transform: rotate(-6deg) scale(1.06); }
+.badge-icon { transition: transform .18s ease; }
