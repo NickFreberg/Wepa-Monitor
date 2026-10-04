@@ -6,7 +6,9 @@ colors for toner/drum series (validated for color-vision deficiency; the
 neutral K ink is the one intentional exception, so those charts always carry
 direct labels).
 
-Three themes: light, dark, and "crimson" (BSU). The BSU theme takes its
+Three everyday themes: light, dark, and "crimson" (BSU). Three more take a slot's place when earned or when
+the calendar says so: "cosmic" (glow-in-the-dark, replaces dark), "cup" (the 90s paper cup, replaces light)
+and "gobears" (football game days, replaces BSU). Their chart series were checked the same way. The BSU theme takes its
 colors from bridgew.edu's own stylesheets: crimson #89191F for chrome, with
 warm stone neutrals. Its chart series (crimson, gold, BSU blue, green) were
 re-validated as a set: every adjacent pair passes the color-vision checks.
@@ -45,7 +47,33 @@ TOKENS["crimson"] = {
     "seq": ["#f7e4e3", "#eebfbd", "#e09591", "#cc6a66", "#b23f3e", "#8f1f24", "#5f1016"],
     "neutral_bar": "#cfcbc2",
 }
-THEMES = ("light", "dark", "crimson")
+# Cosmic bowling: neon on a black-light night sky. Series are bright enough for 3:1 against the surface.
+TOKENS["cosmic"] = {
+    "page": "#08061a", "surface": "#120e2e", "ink": "#ffffff", "secondary": "#dcd8f5",
+    "muted": "#a7a1d6", "grid": "#272152", "axis": "#3d3672", "border": "#2c2560",
+    "series": ["#2ef2ff", "#ff5ad9", "#b8ff4a", "#ffd23f", "#a98bff", "#ff8a5c", "#5cffb6", "#ff6b8f"],
+    "ink_k": "#b8b4d6", "ink_c": "#2ec4f2", "ink_m": "#ff5ad9", "ink_y": "#ffe14a",
+    "seq": ["#1d1747", "#2f2479", "#4b2fa6", "#7a3cc9", "#b34fd9", "#e86ae0", "#ff9cf0"],
+    "neutral_bar": "#3d3672",
+}
+# The 90s paper cup: white with a teal brush stroke and a purple squiggle.
+TOKENS["cup"] = {
+    "page": "#fbfaf6", "surface": "#ffffff", "ink": "#1d1733", "secondary": "#4a4560",
+    "muted": "#77728c", "grid": "#ece9f2", "axis": "#cfcadb", "border": "#e6e2ee",
+    "series": ["#0d8a99", "#5d2d8c", "#d6457f", "#b87600", "#2f6fd1", "#0a7f3f", "#8c5a2d", "#c13a3a"],
+    "ink_k": "#3d3c38", "ink_c": "#1592c7", "ink_m": "#cf3678", "ink_y": "#c99700",
+    "seq": ["#dff3f4", "#b5e3e7", "#7fcbd3", "#3eaebb", "#13909e", "#3f4d9a", "#5d2d8c"],
+    "neutral_bar": "#cfcadb",
+}
+# Go Bears (game days): the BSU palette, louder. Crimson and gold lead.
+TOKENS["gobears"] = {**TOKENS["crimson"], "page": "#f6efe4", "surface": "#fffcf6", "border": "#e6dccb",
+                     "grid": "#ece3d3"}
+THEMES = ("light", "dark", "crimson", "cosmic", "cup", "gobears")
+DARK_THEMES = ("dark", "cosmic")
+
+
+def is_dark(theme: str) -> bool:
+    return theme in DARK_THEMES
 
 STATUS = {"good": "#0ca30c", "warning": "#fab219", "serious": "#ec835a", "critical": "#d03b3b"}
 STATE_STYLE = {   # labels from vocab.STATE
@@ -58,8 +86,8 @@ STATE_STYLE = {   # labels from vocab.STATE
 
 def ink(theme: str, component: str) -> str:
     """Color for a consumable series: CMYK inks for toner/drums, categorical for belt/fuser."""
-    # Consumables are never brand-themed: the BSU theme uses the light theme's inks.
-    t = TOKENS["light" if theme == "crimson" else theme]
+    # Consumables are never brand-themed: the BSU, cup and game-day themes use the light theme's inks.
+    t = TOKENS["light" if theme in ("crimson", "cup", "gobears") else theme]
     suffix = component.rsplit("_", 1)[-1]
     if component.startswith(("toner", "drum")):
         return t[f"ink_{suffix}"]

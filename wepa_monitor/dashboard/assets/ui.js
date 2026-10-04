@@ -58,6 +58,52 @@
     }
   }, true);
 
+  // Easter eggs. Tap the BSU theme 27 times in a row and Dark
+  // becomes Cosmic; then tap Cosmic 10 times in a row and Light becomes Cup. "In a row" means no other
+  // theme in between and no pause longer than 4 seconds. Unlocks live in the "eggs" store (this browser
+  // only); Appearance > "Bring back the original themes" undoes them.
+  var EGGS = [
+    { slot: "crimson", taps: 27, unlock: "cosmic", show: "dark",
+      say: "Cosmic unlocked! Dark is now Cosmic. You can bring Dark back under Appearance." },
+    { slot: "dark", taps: 10, needs: "cosmic", unlock: "cup", show: "light",
+      say: "Cup unlocked! Light is now Cup, straight out of 1994. You can bring Light back under Appearance." }
+  ];
+  var streak = { slot: null, n: 0, at: 0 };
+  function readEggs() {
+    try { return JSON.parse(window.localStorage.getItem("eggs")) || {}; } catch (err) { return {}; }
+  }
+  function toast(text) {
+    var el = document.getElementById("egg-toast");
+    if (!el) { return; }
+    el.textContent = text;
+    el.classList.add("is-shown");
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(function () { el.classList.remove("is-shown"); }, 7000);
+  }
+  document.addEventListener("click", function (e) {
+    var input = e.target;
+    if (!input.matches || !input.matches(".themes input[type=radio]")) { return; }
+    var now = Date.now();
+    if (streak.slot === input.value && now - streak.at < 4000) { streak.n += 1; } else { streak.slot = input.value; streak.n = 1; }
+    streak.at = now;
+    var eggs = readEggs();
+    EGGS.forEach(function (egg) {
+      if (egg.slot !== streak.slot || streak.n !== egg.taps || eggs[egg.unlock]) { return; }
+      if (egg.needs && !eggs[egg.needs]) { return; }
+      if (!(window.dash_clientside && window.dash_clientside.set_props)) { return; }
+      eggs[egg.unlock] = true;
+      window.dash_clientside.set_props("eggs", { data: eggs });
+      streak = { slot: null, n: 0, at: 0 };
+      // Select the slot that changed, the way a person would, so the choice is remembered.
+      setTimeout(function () {
+        var target = document.querySelector('.themes input[value="' + egg.show + '"]');
+        if (target) { target.click(); }
+        streak = { slot: null, n: 0, at: 0 };
+      }, 50);
+      toast(egg.say);
+    });
+  });
+
   var stick = new WeakMap();
   // Live logs (System page) and the assistant's conversation stay scrolled to the newest line,
   // unless the reader has scrolled up to look at something.

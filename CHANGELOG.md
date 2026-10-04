@@ -8,6 +8,20 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.3.0] - 2026-10-04
+Boyden Hall becomes a true 3D wireframe, and on football game days the app cheers for the Bears.
+
+### New
+- Go Bears: on any day the Bridgewater State football team plays, home or away, the BSU appearance becomes Go Bears. It has a crimson and gold sidebar, gold highlights, a background of paw prints, footballs, goalposts and pennants, and a banner with the opponent, kickoff time and any special occasion (Homecoming, the Cranberry Bowl). The schedule comes from the public calendar feed on bsubears.com, refreshed every 12 hours, with this season's games stored in reference/football.csv in case the feed can't be reached.
+- There may be a surprise or two in Appearance for people who keep tapping. Each one can be undone with "Bring back the original themes".
+
+### Changed
+- The Boyden Hall logo is now a 3D wireframe model in a three-quarter view: the wings, portico and pediment, and the tower with its clock, belfry and faceted dome. Back edges show through, small squares mark the corners, and the building stands on a grid floor. The sidebar mark, browser icon, sign-in page and documentation cover all use it.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- Bridgewater State football schedule: https://bsubears.com/sports/fball/2026-27/schedule
+
 ## [1.2.3] - 2026-10-04
 A new look: Boyden Hall, drawn as a wireframe, is the app's logo, and a quiet pattern of data, charts,
 printers and a few bears sits behind every page.

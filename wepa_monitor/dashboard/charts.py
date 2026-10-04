@@ -10,7 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from .. import config, support
-from .theme import STATUS, TOKENS, ink, layout
+from .theme import STATUS, TOKENS, ink, is_dark, layout
 
 SECTION_ORDER = ["ResNet", "Student Computer Labs", "Satellite Campuses"]
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -293,7 +293,7 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
                      hover=pts.apply(lambda p: f"<b>{p['building']}</b> · {p['area']}<br>" +
                                      "<br>".join(p["lines"]), axis=1))
     fig = go.Figure()
-    ring = "#ffffff" if satellite or theme == "light" else t["surface"]
+    ring = "#ffffff" if satellite or not is_dark(theme) else t["surface"]
     fig.add_trace(go.Scattermap(lat=pts["lat"], lon=pts["lon"], mode="markers", hoverinfo="skip",
                                 marker=dict(size=pts["size"] + 5, color=ring, opacity=1), showlegend=False))
     for state, tone, label in MAP_STATES:
@@ -307,7 +307,7 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
                 text=d["short_name"], textposition=pos,
                 textfont=dict(size=12 if satellite else 11,
                               family="Open Sans Bold" if satellite else "Open Sans Regular",
-                              color="#ffffff" if satellite or theme == "dark" else t["ink"]),
+                              color="#ffffff" if satellite or is_dark(theme) else t["ink"]),
                 customdata=np.stack([d["hover"], d["target"]], axis=1),
                 hovertemplate="%{customdata[0]}<br><i>Click to open this building</i><extra></extra>"))
     main = pts[pts["campus"] == "Main"] if (pts["campus"] == "Main").any() else pts
@@ -324,7 +324,7 @@ def campus_map(theme: str, points: pd.DataFrame, basemap: str = "street") -> go.
             dict(below="traces", sourcetype="geojson", source=wash, type="fill", color="#000000", opacity=0.28),
         ])
     else:
-        map_layout.update(style="carto-darkmatter" if theme == "dark" else "carto-positron")
+        map_layout.update(style="carto-darkmatter" if is_dark(theme) else "carto-positron")
     fig.update_layout(**layout(theme, 480, margin=dict(l=0, r=0, t=0, b=0), map=map_layout,
                                legend=dict(x=0.01, y=0.99, yanchor="top", bgcolor=t["surface"],
                                            bordercolor=t["border"], borderwidth=1,
@@ -642,7 +642,7 @@ def route_map(theme: str, plan, start_xy: tuple[float, float]) -> go.Figure:
     span = max(max(lo) - min(lo), lat_span * 700 / 520, 0.002)
     zoom = float(np.clip(math.log2(360 * 700 * 0.7 / (512 * span)), 13.5, 17.5))
     fig.update_layout(**layout(theme, 520, margin=dict(l=0, r=0, t=0, b=0),
-                               map=dict(style="carto-darkmatter" if theme == "dark" else "carto-positron",
+                               map=dict(style="carto-darkmatter" if is_dark(theme) else "carto-positron",
                                         center=dict(lat=(max(la) + min(la)) / 2, lon=(max(lo) + min(lo)) / 2),
                                         zoom=zoom),
                                legend=dict(x=0.01, y=0.99, yanchor="top", bgcolor=t["surface"],

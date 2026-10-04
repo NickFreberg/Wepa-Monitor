@@ -10,6 +10,8 @@ import pytest
 def _no_breach_lookups(monkeypatch):
     monkeypatch.setenv("WEPA_BREACH_CHECK", "0")           # tests never call out to Have I Been Pwned
     monkeypatch.setenv("WEPA_THREAT_INTEL", "0")           # ...or to the threat-intelligence sources
+    monkeypatch.setenv("WEPA_FOOTBALL_FEED", "0")          # ...or to the football schedule
+    monkeypatch.setenv("WEPA_GAMEDAY", "0")                # and the date never changes a test's theme
 
 
 def login(client, username, password, next_="/"):

@@ -15,7 +15,7 @@ import pandas as pd
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 
-from .. import activity, config, export, geo, metrics as M, routing, security
+from .. import activity, config, export, football, geo, metrics as M, routing, security
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
@@ -55,6 +55,27 @@ THEMES = [("auto", "Match my device", "Light or dark, following your system sett
           ("light", "Light", "Clean and bright"),
           ("dark", "Dark", "Easy on the eyes at night"),
           ("crimson", "BSU", "Bridgewater crimson and stone")]
+# Themes that take a slot's place: (slot, theme, name, description). Cosmic and Cup are earned (see ui.js);
+# Go Bears appears by itself on a football game day.
+SPECIAL_THEMES = {"cosmic": ("dark", "Cosmic", "Glow in the dark, like bowling at midnight"),
+                  "cup": ("light", "Cup", "A teal swoosh and a purple squiggle, very 1994"),
+                  "gobears": ("crimson", "Go Bears", "It's game day: crimson and gold, all in")}
+
+
+def theme_options(eggs: dict | None, gameday: bool) -> list[dict]:
+    """The appearance choices. Values never change (they are what the browser remembers); an unlocked or
+    game-day theme takes over its slot's label, swatch, and look."""
+    eggs = eggs or {}
+    names = {k: (k, name, desc) for k, name, desc in THEMES}
+    for theme, (slot, name, desc) in SPECIAL_THEMES.items():
+        if eggs.get(theme) or (theme == "gobears" and gameday):
+            names[slot] = (theme, name, desc)
+    light, dark = names["light"][1], names["dark"][1]
+    names["auto"] = ("auto", "Match my device", f"{light} or {dark}, following your system setting")
+    return [{"label": html.Span([html.Span(className=f"swatch swatch--{look}"),
+                                 html.Span([html.B(name), html.Span(desc, className="themes__desc")],
+                                           className="themes__text")]), "value": slot}
+            for slot, (look, name, desc) in names.items()]
 
 
 def attach_refs(ds: M.Dataset) -> None:
@@ -184,11 +205,9 @@ def _appearance_panel():
             html.Div("Choose an appearance", className="popover__title"),
             html.P("Make it yours. Your choices are saved in this browser.", className="popover__hint"),
             dcc.RadioItems(id="theme-switch", value="crimson", persistence=True, persistence_type="local",
-                           className="themes", labelClassName="themes__opt", options=[
-                               {"label": html.Span([html.Span(className=f"swatch swatch--{k}"),
-                                                    html.Span([html.B(name), html.Span(desc, className="themes__desc")],
-                                                              className="themes__text")]), "value": k}
-                               for k, name, desc in THEMES]),
+                           className="themes", labelClassName="themes__opt", options=theme_options({}, False)),
+            html.Button("Bring back the original themes", id="eggs-reset", className="btn btn--sm btn--block",
+                        hidden=True),
             html.Div("Text size", className="popover__label"),
             segmented("pref-text", [{"label": "Standard", "value": "standard"}, {"label": "Larger", "value": "large"}],
                       "standard", persistence="local"),
@@ -229,6 +248,8 @@ def _shell(ds: M.Dataset):
     return html.Div(className="shell", children=[
         dcc.Location(id="url", refresh=False),
         dcc.Store(id="theme", storage_type="local"),
+        dcc.Store(id="eggs", storage_type="local"),
+        dcc.Store(id="gameday"),
         dcc.Store(id="scope-store", storage_type="session"),
         dcc.Store(id="seen", storage_type="local"),
         dcc.Store(id="notif-latest"),
@@ -269,10 +290,12 @@ def _shell(ds: M.Dataset):
                     account_view.user_menu(),
                 ]),
             ]),
+            html.Div(id="gameday-banner", className="gameday-banner", hidden=True),
             html.Div(id="banner"),
             html.Main(id="content", className="content", tabIndex="-1"),
         ]),
         assistant.pane(),
+        html.Div(id="egg-toast", className="egg-toast", role="status", **{"aria-live": "polite"}),
         dcc.Store(id="hints-off", storage_type="local"),
         html.Div(id="hint-sink", hidden=True),
         html.Div(id="xdrawer", className="drawer drawer--explain", children=[
@@ -374,11 +397,15 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     # --- appearance: OS default until the person chooses; text size, spacing, motion, contrast ------
     app.clientside_callback(
         """
-        function(choice, text, density, motion, contrast) {
+        function(choice, text, density, motion, contrast, eggs, gameday) {
             var t = choice || 'auto';
             if (t === 'auto') {
                 t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
             }
+            eggs = eggs || {};
+            if (t === 'dark' && eggs.cosmic) { t = 'cosmic'; }
+            if (t === 'light' && eggs.cup) { t = 'cup'; }
+            if (t === 'crimson' && gameday) { t = 'gobears'; }
             var d = document.documentElement.dataset;
             d.theme = t; d.text = text || 'standard'; d.density = density || 'comfortable';
             d.motion = motion || 'full'; d.contrast = contrast || 'standard';
@@ -387,6 +414,32 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         """,
         Output("theme", "data"), Input("theme-switch", "value"), Input("pref-text", "value"),
         Input("pref-density", "value"), Input("pref-motion", "value"), Input("pref-contrast", "value"),
+        Input("eggs", "data"), Input("gameday", "data"),
+    )
+
+    # --- special themes: Cosmic and Cup (earned, see ui.js), Go Bears (football game days) ------------
+    @app.callback(Output("gameday", "data"), Output("gameday-banner", "children"),
+                  Output("gameday-banner", "hidden"), Input("url", "pathname"))
+    def gameday(_):
+        game = football.today_game(data_dir)
+        if not game:
+            return False, None, True
+        return True, [html.Span(className="gameday-banner__ball", **{"aria-hidden": "true"}),
+                      html.Span(football.headline(game))], False
+
+    @app.callback(Output("theme-switch", "options"), Output("eggs-reset", "hidden"),
+                  Input("eggs", "data"), Input("gameday", "data"))
+    def special_themes(eggs, gameday):
+        return theme_options(eggs, bool(gameday)), not any((eggs or {}).values())
+
+    app.clientside_callback(
+        """
+        function(n) {
+            if (!n) { return window.dash_clientside.no_update; }
+            return {};
+        }
+        """,
+        Output("eggs", "data", allow_duplicate=True), Input("eggs-reset", "n_clicks"), prevent_initial_call=True,
     )
 
     # --- navigation & page chrome ---------------------------------------------------------------

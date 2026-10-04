@@ -32,7 +32,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not([data-theme="crimson"]) {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --ink: #ffffff; --ink-2: #c3c2b7;
     --muted: #9c9a93; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
@@ -574,7 +574,7 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 :root[data-contrast="high"] { --muted: #5f5d58; --ink-2: #2b2a27; --hairline: #b9b7ae; --border: rgba(0,0,0,.35);
   --good-text: #004d00; --warning-text: #6b4500; --critical-text: #8f1414; }
-:root[data-contrast="high"][data-theme="dark"] { --muted: #c3c2b7; --ink-2: #e8e7e1; --hairline: #55554f;
+:root[data-contrast="high"][data-theme="dark"], :root[data-contrast="high"][data-theme="cosmic"] { --muted: #c3c2b7; --ink-2: #e8e7e1; --hairline: #55554f;
   --border: rgba(255,255,255,.35); --good-text: #63e063; --warning-text: #ffd166; --critical-text: #ff9b9b; }
 :root[data-contrast="high"] .lvl__fill { background: var(--ink-2); }
 
@@ -1080,18 +1080,22 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 :root[data-theme="dark"] { --pattern-a: rgba(255, 255, 255, .055); --pattern-b: rgba(224, 99, 107, .07);
   --side-pattern: rgba(255, 255, 255, .05); --mark-1: #f2ece6; --mark-2: #e0636b; --mark-3: #c99a2e; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]):not([data-theme="crimson"]) { --pattern-a: rgba(255, 255, 255, .055);
+  :root:not([data-theme]) { --pattern-a: rgba(255, 255, 255, .055);
     --pattern-b: rgba(224, 99, 107, .07); --side-pattern: rgba(255, 255, 255, .05);
     --mark-1: #f2ece6; --mark-2: #e0636b; --mark-3: #c99a2e; }
 }
 body::before, body::after { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  -webkit-mask: url("/assets/pattern.svg") 0 0 / 720px 720px repeat; mask: url("/assets/pattern.svg") 0 0 / 720px 720px repeat; }
+  -webkit-mask: var(--pat-a, url("/assets/pattern.svg")) 0 0 / var(--pat-size, 720px) repeat;
+  mask: var(--pat-a, url("/assets/pattern.svg")) 0 0 / var(--pat-size, 720px) repeat; }
 body::before { background: var(--pattern-a); }
-body::after { background: var(--pattern-b); transform: translate(2px, 2px); }
+body::after { background: var(--pattern-b); transform: translate(var(--pat-shift, 2px), var(--pat-shift, 2px));
+  -webkit-mask-image: var(--pat-b, var(--pat-a, url("/assets/pattern.svg")));
+  mask-image: var(--pat-b, var(--pat-a, url("/assets/pattern.svg"))); }
 .shell { position: relative; z-index: 1; background: none; }
 .sidebar { isolation: isolate; }
 .sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--side-pattern);
-  -webkit-mask: url("/assets/pattern.svg") 40px 0 / 560px 560px repeat; mask: url("/assets/pattern.svg") 40px 0 / 560px 560px repeat; }
+  -webkit-mask: var(--pat-side, url("/assets/pattern.svg")) 40px 0 / 560px repeat;
+  mask: var(--pat-side, url("/assets/pattern.svg")) 40px 0 / 560px repeat; }
 :root[data-contrast="high"] body::before, :root[data-contrast="high"] body::after,
 :root[data-contrast="high"] .sidebar::before { display: none; }
 @media (prefers-contrast: more), (forced-colors: active) {
@@ -1099,10 +1103,113 @@ body::after { background: var(--pattern-b); transform: translate(2px, 2px); }
 }
 @media print { body::before, body::after, .sidebar::before { display: none; } }
 
-.brand__mark { position: relative; width: 40px; height: 46px; flex: none; }
+.brand__mark { position: relative; width: 44px; height: 44px; flex: none; }
 .brand__mark i { position: absolute; inset: 0; background: var(--mark-1);
   -webkit-mask: url("/assets/boyden-mark.svg") center / contain no-repeat; mask: url("/assets/boyden-mark.svg") center / contain no-repeat; }
 .brand__mark i:nth-child(1) { background: var(--mark-3); transform: translate(-1.5px, 1px); opacity: .8; }
 .brand__mark i:nth-child(2) { background: var(--mark-2); transform: translate(1.5px, -1px); opacity: .9; }
-@media (max-width: 1180px) and (min-width: 901px) { .brand__mark { width: 36px; height: 42px; } }
-@media (max-width: 900px) { .brand__mark { width: 30px; height: 34px; } }
+@media (max-width: 1180px) and (min-width: 901px) { .brand__mark { width: 40px; height: 40px; } }
+@media (max-width: 900px) { .brand__mark { width: 34px; height: 34px; } }
+
+/* --- special themes ---------------------------------------------------------------------------------
+   Each takes over a slot in Appearance: Cosmic replaces Dark and Cup replaces Light once earned (ui.js), and
+   Go Bears replaces BSU on football game days (wepa_monitor/football.py). Same rules as the others: every
+   text color keeps at least 5:1 over the strongest point of its pattern, patterns are decorative and vanish
+   for high contrast, forced colors and print, and the one animation (Cosmic's twinkle) respects reduced motion. */
+
+/* Cosmic: black-light bowling at midnight. */
+:root[data-theme="cosmic"] {
+  color-scheme: dark;
+  --page: #08061a; --surface: #120e2e; --surface-2: #1b1641; --ink: #ffffff; --ink-2: #dcd8f5; --muted: #c6c1ee;
+  --hairline: #2c2560; --border: rgba(46, 242, 255, 0.22); --accent: #2ef2ff; --accent-ink: #08061a;
+  --good: #5cffb6; --good-text: #5cffb6; --warning: #ffd23f; --warning-text: #ffd23f; --serious: #ff8a5c;
+  --critical: #ff5c8a; --critical-text: #ffaec4; --info: #2ef2ff; --info-text: #8fe9ff;
+  --side-bg: #0b0823; --side-ink: #f3f0ff; --side-muted: #c6c1ee; --side-hover: rgba(46, 242, 255, 0.10);
+  --side-active-bg: #2ef2ff; --side-active-ink: #08061a; --side-border: #ff5ad9; --brand: #ff5ad9;
+  --shadow: 0 0 0 1px rgba(255, 90, 217, 0.10), 0 0 22px rgba(46, 242, 255, 0.10);
+  --pat-a: url("/assets/pattern-cosmic.svg"); --pat-side: url("/assets/pattern-cosmic.svg"); --pat-size: 640px; --pat-shift: 3px;
+  --pattern-a: rgba(46, 242, 255, 0.12); --pattern-b: rgba(255, 90, 217, 0.11); --side-pattern: rgba(184, 255, 74, 0.10);
+  --mark-1: #2ef2ff; --mark-2: #ff5ad9; --mark-3: #b8ff4a;
+}
+:root[data-theme="cosmic"] body { background: radial-gradient(ellipse at 20% 0%, #1d1052 0, transparent 55%),
+  radial-gradient(ellipse at 90% 100%, #0b2a4d 0, transparent 50%), var(--page); background-attachment: fixed; }
+:root[data-theme="cosmic"] .sidebar { box-shadow: 1px 0 0 #ff5ad9, 4px 0 24px rgba(255, 90, 217, 0.25); }
+:root[data-theme="cosmic"] .card, :root[data-theme="cosmic"] .tile { border-color: rgba(46, 242, 255, 0.28); }
+:root[data-theme="cosmic"] .card:hover { border-color: rgba(255, 90, 217, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 90, 217, 0.25), 0 0 26px rgba(255, 90, 217, 0.18); }
+:root[data-theme="cosmic"] .topbar__title, :root[data-theme="cosmic"] .brand__name {
+  text-shadow: 0 0 10px rgba(46, 242, 255, 0.55), 0 0 2px rgba(46, 242, 255, 0.6); }
+:root[data-theme="cosmic"] .nav__link.is-active { background: linear-gradient(90deg, #2ef2ff, #b8ff4a); color: #08061a;
+  box-shadow: 0 0 16px rgba(46, 242, 255, 0.45); }
+:root[data-theme="cosmic"] .btn--primary { background: #ff5ad9; border-color: #ff5ad9; color: #08061a; }
+:root[data-theme="cosmic"] .brand__mark { filter: drop-shadow(0 0 4px rgba(46, 242, 255, 0.7)); }
+@keyframes cosmic-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: no-preference) {
+  :root[data-theme="cosmic"]:not([data-motion="reduce"]) body::after { animation: cosmic-twinkle 5s ease-in-out infinite; }
+}
+.swatch--cosmic { background: radial-gradient(circle at 30% 40%, #ff5ad9 0 3px, transparent 4px),
+  radial-gradient(circle at 70% 60%, #2ef2ff 0 3px, transparent 4px), radial-gradient(circle at 55% 25%, #b8ff4a 0 2px, transparent 3px),
+  #120e2e; border-color: #2ef2ff; box-shadow: 0 0 8px rgba(46, 242, 255, .5); }
+
+/* Cup: the 90s paper cup. White, a teal brush stroke, a purple squiggle. */
+:root[data-theme="cup"] {
+  color-scheme: light;
+  --page: #fbfaf6; --surface: #ffffff; --surface-2: #f3f1f7; --ink: #1d1733; --ink-2: #3f3a55; --muted: #57526d;
+  --hairline: #e6e2ee; --border: rgba(29, 23, 51, 0.12); --accent: #075f69; --accent-ink: #ffffff;
+  --info: #0b7480; --info-text: #075f69; --warning-text: #714900; --critical-text: #a01c1c; --good-text: #005c00;
+  --side-bg: #2e1a50; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.78); --side-hover: rgba(63, 208, 212, 0.16);
+  --side-active-bg: #3fd0d4; --side-active-ink: #1d1733; --side-border: #24133f; --brand: #5d2d8c;
+  --shadow: 3px 3px 0 rgba(13, 138, 153, 0.16);
+  --pat-a: url("/assets/pattern-cup-a.svg"); --pat-b: url("/assets/pattern-cup-b.svg"); --pat-side: url("/assets/pattern-cup-b.svg");
+  --pat-size: 600px; --pat-shift: 0px;
+  --pattern-a: rgba(18, 163, 180, 0.11); --pattern-b: rgba(93, 45, 140, 0.10); --side-pattern: rgba(63, 208, 212, 0.16);
+  --mark-1: #ffffff; --mark-2: #3fd0d4; --mark-3: #c9a6ff;
+}
+:root[data-theme="cup"] .card, :root[data-theme="cup"] .tile { border: 1.5px solid #d9d3e6; box-shadow: 4px 4px 0 rgba(93, 45, 140, 0.12); }
+:root[data-theme="cup"] .topbar { border-bottom: 3px solid #12a3b4; }
+:root[data-theme="cup"] .btn--primary { background: #5d2d8c; border-color: #5d2d8c; color: #ffffff; }
+.swatch--cup { background: linear-gradient(170deg, transparent 0 38%, #12a3b4 38% 58%, transparent 58%),
+  repeating-linear-gradient(60deg, transparent 0 5px, #5d2d8c 5px 6.5px, transparent 6.5px 11px), #ffffff; }
+
+/* Go Bears: football game day. Crimson and gold, all in. */
+:root[data-theme="gobears"] {
+  color-scheme: light;
+  --page: #f6efe4; --surface: #fffcf6; --surface-2: #f1e7d6; --ink: #1c1717; --ink-2: #4b3f3a; --muted: #5a4c46;
+  --hairline: #e6dccb; --border: rgba(110, 20, 25, 0.16); --accent: #89191f; --accent-ink: #ffffff;
+  --info: #00558c; --info-text: #00558c; --warning-text: #714900; --critical-text: #a01c1c; --good-text: #005c00;
+  --side-bg: #89191f; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.78);
+  --side-hover: rgba(255, 255, 255, 0.12); --side-active-bg: #f3c25b; --side-active-ink: #3a0d10;
+  --side-border: #f3c25b; --brand-mark-ring: #89191f;
+  --shadow: 0 1px 2px rgba(60, 20, 20, 0.06), 0 4px 14px rgba(60, 20, 20, 0.06);
+  --pat-a: url("/assets/pattern-spirit.svg"); --pat-side: url("/assets/pattern-spirit.svg"); --pat-size: 640px;
+  --pattern-a: rgba(137, 25, 31, 0.085); --pattern-b: rgba(168, 116, 5, 0.08); --side-pattern: rgba(243, 194, 91, 0.16);
+  --mark-1: #ffffff; --mark-2: #f3c25b; --mark-3: #f19aa0;
+}
+:root[data-theme="gobears"] .sidebar { box-shadow: inset -5px 0 0 #f3c25b; }
+:root[data-theme="gobears"] .topbar { border-bottom: 0; box-shadow: 0 3px 0 #89191f, 0 6px 0 #f3c25b; }
+:root[data-theme="gobears"] .card { border-top: 3px solid #89191f; }
+:root[data-theme="gobears"] .btn--primary { background: #89191f; border-color: #89191f; color: #ffffff; }
+:root[data-theme="gobears"] .side-status .badge, :root[data-theme="cup"] .side-status .badge { color: #ffffff; }
+.swatch--gobears { background: linear-gradient(90deg, #89191f 0 40%, #f3c25b 40% 60%, #89191f 60% 100%); }
+
+.gameday-banner { display: none; }
+:root[data-theme="gobears"] .gameday-banner:not([hidden]) { display: flex; align-items: center; gap: 12px;
+  margin: 14px 28px 0; padding: 10px 16px; border-radius: 12px; color: #ffffff; font-weight: 750; letter-spacing: .01em;
+  background: linear-gradient(100deg, #6f1419 0%, #89191f 55%, #a3262d 100%); box-shadow: inset 0 -3px 0 #f3c25b; }
+.gameday-banner__ball { position: relative; width: 30px; height: 19px; flex: none; border-radius: 50%; background: #f3c25b; }
+.gameday-banner__ball::after { content: ""; position: absolute; left: 8px; right: 8px; top: 8.5px; height: 2px; background: #6f1419;
+  box-shadow: 3px -3px 0 -0.5px transparent; }
+.gameday-banner__ball::before { content: ""; position: absolute; left: 11px; width: 8px; top: 6px; height: 8px;
+  background: repeating-linear-gradient(90deg, #6f1419 0 1.5px, transparent 1.5px 3.3px); }
+@media (max-width: 900px) { :root[data-theme="gobears"] .gameday-banner:not([hidden]) { margin: 10px 12px 0; font-size: 13px; } }
+
+/* The unlock message. */
+.egg-toast { position: fixed; left: 50%; bottom: 24px; z-index: 80; max-width: min(520px, calc(100vw - 32px));
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none; padding: 12px 16px; border-radius: 12px;
+  background: #120e2e; color: #ffffff; font-weight: 600; box-shadow: 0 0 0 1px #2ef2ff, 0 8px 30px rgba(255, 90, 217, .35);
+  transition: opacity .25s ease, transform .25s ease; }
+.egg-toast.is-shown { opacity: 1; transform: translate(-50%, 0); }
+.egg-toast:empty { display: none; }
+
+:root[data-theme="cosmic"][data-contrast="high"] .sidebar, :root[data-theme="cosmic"][data-contrast="high"] .card:hover { box-shadow: none; }
+@media (forced-colors: active) { .brand__mark { filter: none; } }

@@ -27,82 +27,187 @@ CRIMSON, GOLD, SLATE = "#8b1e24", "#c99a2e", "#4f7396"
 
 # --- Boyden Hall, front elevation ----------------------------------------------------------------------
 
-def _rect(x0, y0, x1, y1):
-    return f"M{x0} {y0}H{x1}V{y1}H{x0}Z"
+def _poly_d(pts, close=True):
+    d = "M" + "L".join(f"{x:.1f} {y:.1f}" for x, y in pts)
+    return d + ("Z" if close else "")
 
 
-def boyden_paths(full: bool = True) -> tuple[list[str], list[str]]:
-    """(architecture, facet lines). Coordinates on a 1200 x 560 canvas, centre line x = 600."""
-    p: list[str] = []
-    cx = 600
-    ground = 520
-    # Cupola: finial with weathervane, lantern, dome, belfry with arched openings, cornice.
-    p += [f"M{cx} 22V48", f"M{cx - 9} 30H{cx + 9}M{cx + 9} 30L{cx + 3} 26", "M596 36a4 4 0 1 0 8 0a4 4 0 1 0 -8 0",
-          _rect(593, 48, 607, 60), "M570 90Q570 54 600 52Q630 54 630 90", _rect(564, 90, 636, 98),
-          _rect(572, 98, 628, 156)]
-    for x in (580, 600, 620):                                      # columns between the arches
-        p.append(f"M{x} 98V156")
-    for x0 in (580, 600):                                          # two arched openings
-        p.append(f"M{x0 + 4} 150V118Q{x0 + 10} 106 {x0 + 16} 118V150")
-    # Balustrade platform with corner urns.
-    p += [_rect(538, 156, 662, 168), "M538 146H662"]
-    for x in range(544, 660, 8):
-        p.append(f"M{x} 146V156")
-    for x in (538, 662):
-        p.append(f"M{x} 146V132M{x - 4} 140H{x + 4}")
-    # Brick tower base with its oculus.
-    p += [_rect(552, 168, 648, 252), "M588 214a12 12 0 1 0 24 0a12 12 0 1 0 -24 0", "M600 202V226M588 214H612"]
-    # Pediment, tympanum and seal.
-    p += ["M474 320L600 248L726 320Z", "M494 312L600 258L706 312Z", "M590 296a10 10 0 1 0 20 0a10 10 0 1 0 -20 0"]
-    # Entablature, six columns, door, steps.
-    p += [_rect(478, 320, 722, 334)]
-    for x in (492, 532, 572, 616, 656, 696):
-        p += [_rect(x, 334, x + 12, 494), f"M{x - 3} 334H{x + 15}M{x - 3} 494H{x + 15}"]
-    p += ["M586 494V448Q600 430 614 448V494"]
-    p += [_rect(470, 494, 730, 502), _rect(462, 502, 738, 510), _rect(454, 510, 746, ground)]
-    if not full:
-        # The compact mark is shown as small as 30 px: keep only what reads at that size.
-        p = [f"M{cx} 22V48", _rect(590, 48, 610, 60), "M568 92Q568 52 600 50Q632 52 632 92", _rect(560, 92, 640, 100),
-             _rect(570, 100, 630, 154), "M582 148V122Q590 108 598 122V148", "M602 148V122Q610 108 618 122V148",
-             _rect(536, 154, 664, 168), _rect(552, 168, 648, 252), "M584 210a16 16 0 1 0 32 0a16 16 0 1 0 -32 0",
-             "M466 324L600 246L734 324Z", _rect(474, 324, 726, 338)]
-        for x in (496, 542, 588, 612, 658, 704):
-            p.append(f"M{x} 338V494")
-        p += [_rect(462, 494, 738, 508), _rect(448, 508, 752, ground)]
-        return p, ["M600 22L448 520", "M600 22L752 520"]
+class _Model:
+    """A small 3D wireframe model of Boyden Hall, drawn in a three-quarter axonometric view.
+
+    x runs along the facade (centre line x = 0), y runs back from the front of the main block, z is up.
+    `strong` holds the massing (every edge of every solid, hidden ones included, as a wireframe does);
+    `light` holds detail: windows, the floor grid, dome ribs and railings."""
+
+    def __init__(self, yaw: float, pitch: float):
+        self.c, self.s = math.cos(math.radians(yaw)), math.sin(math.radians(yaw))
+        self.cp, self.sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
+        self.strong: list[list[tuple]] = []
+        self.light: list[list[tuple]] = []
+        self.nodes: list[tuple] = []
+
+    def p(self, x, y, z):
+        depth = -x * self.s + y * self.c
+        return (x * self.c + y * self.s, -z * self.cp - depth * self.sp)
+
+    def line(self, *pts, light=False):
+        (self.light if light else self.strong).append([self.p(*q) for q in pts])
+
+    def ring(self, pts, light=False):
+        self.line(*pts, pts[0], light=light)
+
+    def box(self, x0, x1, y0, y1, z0, z1, light=False, node=False):
+        for z in (z0, z1):
+            self.ring([(x0, y0, z), (x1, y0, z), (x1, y1, z), (x0, y1, z)], light)
+        for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1)):
+            self.line((x, y, z0), (x, y, z1), light=light)
+        if node:
+            self.nodes += [(x, y, z) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
+
+    def prism(self, tri, y0, y1, light=False):
+        """A triangular prism (pediment, gable) from an xz triangle, extruded from y0 to y1."""
+        for y in (y0, y1):
+            self.ring([(x, y, z) for x, z in tri], light)
+        for x, z in tri:
+            self.line((x, y0, z), (x, y1, z), light=light)
+
+    def hip(self, x0, x1, y0, y1, z0, z1, inset):
+        ym = (y0 + y1) / 2
+        a, b = (x0 + inset, ym, z1), (x1 - inset, ym, z1)
+        self.line(a, b)
+        for corner, end in (((x0, y0), a), ((x0, y1), a), ((x1, y0), b), ((x1, y1), b)):
+            self.line((*corner, z0), end)
+        self.nodes += [a, b]
+
+    def octo(self, cx, cy, r, z, n=8):
+        return [(cx + r * math.cos(2 * math.pi * (i + 0.5) / n), cy + r * math.sin(2 * math.pi * (i + 0.5) / n), z)
+                for i in range(n)]
+
+    def dome(self, cx, cy, r, z0, h, rings=3, n=8):
+        layers = [self.octo(cx, cy, r * math.cos(math.pi / 2 * i / rings), z0 + h * math.sin(math.pi / 2 * i / rings), n)
+                  for i in range(rings)]
+        top = (cx, cy, z0 + h)
+        for i, ring in enumerate(layers):
+            self.ring(ring, light=i > 0)
+        for j in range(n):
+            self.line(*[layer[j] for layer in layers], top, light=True)
+        for a, b in zip(layers, layers[1:]):           # one diagonal per panel: a geodesic look
+            for j in range(n):
+                self.line(a[j], b[(j + 1) % n], light=True)
+
+    def window(self, x, y, z0, z1, w):
+        self.ring([(x, y, z0), (x + w, y, z0), (x + w, y, z1), (x, y, z1)], light=True)
+        self.line((x + w / 2, y, z0), (x + w / 2, y, z1), light=True)
+        self.line((x, y, (z0 + z1) / 2), (x + w, y, (z0 + z1) / 2), light=True)
+
+    def arch(self, x, y, z0, z1, w):
+        self.line((x, y, z0), (x, y, z1 - w * 0.6), (x + w / 2, y, z1), (x + w, y, z1 - w * 0.6), (x + w, y, z0),
+                  light=True)
+
+    def grid(self, x0, x1, y0, y1, step):
+        x = x0
+        while x <= x1 + 0.1:
+            self.line((x, y0, 0), (x, y1, 0), light=True)
+            x += step
+        y = y0
+        while y <= y1 + 0.1:
+            self.line((x0, y, 0), (x1, y, 0), light=True)
+            y += step
+
+
+def _boyden_model(full: bool) -> _Model:
+    m = _Model(yaw=24 if full else 30, pitch=22 if full else 24)
+    m.grid(-300, 300, -120, 120, 40) if full else m.grid(-90, 90, -80, 100, 45)
+    # Portico: steps, six columns, entablature and the pediment prism.
+    m.box(-68, 68, -46, 0, 0, 3)
     if full:
-        # Central block behind the portico, then the two wings with hipped roofs and chimneys.
-        p += [_rect(464, 286, 736, ground)]
-        for x0, x1 in ((80, 464), (736, 1120)):
-            p += [_rect(x0, 300, x1, ground), f"M{x0 - 8} 300H{x1 + 8}"]
-            p.append(f"M{x0} 300L{x0 + 34} 262H{x1 - 34}L{x1} 300")
-            for y0, y1 in ((318, 352), (380, 414), (446, 484)):
-                for x in range(x0 + 18, x1 - 24, 40):
-                    p += [_rect(x, y0, x + 22, y1), f"M{x + 11} {y0}V{y1}M{x} {(y0 + y1) // 2}H{x + 22}"]
-        for x in (196, 330, 870, 1004):                            # chimneys
-            p.append(_rect(x, 238, x + 24, 266))
-    facets = (["M600 22L80 300", "M600 22L1120 300", "M80 520L600 248", "M1120 520L600 248",
-               "M196 238L552 168", "M1028 238L648 168"] if full else
-              ["M600 22L454 520", "M600 22L746 520", "M474 320L746 520", "M726 320L454 520"])
-    return p, facets
+        m.box(-62, 62, -40, 0, 3, 6, light=True)
+    for x in (-55, -33, -11, 11, 33, 55):
+        m.line((x, -34, 6), (x, -34, 78))
+        if full:
+            m.box(x - 3, x + 3, -37, -31, 74, 78, light=True)
+    m.box(-62, 62, -40, 0, 78, 86, node=full)
+    m.prism([(-64, 86), (0, 114), (64, 86)], -40, 0)
+    m.ring([(-52, -40, 89), (0, -40, 109), (52, -40, 89)], light=True)
+    m.nodes += [(0, -40, 114)]
+    # Main block behind the portico.
+    m.box(-70, 70, 0, 60, 0, 104, node=full)
+    if full:
+        m.arch(-7, -34, 6, 46, 14)
+    # Tower: brick base with clock, balustrade, belfry with arched openings, cornice, faceted dome, lantern.
+    m.box(-22, 22, 8, 52, 104, 148, node=True)
+    clock = [(11 * math.cos(2 * math.pi * (i + .5) / 8), 8, 126 + 11 * math.sin(2 * math.pi * (i + .5) / 8))
+             for i in range(8)]
+    m.ring(clock)
+    m.line((0, 8, 126), (0, 8, 134), light=True)
+    m.line((0, 8, 126), (6, 8, 122), light=True)
+    m.box(-30, 30, 0, 60, 148, 154)
+    if full:
+        for x in range(-30, 31, 10):
+            m.line((x, 0, 154), (x, 0, 161), light=True)
+        m.ring([(-30, 0, 161), (30, 0, 161), (30, 60, 161), (-30, 60, 161)], light=True)
+    m.box(-15, 15, 15, 45, 154, 184)
+    for x in ((-12, -1.5), (1.5, 12)):
+        m.arch(x[0], 15, 157, 180, x[1] - x[0])
+    m.box(-18, 18, 12, 48, 184, 189)
+    m.dome(0, 30, 17, 189, 21, rings=3 if full else 2)
+    for z in (210, 217):
+        m.ring(m.octo(0, 30, 4.5, z))
+    m.line((0, 30, 217), (0, 30, 236))
+    m.ring([(0, 30, 224), (3, 30, 227), (0, 30, 230), (-3, 30, 227)])
+    m.nodes += [(0, 30, 236)]
+    if full:
+        # Wings, hipped roofs, chimneys and three rows of windows on each front.
+        for x0, x1 in ((-250, -70), (70, 250)):
+            m.box(x0, x1, 4, 56, 0, 92, node=True)
+            m.hip(x0, x1, 4, 56, 92, 114, 18)
+            for cx in ((x0 + 50, x1 - 50)):
+                m.box(cx - 5, cx + 5, 24, 34, 100, 124, light=True)
+            for z0, z1 in ((12, 30), (40, 58), (66, 84)):
+                for x in range(x0 + 10, x1 - 12, 20):
+                    m.window(x, 4, z0, z1, 11)
+        for z0, z1 in ((18, 40), (52, 72)):
+            for x in (-50, 39):
+                m.window(x, -0.1, z0, z1, 11)
+    return m
+
+
+def boyden_paths(full: bool = True) -> tuple[list[str], list[str], str]:
+    """(massing, detail, viewBox) for the wireframe model, scaled so the drawing is about 1200 units wide."""
+    m = _boyden_model(full)
+    pts = [q for line in m.strong + m.light for q in line]
+    x0, x1 = min(q[0] for q in pts), max(q[0] for q in pts)
+    y0, y1 = min(q[1] for q in pts), max(q[1] for q in pts)
+    k = (1200 if full else 320) / (x1 - x0)
+    f = lambda q: ((q[0] - x0) * k, (q[1] - y0) * k)  # noqa: E731
+    pad = 14 if full else 10
+    h = 4.5 if full else 6
+    marks = []
+    for q in m.nodes:
+        x, y = f(m.p(*q))
+        marks.append(_poly_d([(x - h, y - h), (x + h, y - h), (x + h, y + h), (x - h, y + h)]))
+    strong = [_poly_d([f(q) for q in line], False) for line in m.strong] + marks
+    light = [_poly_d([f(q) for q in line], False) for line in m.light]
+    vb = f"{-pad} {-pad} {(x1 - x0) * k + 2 * pad:.0f} {(y1 - y0) * k + 2 * pad:.0f}"
+    return strong, light, vb
 
 
 def boyden_svg(full: bool, colors: tuple[str, ...] | None = None, stroke: float | None = None,
                bg: str | None = None) -> str:
-    arch, facets = boyden_paths(full)
-    vb = "40 0 1120 540" if full else "440 10 320 520"
-    sw = stroke or (2.2 if full else 9)
+    strong, light, vb = boyden_paths(full)
+    sw = stroke or (2.2 if full else 6)
     def layer(color, dx=0.0, dy=0.0, op=1.0):
         t = f' transform="translate({dx} {dy})"' if dx or dy else ""
         return (f'<g fill="none" stroke="{color}" stroke-width="{sw}" stroke-linejoin="round" '
-                f'stroke-linecap="round" opacity="{op}"{t}><path d="{" ".join(arch)}"/>'
-                f'<path d="{" ".join(facets)}" stroke-width="{sw * 0.55}" opacity=".7"/></g>')
+                f'stroke-linecap="round" opacity="{op}"{t}><path d="{" ".join(strong)}"/>'
+                f'<path d="{" ".join(light)}" stroke-width="{sw * 0.5}" opacity=".8"/></g>')
     if colors is None:
         body = layer("#000")
     else:
-        off = 3.2 if full else 7
+        off = 3.2 if full else 5
         body = layer(colors[2], -off, off * 0.6, .75) + layer(colors[1], off, -off * 0.4, .85) + layer(colors[0])
-    rect = f'<rect x="{vb.split()[0]}" y="{vb.split()[1]}" width="100%" height="100%" fill="{bg}"/>' if bg else ""
+    x, y, w, h = vb.split()
+    rect = f'<rect x="{x}" y="{y}" width="{w}" height="{h}" fill="{bg}"/>' if bg else ""
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}">{rect}{body}</svg>'
 
 
@@ -199,6 +304,111 @@ def pattern_svg() -> str:
             f'<path d="{" ".join(glyphs)}" stroke-width="1.6"/></g></svg>')
 
 
+# --- patterns for the special themes ---------------------------------------------------------------------
+
+def _seamless(body: str, size: int, stroke: float, extra: str = "") -> str:
+    """Wrap tile content so anything crossing an edge reappears on the opposite side."""
+    copies = "".join(f'<use href="#t" x="{dx}" y="{dy}"/>' for dx in (-size, 0, size) for dy in (-size, 0, size))
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}">'
+            f'<defs><g id="t" fill="none" stroke="#000" stroke-width="{stroke}" stroke-linecap="round" '
+            f'stroke-linejoin="round"{extra}>{body}</g></defs>{copies}</svg>')
+
+
+def _shape(kind: str, cx: float, cy: float, s: float, rot: float) -> list[str]:
+    f = _xf(cx, cy, s, rot)
+    P = lambda pts, close=True: _poly([f(*q) for q in pts], close)  # noqa: E731
+    def circle(x, y, r, n=20):
+        return P([(x + r * math.cos(2 * math.pi * i / n), y + r * math.sin(2 * math.pi * i / n)) for i in range(n)])
+    if kind == "star":                                     # four-point sparkle
+        return [P([(0, -14), (3, -3), (14, 0), (3, 3), (0, 14), (-3, 3), (-14, 0), (-3, -3)])]
+    if kind == "dot":
+        return [circle(0, 0, 2, 8)]
+    if kind == "pin":                                      # bowling pin, two stripes
+        side = [(0, -26), (5, -24), (6, -18), (4, -12), (4, -9), (8, 0), (10, 10), (8, 20), (5, 26)]
+        outline = side + [(-x, y) for x, y in reversed(side)]
+        return [P(outline), P([(-4, -12), (4, -12)], False), P([(-4, -9), (4, -9)], False)]
+    if kind == "ball":
+        return [circle(0, 0, 16), circle(-4, -6, 2.4, 8), circle(4, -6, 2.4, 8), circle(0, 1, 2.4, 8)]
+    if kind == "planet":
+        ring = [(math.cos(a) * 26, math.sin(a) * 7) for a in [i * math.pi / 12 for i in range(24)]]
+        return [circle(0, 0, 11), P(ring)]
+    if kind == "zigzag":
+        return [P([(-24, 0), (-14, -8), (-4, 8), (6, -8), (16, 8), (24, 0)], False)]
+    if kind == "paw":                                      # a generic paw print: pad and four toes
+        pad = [(-10, 6), (-6, -2), (0, -4), (6, -2), (10, 6), (6, 12), (0, 11), (-6, 12)]
+        return [P(pad), circle(-12, -10, 4, 10), circle(-4, -16, 4, 10), circle(5, -16, 4, 10), circle(13, -10, 4, 10)]
+    if kind == "football":
+        body = [(math.cos(a) * 20, math.sin(a) * 11 * (1 - 0.15 * math.cos(a) ** 2)) for a in [i * math.pi / 12 for i in range(24)]]
+        return [P(body), P([(-8, 0), (8, 0)], False)] + [P([(x, -3), (x, 3)], False) for x in (-5, -1.7, 1.7, 5)]
+    if kind == "goalpost":
+        return [P([(0, 24), (0, 4)], False), P([(-16, 4), (16, 4)], False), P([(-16, 4), (-16, -24)], False),
+                P([(16, 4), (16, -24)], False)]
+    if kind == "pennant":
+        return [P([(-18, -16), (-18, 20)], False), P([(-18, -16), (20, -8), (-18, 0)]), P([(-12, -9), (6, -8)], False)]
+    if kind == "megaphone":
+        return [P([(-16, -4), (8, -14), (8, 14), (-16, 4)]), P([(-22, -4), (-16, -4), (-16, 4), (-22, 4)]),
+                P([(-12, 4), (-10, 14), (-5, 14), (-6, 3)], False)]
+    return glyph(kind, cx, cy, s, rot)
+
+
+def _scatter(kinds: list[str], size: int, seed: int, grid: int) -> list[str]:
+    rnd = random.Random(seed)
+    cell = size / grid
+    out = []
+    for i in range(grid):
+        for j in range(grid):
+            kind = kinds[(i * 3 + j * 5 + rnd.randrange(len(kinds))) % len(kinds)]
+            x, y = (i + 0.5) * cell + rnd.uniform(-cell * .25, cell * .25), (j + 0.5) * cell + rnd.uniform(-cell * .25, cell * .25)
+            out += _shape(kind, x, y, rnd.uniform(0.85, 1.15), rnd.choice((0, -15, 15, 30, -30)))
+    return out
+
+
+def cosmic_svg() -> str:
+    """Cosmic bowling: sparkles, pins, balls, planets and zigzags."""
+    size = 640
+    shapes = _scatter(["star", "pin", "dot", "ball", "star", "planet", "zigzag", "dot", "star"], size, 7, 7)
+    return _seamless(f'<path d="{" ".join(shapes)}"/>', size, 1.8)
+
+
+def spirit_svg() -> str:
+    """Game day: paw prints, footballs, goalposts, pennants, megaphones, bears and a few Boydens."""
+    size = 640
+    shapes = _scatter(["paw", "football", "paw", "goalpost", "pennant", "bear", "paw", "megaphone", "boyden"], size, 11, 6)
+    return _seamless(f'<path d="{" ".join(shapes)}"/>', size, 1.8)
+
+
+def _wave(x0, y0, length, amp, period, steps=60, phase=0.0):
+    return [(x0 + length * i / steps, y0 + amp * math.sin(phase + 2 * math.pi * (length * i / steps) / period))
+            for i in range(steps + 1)]
+
+
+def cup_svgs() -> tuple[str, str]:
+    """The 90s paper cup, as two masks: a broad teal brush stroke (a) and a thin purple squiggle (b)."""
+    size = 600
+    rnd = random.Random(1994)
+    brush = []
+    for y, phase in ((150, 0.0), (450, 2.1)):
+        main = _wave(-40, y, size + 80, 22, 380, 70, phase)
+        brush.append(f'<path d="{_poly(main, False)}" stroke-width="30"/>')
+        for _ in range(5):                                 # dry-brush bristle strokes along the edges
+            off = rnd.choice((-1, 1)) * rnd.uniform(17, 25)
+            start, end = rnd.randrange(0, 30), rnd.randrange(40, 71)
+            pts = [(x, yy + off) for x, yy in main[start:end]]
+            brush.append(f'<path d="{_poly(pts, False)}" stroke-width="{rnd.uniform(2, 4.5):.1f}"/>')
+    squiggle = []
+    for y, phase in ((60, 1.0), (300, 3.0), (540, 0.4)):
+        pts = []
+        for i in range(161):
+            t = i / 160
+            x = -30 + (size + 60) * t + 14 * math.cos(t * 2 * math.pi * 9 + phase)
+            yy = y + 26 * math.sin(t * 2 * math.pi * 2 + phase) + 12 * math.sin(t * 2 * math.pi * 9 + phase)
+            pts.append((x, yy))
+        squiggle.append(_poly(pts, False))
+    a = _seamless("".join(brush), size, 30)
+    b = _seamless(f'<path d="{" ".join(squiggle)}"/>', size, 5)
+    return a, b
+
+
 def favicon() -> None:
     """Render the colored mark to PNG with Chromium, then pack an .ico (16-64 px)."""
     import io
@@ -225,6 +435,11 @@ def main() -> None:
     (ASSETS / "boyden.svg").write_text(boyden_svg(True))
     (ASSETS / "boyden-mark.svg").write_text(boyden_svg(False))
     (ASSETS / "pattern.svg").write_text(pattern_svg())
+    (ASSETS / "pattern-cosmic.svg").write_text(cosmic_svg())
+    (ASSETS / "pattern-spirit.svg").write_text(spirit_svg())
+    cup_a, cup_b = cup_svgs()
+    (ASSETS / "pattern-cup-a.svg").write_text(cup_a)
+    (ASSETS / "pattern-cup-b.svg").write_text(cup_b)
     (DOC_ASSETS / "boyden-cover.svg").write_text(boyden_svg(True, ("#ffffff", "#f3c25b", "#8fc1e8"), stroke=2.4))
     (DOC_ASSETS / "boyden-mark-color.svg").write_text(boyden_svg(False, (CRIMSON, GOLD, SLATE)))
     favicon()
