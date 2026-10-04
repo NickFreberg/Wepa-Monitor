@@ -523,17 +523,23 @@ def _shape(kind: str, cx: float, cy: float, s: float, rot: float) -> list[str]:
         return [P([(0, -14), (3, -3), (14, 0), (3, 3), (0, 14), (-3, 3), (-14, 0), (-3, -3)])]
     if kind == "dot":
         return [circle(0, 0, 2, 8)]
-    if kind == "pin":                                      # bowling pin, two stripes
-        side = [(0, -26), (5, -24), (6, -18), (4, -12), (4, -9), (8, 0), (10, 10), (8, 20), (5, 26)]
-        outline = side + [(-x, y) for x, y in reversed(side)]
-        return [P(outline), P([(-4, -12), (4, -12)], False), P([(-4, -9), (4, -9)], False)]
-    if kind == "ball":
-        return [circle(0, 0, 16), circle(-4, -6, 2.4, 8), circle(4, -6, 2.4, 8), circle(0, 1, 2.4, 8)]
     if kind == "planet":
         ring = [(math.cos(a) * 26, math.sin(a) * 7) for a in [i * math.pi / 12 for i in range(24)]]
         return [circle(0, 0, 11), P(ring)]
     if kind == "zigzag":
         return [P([(-24, 0), (-14, -8), (-4, 8), (6, -8), (16, 8), (24, 0)], False)]
+    if kind == "toner":                                    # toner cartridge: body, drum window, grip ridges
+        return [P([(-22, -8), (18, -8), (24, -2), (24, 8), (-22, 8)]), P([(-14, 8), (-14, 13), (10, 13), (10, 8)], False),
+                P([(14, -8), (14, 8)], False)] + [P([(x, -4), (x, 4)], False) for x in (-17, -13, -9)]
+    if kind == "drop":                                     # ink drop
+        side = [(0, -16), (5, -7), (9, 1), (9, 6), (6, 12), (0, 14)]
+        return [P(side + [(-x, y) for x, y in reversed(side[1:-1])]), P([(-3, 4), (-4, 8)], False)]
+    if kind == "sheets":                                   # paper flying out of a printer: three tilted sheets
+        out = []
+        for i in range(3):
+            g = _xf(cx + (i - 1) * 9 * s, cy - i * 7 * s, s, rot + (i - 1) * 14)
+            out.append(_poly([g(-9, -12), (g(9, -12)), g(9, 12), g(-9, 12)]))
+        return out
     if kind == "paw":                                      # a generic paw print: pad and four toes
         pad = [(-10, 6), (-6, -2), (0, -4), (6, -2), (10, 6), (6, 12), (0, 11), (-6, 12)]
         return [P(pad), circle(-12, -10, 4, 10), circle(-4, -16, 4, 10), circle(5, -16, 4, 10), circle(13, -10, 4, 10)]
@@ -564,9 +570,10 @@ def _scatter(kinds: list[str], size: int, seed: int, grid: int) -> list[str]:
 
 
 def cosmic_svg() -> str:
-    """Cosmic bowling: sparkles, pins, balls, planets and zigzags."""
+    """Cosmic (black-light glow): sparkles, planets and zigzags, with printers, flying paper, toner and ink drops."""
     size = 640
-    shapes = _scatter(["star", "pin", "dot", "ball", "star", "planet", "zigzag", "dot", "star"], size, 7, 7)
+    shapes = _scatter(["star", "printer", "dot", "sheets", "star", "planet", "toner", "drop", "zigzag", "paper",
+                       "dot", "star", "drop"], size, 7, 7)
     return _seamless(f'<path d="{" ".join(shapes)}"/>', size, 1.8)
 
 

@@ -1115,9 +1115,9 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
    Each takes over a slot in Appearance: Cosmic replaces Dark and Cup replaces Light once earned (ui.js), and
    Go Bears replaces BSU on football game days (wepa_monitor/football.py). Same rules as the others: every
    text color keeps at least 5:1 over the strongest point of its pattern, patterns are decorative and vanish
-   for high contrast, forced colors and print, and the one animation (Cosmic's twinkle) respects reduced motion. */
+   for high contrast, forced colors and print, and Cosmic's animation stops for reduced motion. */
 
-/* Cosmic: black-light bowling at midnight. */
+/* Cosmic: black-light glow, with printers, paper, toner and ink drops drifting among the stars. */
 :root[data-theme="cosmic"] {
   color-scheme: dark;
   --page: #08061a; --surface: #120e2e; --surface-2: #1b1641; --ink: #ffffff; --ink-2: #dcd8f5; --muted: #d6d3f3;
@@ -1128,7 +1128,7 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
   --side-active-bg: #2ef2ff; --side-active-ink: #08061a; --side-border: #ff5ad9; --brand: #ff5ad9;
   --shadow: 0 0 0 1px rgba(255, 90, 217, 0.10), 0 0 22px rgba(46, 242, 255, 0.10);
   --pat-a: url("/assets/pattern-cosmic.svg"); --pat-side: url("/assets/pattern-cosmic.svg"); --pat-size: 640px; --pat-pos: 0 0; --pat-repeat: repeat; --pat-side-size: 560px; --pat-side-pos: 40px 0; --pat-shift: 3px;
-  --pattern-a: rgba(46, 242, 255, 0.24); --pattern-b: rgba(255, 90, 217, 0.22); --side-pattern: rgba(184, 255, 74, 0.16);
+  --pattern-a: rgba(46, 242, 255, 0.2); --pattern-b: rgba(255, 90, 217, 0.18); --side-pattern: rgba(184, 255, 74, 0.16);
   --mark-1: #2ef2ff; --mark-2: #ff5ad9; --mark-3: #b8ff4a;
 }
 :root[data-theme="cosmic"] body { background: radial-gradient(ellipse at 20% 0%, #1d1052 0, transparent 55%),
@@ -1143,9 +1143,25 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
   box-shadow: 0 0 16px rgba(46, 242, 255, 0.45); }
 :root[data-theme="cosmic"] .btn--primary { background: #ff5ad9; border-color: #ff5ad9; color: #08061a; }
 :root[data-theme="cosmic"] .brand__mark { filter: drop-shadow(0 0 4px rgba(46, 242, 255, 0.7)); }
-@keyframes cosmic-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+/* Motion: the two neon layers drift in different directions (parallax), their colors cycle slowly like
+   black-light bowling lights, and the second layer twinkles. Only transform, opacity and filter animate, so
+   it stays cheap. hue-rotate keeps each color's luminance, so contrast holds through the cycle. Every bit of
+   it stops for reduced motion (system setting or Appearance). Each layer is one tile larger than the window
+   and slides exactly one tile per loop, so the loop is seamless. */
+@keyframes cosmic-twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+@keyframes cosmic-drift-a { from { transform: translate(0, 0); } to { transform: translate(640px, 640px); } }
+@keyframes cosmic-drift-b { from { transform: translate(3px, 3px); } to { transform: translate(-637px, 3px); } }
+@keyframes cosmic-hue { to { filter: hue-rotate(360deg); } }
+@keyframes cosmic-glow { 0%, 100% { box-shadow: 1px 0 0 #ff5ad9, 4px 0 24px rgba(255, 90, 217, 0.25); }
+  50% { box-shadow: 1px 0 0 #2ef2ff, 4px 0 28px rgba(46, 242, 255, 0.3); } }
 @media (prefers-reduced-motion: no-preference) {
-  :root[data-theme="cosmic"]:not([data-motion="reduce"]) body::after { animation: cosmic-twinkle 5s ease-in-out infinite; }
+  :root[data-theme="cosmic"]:not([data-motion="reduce"]) body::before {
+    inset: -640px 0 0 -640px; will-change: transform, filter;
+    animation: cosmic-drift-a 140s linear infinite, cosmic-hue 48s linear infinite; }
+  :root[data-theme="cosmic"]:not([data-motion="reduce"]) body::after {
+    inset: 0 -640px 0 0; will-change: transform, filter, opacity;
+    animation: cosmic-drift-b 95s linear infinite, cosmic-twinkle 5s ease-in-out infinite, cosmic-hue 48s linear -24s infinite; }
+  :root[data-theme="cosmic"]:not([data-motion="reduce"]) .sidebar { animation: cosmic-glow 6s ease-in-out infinite; }
 }
 .swatch--cosmic { background: radial-gradient(circle at 30% 40%, #ff5ad9 0 3px, transparent 4px),
   radial-gradient(circle at 70% 60%, #2ef2ff 0 3px, transparent 4px), radial-gradient(circle at 55% 25%, #b8ff4a 0 2px, transparent 3px),

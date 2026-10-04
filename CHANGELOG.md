@@ -8,6 +8,17 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.2] - 2026-10-04
+Cosmic comes alive, and it's about printing now.
+
+### Changed
+- Cosmic's background moves: its two neon layers drift slowly in different directions, their colors cycle like black-light lights, the stars twinkle, and the sidebar's edge pulses between pink and cyan. Everything stops when reduced motion is on, in Appearance or in the device's settings. The color cycle is checked at every step so text keeps at least 4.5 to 1 contrast throughout.
+- The bowling pins and balls are gone. Printers, flying sheets of paper, toner cartridges and ink drops float among the stars and planets instead.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- WCAG 2.2 success criterion 2.3.3 Animation from Interactions: https://www.w3.org/TR/WCAG22/#animation-from-interactions
+
 ## [1.4.1] - 2026-10-04
 Cup gets the real thing.
 

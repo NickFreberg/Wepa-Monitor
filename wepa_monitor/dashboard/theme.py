@@ -47,7 +47,7 @@ TOKENS["crimson"] = {
     "seq": ["#f7e4e3", "#eebfbd", "#e09591", "#cc6a66", "#b23f3e", "#8f1f24", "#5f1016"],
     "neutral_bar": "#cfcbc2",
 }
-# Cosmic bowling: neon on a black-light night sky. Series are bright enough for 3:1 against the surface.
+# Cosmic: neon on a black-light night sky, printers in orbit. Series are bright enough for 3:1 against the surface.
 TOKENS["cosmic"] = {
     "page": "#08061a", "surface": "#120e2e", "ink": "#ffffff", "secondary": "#dcd8f5",
     "muted": "#a7a1d6", "grid": "#272152", "axis": "#3d3672", "border": "#2c2560",

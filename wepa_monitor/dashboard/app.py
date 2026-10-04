@@ -57,7 +57,7 @@ THEMES = [("auto", "Match my device", "Light or dark, following your system sett
           ("crimson", "BSU", "Bridgewater crimson and stone")]
 # Themes that take a slot's place: (slot, theme, name, description). Cosmic and Cup are earned (see ui.js);
 # Go Bears appears by itself on a football game day.
-SPECIAL_THEMES = {"cosmic": ("dark", "Cosmic", "Glow in the dark, like bowling at midnight"),
+SPECIAL_THEMES = {"cosmic": ("dark", "Cosmic", "Glow in the dark, with neon printers in orbit"),
                   "cup": ("light", "Cup", "A teal swoosh and a purple squiggle, very 1994"),
                   "gobears": ("crimson", "Go Bears", "It's game day: crimson and gold, all in")}
 
