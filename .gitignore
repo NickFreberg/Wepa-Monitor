@@ -16,7 +16,3 @@ cup.png
 cup.jpg
 cup.jpeg
 cup.webp
-# The university mascot image is installed on the server, never committed (see wepa_monitor/theme_art.py)
-mascot.png
-mascot.webp
-mascot.gif

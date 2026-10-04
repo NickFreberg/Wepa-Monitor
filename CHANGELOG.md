@@ -8,6 +8,15 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.6] - 2026-10-04
+Bristaco takes over.
+
+### Changed
+- The reaction to a certain number is now Bristaco himself, with a plain red shirt and no logo, standing over the page with his arms out. Each arm rocks at the shoulder, out of sync with the other, weighing a number on each paw. The drawn stand-in bear and the server-installed mascot option are gone.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
 ## [1.4.5] - 2026-10-04
 A certain number now gets a bear.
 

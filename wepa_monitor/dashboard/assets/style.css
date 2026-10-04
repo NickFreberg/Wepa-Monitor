@@ -1284,37 +1284,34 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 @media (max-width: 900px) { .sandman-banner:not([hidden]) { top: 120px; left: 50%; width: calc(100vw - 24px); font-size: 15px;
   letter-spacing: .2em; } }
 
-/* 6 7 (ui.js): a bear in BSU colors (or the server's mascot image) weighs "6... 7..." whenever the number 67
-   appears. No panel, just the figure over the page. Decorative, under 5 s, no flashing, still for reduced
-   motion, never blocks a click. */
-.sixseven { position: fixed; left: 50%; bottom: -6px; z-index: 90; width: min(330px, calc(100vw - 24px));
-  transform: translateX(-50%); pointer-events: none; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .35));
+/* 6 7 (ui.js): Bristaco weighs "6... 7..." whenever the number 67 appears. Three layers cut from one drawing
+   (arms behind the body, each rocking about its shoulder), no panel. Decorative, under 5 s, no flashing, still
+   for reduced motion, never blocks a click. */
+.sixseven { position: fixed; left: 50%; bottom: -4px; z-index: 90; width: min(360px, calc(100vw - 24px));
+  transform: translateX(-50%); pointer-events: none; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .3));
   animation: sixseven-in .45s cubic-bezier(.2, 1.6, .4, 1) both, sixseven-out .4s ease-in 4.15s forwards; }
-.sixseven svg { display: block; width: 100%; height: auto; overflow: visible; }
-.sixseven #ss-left, .sixseven #ss-right { transform-box: view-box; }
-.sixseven #ss-left { transform-origin: 108px 184px; animation: ss-left .5s ease-in-out infinite alternate; }
-.sixseven #ss-right { transform-origin: 212px 184px; animation: ss-right .5s ease-in-out -.5s infinite alternate; }
-.sixseven--mascot { width: min(300px, calc(100vw - 24px)); }
-.sixseven__mascot { display: block; width: 100%; animation: ss-rock .5s ease-in-out infinite alternate; transform-origin: 50% 90%; }
-.sixseven__num { position: absolute; top: 18%; font: 900 64px/1 "Arial Rounded MT Bold", "Nunito", "Trebuchet MS", Arial, sans-serif;
+.ss-body { position: relative; display: block; width: 100%; }
+.ss-arm { position: absolute; inset: 0; }
+.ss-arm img { display: block; width: 100%; }
+.ss-arm--left { transform-origin: 27.3% 47%; animation: ss-left .5s ease-in-out infinite alternate; }
+.ss-arm--right { transform-origin: 72.9% 47%; animation: ss-right .5s ease-in-out -.5s infinite alternate; }
+.ss-num { position: absolute; top: 11%; font: 900 62px/1 "Arial Rounded MT Bold", "Nunito", "Trebuchet MS", Arial, sans-serif;
   color: #1638f0; text-shadow: 4px 0 #fff, -4px 0 #fff, 0 4px #fff, 0 -4px #fff, 3px 3px #fff, -3px 3px #fff, 3px -3px #fff, -3px -3px #fff; }
-.sixseven__num--six { left: 2%; animation: ss-bob .5s ease-in-out infinite alternate; }
-.sixseven__num--seven { right: 2%; animation: ss-bob .5s ease-in-out -.5s infinite alternate; }
+.ss-arm--left .ss-num { left: 3%; }
+.ss-arm--right .ss-num { right: 3%; }
 .sixseven-ring { position: fixed; z-index: 89; pointer-events: none; border: 4px solid #f25fc6; border-radius: 14px;
   box-shadow: 0 0 0 3px #ffffff, 0 0 18px rgba(242, 95, 198, .7); animation: sixseven-wobble .35s ease-in-out 12 alternate; }
 .is-sixseven { animation: sixseven-shake .55s ease-in-out; }
 @keyframes sixseven-in { from { transform: translate(-50%, 110%) rotate(-6deg); } to { transform: translate(-50%, 0) rotate(0); } }
 @keyframes sixseven-out { to { transform: translate(-50%, 110%) rotate(5deg); } }
-@keyframes ss-left { from { transform: rotate(-11deg); } to { transform: rotate(13deg); } }
-@keyframes ss-right { from { transform: rotate(11deg); } to { transform: rotate(-13deg); } }
-@keyframes ss-rock { from { transform: rotate(-6deg); } to { transform: rotate(6deg); } }
-@keyframes ss-bob { from { transform: translateY(26px); } to { transform: translateY(-26px); } }
+@keyframes ss-left { from { transform: rotate(-9deg); } to { transform: rotate(12deg); } }
+@keyframes ss-right { from { transform: rotate(9deg); } to { transform: rotate(-12deg); } }
 @keyframes sixseven-wobble { from { transform: rotate(-5deg) scale(1.08); } to { transform: rotate(5deg) scale(1.18); } }
 @keyframes sixseven-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-6px) rotate(-.4deg); }
   40% { transform: translateX(6px) rotate(.4deg); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
 .sixseven--still, .sixseven--still *, .sixseven-ring.sixseven--still { animation: none !important; }
 @media print { .sixseven, .sixseven-ring { display: none; } }
-@media (max-width: 600px) { .sixseven { width: 240px; } .sixseven__num { font-size: 46px; } }
+@media (max-width: 600px) { .sixseven { width: 250px; } .ss-num { font-size: 44px; } }
 
 /* The Sandman mini-player (YouTube): visible and at least 200 px tall, as YouTube's embed rules require. */
 .sandman-player { position: fixed; right: 16px; bottom: 16px; z-index: 86; width: min(356px, calc(100vw - 32px));
