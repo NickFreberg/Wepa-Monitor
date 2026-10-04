@@ -1,0 +1,104 @@
+<section class="chapter" id="guide">
+  <div class="chapter__eyebrow">Chapter 8 <span class="phase">User guide</span></div>
+  <h2>Using ResNet Print Ops</h2>
+  <div class="audiences"><span class="aud aud--on">Students</span><span class="aud aud--on">Student staff</span><span class="aud aud--on">Supervisors</span><span class="aud">IT leadership</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>Sign in with the account your ResNet administrator gave you. The left side lists every page; the top bar
+      holds the filter, the time period, export, the activity log, notifications, appearance and the Assistant.
+      Everything is read-only except investigations, your own account and feature requests.</p></div>
+
+  <h3 id="guide-students">8.1 For students: finding a printer that works</h3>
+  <ol class="steps">
+    <li>Scan the QR sign on the printer, where your residence hall or building has one.</li>
+    <li>The page shows whether that printer is working right now and, if not, the nearest printers that are, with the
+      walking time. East Campus Commons counts as open to everyone; other residence-hall printers need card access.</li>
+    <li>Wepa holds print jobs online, so a job you sent can usually be released at another working station.</li>
+  </ol>
+  <p class="callout">Student status pages are behind sign-in unless the administrator turns on public status pages
+    (with Wepa's and BSU's agreement). They show the present only, never history.</p>
+
+  <h3>8.2 Getting started (staff)</h3>
+  <ol class="steps">
+    <li>Open the app's address and sign in. A temporary password from the administrator must be changed the first time.</li>
+    <li>Use a password of 12 or more characters; a few unrelated words works well. Common and breached passwords are refused.</li>
+    <li>Under your picture: <b>My account</b> (picture, phone, password), <b>Directory</b>, <b>Suggest a feature</b>, <b>Sign out</b>.</li>
+    <li>Choose an appearance (BSU, light, dark or automatic; larger text; compact; reduced motion; extra contrast).</li>
+  </ol>
+
+  <h3>8.3 Pages</h3>
+  <div class="tbl"><table>
+    <tr><th>Page</th><th>Use it to</th><th>Tip</th></tr>
+    <tr><td>Overview</td><td>See what needs attention now: status map, work queue, end-of-life watch, recent activity</td><td>Start every shift here</td></tr>
+    <tr><td>Insights</td><td>Read the story of a day, week or term; ask the data a question in plain English</td><td>Good for a supervisor's weekly note</td></tr>
+    <tr><td>Rounds</td><td>Get the fastest route to every printer that needs a visit, on foot or by van</td><td>Urgent printers come first</td></tr>
+    <tr><td>Stations</td><td>Search all stations; open one for its history, parts and backups</td><td>Click any chart point for its meaning</td></tr>
+    <tr><td>Analytics</td><td>Reliability, faults, supplies, usage, report card, planning, statistics</td><td>The period selector applies here</td></tr>
+    <tr><td>Executive</td><td>Month and year to date, with what stands out</td><td>Export to PDF for meetings</td></tr>
+    <tr><td>IT Outcomes</td><td>A print-ready page for the IT annual report</td><td>Prints on letter paper</td></tr>
+    <tr><td>Investigations</td><td>Document recurring problems; move them through the lifecycle; download evidence for Wepa</td><td>A second person closes from Review</td></tr>
+    <tr><td>System</td><td>Is the monitor healthy? Live log, data quality, visits, sign-in security, AI status</td><td>Check here if numbers look odd</td></tr>
+    <tr><td>Software</td><td>Version, self-check, vulnerabilities and their priority, OWASP checklist, updates, backups, change log</td><td>Administrator starts updates here</td></tr>
+    <tr><td>Activity</td><td>Everything that happened, searchable by date</td><td>Click a version number for its change log</td></tr>
+    <tr><td>Assistant</td><td>Ask questions in plain English; answers cite only looked-up figures</td><td>Ctrl or Cmd + I opens it</td></tr>
+  </table></div>
+
+  <div class="shots">
+    <figure class="plate">{{IMG_overview}}<figcaption><b>Overview.</b> Status map, work queue and what needs attention.</figcaption></figure>
+    <figure class="plate">{{IMG_station}}<figcaption><b>Station page.</b> History, parts and the nearest backups.</figcaption></figure>
+    <figure class="plate">{{IMG_investigation}}<figcaption><b>Investigation.</b> Governed lifecycle, audit trail and evidence packet.</figcaption></figure>
+    <figure class="plate">{{IMG_assistant}}<figcaption><b>Assistant.</b> Answers from read-only tools, fact-checked.</figcaption></figure>
+  </div>
+  <p class="callout">Screenshots use the synthetic demo data set and an earlier release; layouts may differ slightly
+    in version 1.2.1 (for example, durations now read in whole days, hours and minutes).</p>
+
+  <h3>8.4 Common tasks</h3>
+  <h4>Respond to an outage</h4>
+  <ol class="steps">
+    <li>On <b>Overview</b>, open the top item in the work queue, or go to <b>Rounds</b> for a route.</li>
+    <li>Fix it on site. The station turns Operational within a minute of Wepa's page updating.</li>
+    <li>The outage resolves itself with its reference number, duration and desk-hour split. Nothing to type.</li>
+  </ol>
+  <h4>Work an investigation</h4>
+  <ol class="steps">
+    <li>Open <b>Investigations</b>. Detector-opened cases are marked; you can also open one yourself.</li>
+    <li>Assign it (moves to Analyze), record a root cause (Respond), record the action taken (Review).</li>
+    <li>A second person closes it. Download the evidence packet (PDF) for a Wepa case.</li>
+  </ol>
+  <h4>Report the month</h4>
+  <ol class="steps">
+    <li>Open <b>Executive</b>, pick the month, read the highlights.</li>
+    <li>Use <b>Export</b> in the top bar for PDF, Excel, CSV or JSON of the current filter and period.</li>
+  </ol>
+  <h4>Suggest a feature or report a problem</h4>
+  <ol class="steps">
+    <li>Under your picture, choose <b>Suggest a feature</b>.</li>
+    <li>Pick the kind, give a title and details, and send. It gets a REQ number and becomes a GitHub issue; your name
+      is not included unless the administrator turned that on.</li>
+  </ol>
+
+  <h3>8.5 For the administrator</h3>
+  <div class="tbl"><table>
+    <tr><th>Task</th><th>Command or place</th></tr>
+    <tr><td>Add a staff account</td><td><code>python -m wepa_monitor users add jsmith --name "Jordan Smith" --email jsmith@bridgew.edu</code></td></tr>
+    <tr><td>Reset, deactivate, list</td><td><code>users reset jsmith</code> · <code>users deactivate jsmith</code> · <code>users list</code></td></tr>
+    <tr><td>Deploy or update</td><td><code>./deploy/azure-containerapps/deploy.sh</code> (from a laptop or Azure Cloud Shell)</td></tr>
+    <tr><td>Add keys safely</td><td><code>ASK_SECRETS=1 ./deploy/azure-containerapps/deploy.sh</code> (hidden prompts)</td></tr>
+    <tr><td>Check the app</td><td><code>python -m wepa_monitor selfcheck --vulns</code>, or the Software page</td></tr>
+    <tr><td>Start a backup collector</td><td><code>python -m wepa_monitor backup --primary https://&lt;app&gt;</code> with <code>WEPA_PEER_KEY</code> set</td></tr>
+    <tr><td>Start a security update</td><td>Software page → Prepare update package → Start update (password again)</td></tr>
+  </table></div>
+
+  <h3>8.6 Frequently asked questions</h3>
+  <dl class="defs">
+    <dt>Why does a station say "No signal"?</dt><dd>It hasn't appeared on Wepa's page for 5 minutes. Its status is
+      unknown, and that time is left out of every rate.</dd>
+    <dt>Why "support unavailable until …"?</dt><dd>The team that supports that printer has no desk open right now;
+      the time is when it next opens.</dd>
+    <dt>Why does a figure say "insufficient data"?</dt><dd>Too few incidents or too little observed time to be
+      reliable. It appears once there is enough evidence.</dd>
+    <dt>Why isn't the outage-risk model shown?</dt><dd>It hasn't beaten the simple baseline on held-out weeks yet; the
+      page says which condition is not met.</dd>
+    <dt>Is "In progress" ever shown?</dt><dd>No. The monitor can see that a problem is open, not whether someone is
+      working on it, so it says Ongoing.</dd>
+  </dl>
+</section>

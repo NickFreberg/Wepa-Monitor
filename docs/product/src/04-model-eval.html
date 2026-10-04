@@ -1,0 +1,187 @@
+<section class="chapter" id="modeling">
+  <div class="chapter__eyebrow">Chapter 4 <span class="phase">CRISP-DM phase 4 · Modeling</span></div>
+  <h2>Modeling</h2>
+  <div class="audiences"><span class="aud aud--on">Data scientists</span><span class="aud">Supervisors</span><span class="aud">IT leadership</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>Most of the product's value comes from careful definitions, not exotic models: what counts as available, how
+      long an outage really lasted, what usage really was. On top of those sit a handful of well-understood
+      statistical methods, each chosen to answer one operational question, and one machine-learning model that has
+      to prove itself before it is shown.</p></div>
+
+  <h3>4.1 Measures</h3>
+  <div class="tbl"><table>
+    <tr><th>Measure</th><th>Definition</th><th>Shown when</th></tr>
+    <tr><td>Availability</td><td>Observed printer-minutes not out of service ÷ all observed printer-minutes</td><td>At least half the window observed</td></tr>
+    <tr><td>Building coverage</td><td>Share of minutes at least one printer in the building could print</td><td>Same</td></tr>
+    <tr><td>Mean time to repair</td><td>Mean duration of resolved outages (or warnings), censored starts excluded</td><td>At least 3 incidents</td></tr>
+    <tr><td>Mean time between failures</td><td>Hours of uptime ÷ number of outages</td><td>At least one outage</td></tr>
+    <tr><td>Paper refill time</td><td>Mean duration of paper-out outages</td><td>At least 3 incidents</td></tr>
+    <tr><td>Tray empty time</td><td>Mean time a single tray reports empty while others may still print</td><td>At least 3 incidents</td></tr>
+    <tr><td>Burn rate</td><td>Consumable points used per day, from the last 14 days</td><td>At least 3 days observed</td></tr>
+    <tr><td>Data quality</td><td>30% freshness + 40% completeness + 20% validity + 10% station coverage</td><td>Always</td></tr>
+  </table></div>
+  <p>Below the evidence threshold the dashboard says "insufficient data" rather than showing a number that would
+    swing wildly with one more incident.</p>
+
+  <h3>4.2 Model inventory</h3>
+  <div class="tbl"><table>
+    <tr><th>Question</th><th>Method</th><th>Why this method</th></tr>
+    <tr><td>When will this part reach end of life?</td><td>Theil–Sen regression on readings since the last replacement, with a 90% interval</td><td>Robust to sensor blips; falls back to burn rate with few readings</td></tr>
+    <tr><td>Is today's fault count normal?</td><td>Statistical process control c-chart (mean ± 3√mean) and the Western Electric 8-in-a-row rule; Poisson tail test per station-day</td><td>Counts of rare events; the standard Six Sigma control tool</td></tr>
+    <tr><td>How fast are outages fixed, in and out of desk hours?</td><td>Kaplan–Meier survival curves with a log-rank test</td><td>Keeps still-open outages as censored rather than dropping them</td></tr>
+    <tr><td>Do busier printers fail more?</td><td>Ordinary least squares, outages per week on usage, with residual flags beyond 2σ</td><td>Separates "busy" from "bad unit"</td></tr>
+    <tr><td>Which printers fail most, fairly?</td><td>Empirical-Bayes Gamma–Poisson rates with 90% credible intervals; report-card grades shrink toward the campus rate</td><td>Small samples don't top the list by chance</td></tr>
+    <tr><td>Did several printers fail together?</td><td>Clusters of outages within 10 minutes across 3+ stations, tested against a Poisson rate for that hour and day type</td><td>Tells a network or Wepa-side event from a busy moment</td></tr>
+    <tr><td>Which downtime cost the most printing?</td><td>Outage hours weighted by that printer's typical use at that time of week</td><td>An hour down at 2 PM on a Tuesday matters more than at 4 AM</td></tr>
+    <tr><td>Does humid weather go with more jams?</td><td>Mantel–Haenszel rate ratio, stratified by 6-hour block and weekday or weekend</td><td>Controls for the fact that humidity and printing both follow the clock</td></tr>
+    <tr><td>What if a desk stayed open later?</td><td>Monte Carlo replay (1,000 runs) of real outages with extra desk coverage; fix times drawn from real desk-hour fixes</td><td>Answers staffing questions with the campus's own history</td></tr>
+    <tr><td>Where would one more printer help most?</td><td>Greedy one-step p-median on walking times, weighted by busy-weighted downtime</td><td>Directly minimizes students' extra walking</td></tr>
+    <tr><td>Supplies to reorder</td><td>Monte Carlo of recent daily usage: how many of each part to stock at 50%, 90% and 95% confidence; reorder points use the supply lead time (7 days unless set)</td><td>Gives a range, not a single guess</td></tr>
+    <tr><td>Which printer may fail in the next 24 hours?</td><td>Machine learning, below</td><td>Only if it beats the simple alternative</td></tr>
+  </table></div>
+
+  <h3>4.3 The outage-risk model</h3>
+  <p>Each printer-hour becomes one example: time of day and week, whether a desk is open and how long until it
+    opens, whether classes are in session, the kind of place, recent faults and warnings, recent usage, part levels.
+    The label is whether an outage started in the next 24 hours.</p>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+flowchart LR
+  A["History<br/>one row per printer-hour"] --> B["Features<br/>time · desk · calendar · place · recent faults · usage · parts"]
+  B --> C["Walk-forward test<br/>train on the past, test on each of 4 later weeks"]
+  C --> D1["Logistic regression"]
+  C --> D2["Gradient-boosted trees"]
+  C --> D3["Small neural network<br/>16 units, strong regularization"]
+  C --> D0["Baseline<br/>each printer's own recent rate, shrunk toward campus"]
+  D1 --> E{"Go-live gate"}
+  D2 --> E
+  D3 --> E
+  D0 --> E
+  E -->|"passes"| F["Shown: chance of an outage in 24 h, with reasons"]
+  E -->|"fails"| G["Hidden; the page says why"]
+</pre>
+    <figcaption><b>Figure 4.1 · Train, test, gate.</b> Recent history counts more (weight halves every 21 days).
+      The model retrains nightly; every prediction is logged so its track record can be checked later.</figcaption>
+  </figure>
+
+  <h3 id="dmn">4.4 Decision tables (DMN)</h3>
+  <p>The product's key decisions are written as DMN-style decision tables. The hit policy is shown in the top-left
+    cell: <span class="hit">U</span> unique (exactly one rule applies), <span class="hit">F</span> first (the first
+    matching rule wins), <span class="hit">A</span> all conditions must hold.</p>
+  <div class="tbl"><table>
+    <caption>Decision: station status</caption>
+    <tr><th><span class="hit">F</span></th><th>Last reading age</th><th>Row color</th><th>Status shown</th></tr>
+    <tr><td>1</td><td>over 5 minutes</td><td>–</td><td>No signal</td></tr>
+    <tr><td>2</td><td>≤ 5 minutes</td><td>red</td><td>Out of service</td></tr>
+    <tr><td>3</td><td>≤ 5 minutes</td><td>yellow</td><td>Degraded</td></tr>
+    <tr><td>4</td><td>≤ 5 minutes</td><td>green</td><td>Operational</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>Decision: show the outage-risk model</caption>
+    <tr><th><span class="hit">A</span></th><th>Condition</th><th>Threshold</th></tr>
+    <tr><td>1</td><td>Days of history</td><td>≥ 21</td></tr>
+    <tr><td>2</td><td>Outages in training</td><td>≥ 50</td></tr>
+    <tr><td>3</td><td>Outages in the test weeks</td><td>≥ 25</td></tr>
+    <tr><td>4</td><td>Ranking skill (AUC) of the best model</td><td>≥ 0.65</td></tr>
+    <tr><td>5</td><td>Brier skill over the baseline</td><td>≥ 2%</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>Decision: vulnerability priority</caption>
+    <tr><th><span class="hit">F</span></th><th>Evidence from the sources</th><th>Priority</th></tr>
+    <tr><td>1</td><td>On CISA's Known Exploited list, or CISA or Microsoft report active exploitation, or a Metasploit module exists</td><td>Act now (Soon for install-only tools)</td></tr>
+    <tr><td>2</td><td>Public exploit on Exploit-DB, CISA proof of concept, automatable, EPSS ≥ 10%, or high or critical severity</td><td>Soon</td></tr>
+    <tr><td>3</td><td>None of the above</td><td>Routine</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>Decision: investigation impact</caption>
+    <tr><th><span class="hit">F</span></th><th>History</th><th>Score (usage + redundancy + lost printing, each 1–3)</th><th>Impact</th></tr>
+    <tr><td>1</td><td>under 90 days</td><td>–</td><td>Moderate (default)</td></tr>
+    <tr><td>2</td><td>90 days or more</td><td>average under 1.5</td><td>Low</td></tr>
+    <tr><td>3</td><td>90 days or more</td><td>average 2.5 or more</td><td>High</td></tr>
+    <tr><td>4</td><td>90 days or more</td><td>otherwise</td><td>Moderate</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>Decision: backup collector</caption>
+    <tr><th><span class="hit">U</span></th><th>Backup state</th><th>Main collector</th><th>Action</th></tr>
+    <tr><td>1</td><td>Standing by</td><td>live</td><td>Stay on standby; update itself if the main app is newer</td></tr>
+    <tr><td>2</td><td>Standing by</td><td>silent under 60 s</td><td>Keep checking every 15 s</td></tr>
+    <tr><td>3</td><td>Standing by</td><td>silent 60 s or more</td><td>Take over: collect every minute, send readings to the dashboard</td></tr>
+    <tr><td>4</td><td>Collecting</td><td>live again</td><td>Stop at once, report the period covered, send everything collected</td></tr>
+    <tr><td>5</td><td>Collecting</td><td>still silent</td><td>Keep collecting</td></tr>
+  </table></div>
+
+  <h3>4.5 The AI analyst</h3>
+  <p>The Assistant is optional and runs only with an API key. It is an analyst with 16 read-only tools over the same
+    data the pages use (station profiles, availability, incidents, repair times, supplies, usage, the report card,
+    period comparisons, campus context, statistics, the risk model, investigations and the app's self-check).</p>
+  <ul>
+    <li><b>Facts only.</b> Every number it writes is checked against the tool results it received, allowing only
+      honest unit restatements (minutes to hours, shares to percentages). Unsupported figures trigger one rewrite;
+      anything still unsupported is flagged.</li>
+    <li><b>Read-only.</b> It cannot change records, start updates or contact anyone.</li>
+    <li><b>Safe output.</b> Answers are shown without links, images or HTML.</li>
+    <li><b>Scoped and fair.</b> BSU printing only; never guesses who caused a problem; says "demo data" when it is.</li>
+  </ul>
+</section>
+
+<section class="chapter" id="evaluation">
+  <div class="chapter__eyebrow">Chapter 5 <span class="phase">CRISP-DM phase 5 · Evaluation</span></div>
+  <h2>Evaluation</h2>
+  <div class="audiences"><span class="aud aud--on">IT leadership</span><span class="aud aud--on">Data scientists</span><span class="aud">Engineers</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>Each output is checked three ways: does the code do what the definition says (automated tests), is the
+      evidence strong enough to show it (gates), and does the model actually beat the obvious alternative (held-out
+      testing). Where the answer is no, the product says so instead of showing a confident number.</p></div>
+
+  <h3>5.1 Does it meet the business goals?</h3>
+  <div class="tbl"><table>
+    <tr><th>Objective</th><th>Evidence in the product</th><th>Assessment</th></tr>
+    <tr><td>Fix printers sooner</td><td>Outage detected at the first red reading; ranked queue; routes</td><td><span class="tag tag--ok">Met in design</span> Outcome needs a term of live data</td></tr>
+    <tr><td>Fewer outages waiting overnight</td><td>Desk-hours split per team; staffing what-if</td><td><span class="tag tag--ok">Met</span></td></tr>
+    <tr><td>Evidence for the vendor</td><td>Reference numbers; detector; hash chain; evidence PDF</td><td><span class="tag tag--ok">Met</span></td></tr>
+    <tr><td>Supplies before they run out</td><td>Replacement-aware usage; end-of-life and reorder forecasts</td><td><span class="tag tag--ok">Met</span> Accuracy improves with history</td></tr>
+    <tr><td>Point students to a working printer</td><td>Walking network; access rules; QR status pages</td><td><span class="tag tag--ok">Met</span></td></tr>
+    <tr><td>Trustworthy numbers</td><td>Quality score; gates; no imputation; definitions</td><td><span class="tag tag--ok">Met</span></td></tr>
+  </table></div>
+
+  <h3>5.2 How the outage-risk model is scored</h3>
+  <dl class="defs">
+    <dt>Walk-forward</dt><dd>Train on everything before a week, test on that week, for each of the last four weeks.
+      The model never sees the future it is tested on.</dd>
+    <dt>Brier score</dt><dd>Mean squared error of the predicted probabilities; lower is better. <b>Skill</b> is the
+      improvement over the baseline's Brier score.</dd>
+    <dt>AUC</dt><dd>How well the model ranks printers that did fail above those that didn't; 0.5 is a coin flip.</dd>
+    <dt>Calibration</dt><dd>Predicted chance versus observed rate in bins, shown as a chart, so "20%" means about 1 in 5.</dd>
+    <dt>Track record</dt><dd>Live predictions are logged and later compared with what happened.</dd>
+  </dl>
+  <div class="extras">
+    <div class="extra"><b class="lbl">For data scientists</b>The baseline is deliberately strong: each printer's recent
+      outage rate, shrunk toward the campus rate. An early version's baseline scored below 0.5 AUC because
+      raw per-printer rates were noisy; shrinkage fixed it. A model that cannot beat this baseline is not shown.</div>
+    <div class="extra"><b class="lbl">For leadership</b>"Not enough evidence yet" is a correct answer. The risk model
+      stays hidden on new deployments until the data supports it; the page explains which condition is not met.</div>
+  </div>
+
+  <h3>5.3 Software verification</h3>
+  <ul>
+    <li><b>190 automated test cases</b> run on every push and daily: the page parser against saved real pages,
+      incident rules, the replacement rule, desk hours, the calendar, stories, Ask the data, routing (including an
+      exact Held–Karp check), investigations, accounts and sign-in, security probes, the update pipeline, backup
+      collectors, threat intelligence and durations.</li>
+    <li><b>Lint</b> (ruff), <b>static security analysis</b> (bandit) and <b>known-vulnerability scanning</b>
+      (pip-audit over the exact lock file) in continuous integration.</li>
+    <li><b>Attacker-style tests</b>: every route without a session, path traversal, oversized uploads, cross-site
+      posts, password guessing, forged or replayed backup messages, tampering with the audit trail.</li>
+  </ul>
+
+  <h3>5.4 Known limits</h3>
+  <ul>
+    <li>Usage is inferred from consumable levels; Wepa's job counts are not available.</li>
+    <li>Several alert codes are inferred from Wepa's legend until they appear on BSU's page.</li>
+    <li>Forecasting across semesters (ARIMA and similar) is deliberately postponed until a full academic year of live
+      history exists.</li>
+    <li>Demo data is synthetic. On it, the models mostly rediscover patterns built into the simulator.</li>
+    <li>No multi-factor authentication yet; the administrator is a shared account.</li>
+  </ul>
+</section>

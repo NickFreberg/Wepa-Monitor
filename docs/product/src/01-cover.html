@@ -1,0 +1,94 @@
+<div class="doc">
+<header class="cover" id="top">
+  <div class="cover__top">
+    <span>Bridgewater State University · ResNet</span>
+    <span>Product documentation · Version 1.2.1</span>
+  </div>
+  <div style="display:flex;gap:22px;align-items:flex-end;flex-wrap:wrap;margin-top:40px">
+    <svg class="seal" viewBox="0 0 120 120" role="img" aria-label="ResNet Print Ops mark: a page leaving a printer">
+      <circle cx="60" cy="60" r="56" fill="none" stroke="#f3d9b0" stroke-width="2"/>
+      <circle cx="60" cy="60" r="49" fill="none" stroke="#f3d9b0" stroke-width="0.8" stroke-dasharray="2 3"/>
+      <rect x="32" y="50" width="56" height="26" rx="5" fill="#f6e7d2"/>
+      <rect x="40" y="30" width="40" height="22" rx="2" fill="#fff" stroke="#f3d9b0"/>
+      <rect x="40" y="70" width="40" height="26" rx="2" fill="#fff"/>
+      <line x1="46" y1="78" x2="74" y2="78" stroke="#8b1e24" stroke-width="2.4"/>
+      <line x1="46" y1="84" x2="68" y2="84" stroke="#8b1e24" stroke-width="2.4"/>
+      <line x1="46" y1="90" x2="71" y2="90" stroke="#b8892b" stroke-width="2.4"/>
+      <circle cx="80" cy="58" r="3" fill="#63c08a"/>
+    </svg>
+    <div class="pips__key">Est. 2020 as a terminal script for ResNet Support Representatives.<br>Rebuilt 2026 as a monitoring and analytics platform.</div>
+  </div>
+  <h1>ResNet Print Ops<span>The print-station monitor, documented end to end</span></h1>
+  <p class="cover__lede">How Bridgewater State's 31 Wepa print stations are watched, measured, explained and improved,
+    told through the full CRISP-DM lifecycle: from the business problem to the deployed product, with a guide for
+    everyone who uses it.</p>
+  <div class="pips" aria-label="The 31 stations on Wepa's status page: 16 ResNet, 14 Student Computer Labs, 1 Satellite Campus">
+    <span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span><span class="pip"></span>
+    <span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span><span class="pip pip--labs"></span>
+    <span class="pip pip--sat"></span>
+  </div>
+  <div class="pips__key">31 stations · 16 ResNet (green) · 14 Student Computer Labs (gold) · 1 Satellite Campus (white)</div>
+  <dl class="cover__meta">
+    <div><dt>Document</dt><dd>RPO-DOC-001</dd></div>
+    <div><dt>Product version</dt><dd>1.2.1 · October 2026</dd></div>
+    <div><dt>Method</dt><dd>CRISP-DM, six phases</dd></div>
+    <div><dt>Status</dt><dd>Released · living document</dd></div>
+  </dl>
+  <p class="cover__credit">Designed, built and documented by <b>Nicholas Freberg</b>, Bridgewater State University
+    Class of 2020 · Former BSU ResNet Support Representative (2018–2020).</p>
+  <p class="cover__note">An independent portfolio project. It is not an official publication of Bridgewater State
+    University or Wepa, and it does not represent either. Wepa's status page is read for internal operations only;
+    its data is not republished.</p>
+</header>
+
+<section id="control" style="padding-top:48px">
+  <div class="chapter__eyebrow">Front matter</div>
+  <h2>About this document</h2>
+  <p class="chapter__lede">One document for everyone who touches the product: the student whose printer jammed at
+    11 PM, the student worker on shift, the supervisor, IT leadership, and the engineer or data scientist who will
+    maintain it next.</p>
+
+  <div class="tbl"><table>
+    <caption>Document control</caption>
+    <tr><th>Field</th><th>Value</th></tr>
+    <tr><td>Title</td><td>ResNet Print Ops: product documentation (CRISP-DM lifecycle edition)</td></tr>
+    <tr><td>Identifier</td><td><code>RPO-DOC-001</code>, kept with the code in <code>docs/product/</code></td></tr>
+    <tr><td>Describes</td><td>Product version 1.2.1 (see the change log in the app and in <code>CHANGELOG.md</code>)</td></tr>
+    <tr><td>Author</td><td>Nicholas Freberg</td></tr>
+    <tr><td>Classification</td><td>Internal operations. Contains no personal data; screenshots use the synthetic demo data set.</td></tr>
+    <tr><td>Dates</td><td>Written ISO 8601 (YYYY-MM-DD); times are Eastern (America/New_York), as in the app</td></tr>
+    <tr><td>Review</td><td>Revise with every minor release; the change log names what changed</td></tr>
+  </table></div>
+
+  <h3>How to read it</h3>
+  <p>The chapters follow CRISP-DM, the Cross-Industry Standard Process for Data Mining, because the product was
+    built that way: understand the problem, understand the data, prepare it, model it, evaluate the models honestly,
+    then deploy and keep watching. Chapters 7 to 9 step outside that cycle for process models, the user guide and
+    standards.</p>
+  <p>Every chapter opens with <b>In short</b>, a plain-language summary anyone can read. Boxes marked with an
+    audience give a little extra for that reader. Badges at the top of each chapter say who it is mainly for.</p>
+
+  <div class="paths">
+    <div class="path"><h4>Students</h4><p>Read <a href="#guide-students">8.1 Finding a printer that works</a>. Two minutes.</p></div>
+    <div class="path"><h4>Student staff</h4><p><a href="#exec">The summary</a>, then the <a href="#guide">user guide</a>, especially Overview, Rounds and Investigations.</p></div>
+    <div class="path"><h4>Supervisors</h4><p><a href="#business">Business understanding</a>, the <a href="#guide">user guide</a>, and <a href="#process">process models</a>.</p></div>
+    <div class="path"><h4>IT leadership</h4><p><a href="#exec">The summary</a>, <a href="#evaluation">evaluation</a> and <a href="#deployment">deployment</a>, then the <a href="#standards">standards</a>.</p></div>
+    <div class="path"><h4>Engineers</h4><p><a href="#preparation">Data preparation</a>, <a href="#dictionary">the data dictionary</a>, <a href="#deployment">architecture</a> and the appendices.</p></div>
+    <div class="path"><h4>Data scientists</h4><p><a href="#data">Data understanding</a> through <a href="#evaluation">evaluation</a>; the model inventory is in chapter 4.</p></div>
+  </div>
+
+  <h3>Contents</h3>
+  <ol class="toc">
+    <li><a href="#exec"><span class="n">0</span>Executive summary</a><small>What it is, why it exists, what it does</small></li>
+    <li><a href="#business"><span class="n">1</span>Business understanding</a><small>Problem, stakeholders, goals, journeys, requirements</small></li>
+    <li><a href="#data"><span class="n">2</span>Data understanding</a><small>Sources, cadence, quirks, quality</small></li>
+    <li><a href="#preparation"><span class="n">3</span>Data preparation</a><small>Pipeline, cleaning rules, incidents, data dictionary</small></li>
+    <li><a href="#modeling"><span class="n">4</span>Modeling</a><small>Metrics, statistics, machine learning, AI analyst, decision tables</small></li>
+    <li><a href="#evaluation"><span class="n">5</span>Evaluation</a><small>Gates, testing, model scoring, limits</small></li>
+    <li><a href="#deployment"><span class="n">6</span>Deployment</a><small>Architecture, Azure, availability, security, updates</small></li>
+    <li><a href="#process"><span class="n">7</span>Process models</a><small>BPMN, CMMN, DMN and Six Sigma views</small></li>
+    <li><a href="#guide"><span class="n">8</span>User guide</a><small>Every page, task by task, for every role</small></li>
+    <li><a href="#standards"><span class="n">9</span>Standards and recommendations</a><small>ISO, ACM, ASA, OMG, Six Sigma, DASCA, data ecology</small></li>
+    <li><a href="#appendix"><span class="n">A</span>Appendices</a><small>Configuration, commands, glossary, sources, credits</small></li>
+  </ol>
+</section>

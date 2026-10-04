@@ -1,0 +1,205 @@
+<section class="chapter" id="standards">
+  <div class="chapter__eyebrow">Chapter 9 <span class="phase">Standards, ethics and recommendations</span></div>
+  <h2>Standards and recommendations</h2>
+  <div class="audiences"><span class="aud aud--on">IT leadership</span><span class="aud aud--on">Engineers</span><span class="aud aud--on">Data scientists</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>The product was built with recognized standards and professional codes in mind. This chapter maps each one to
+      what the product does, says honestly where it falls short, and recommends next steps. It is a self-assessment:
+      no certification or formal audit is claimed.</p></div>
+
+  <h3>9.1 Alignment matrix</h3>
+  <div class="tbl"><table>
+    <tr><th>Standard or code</th><th>What it asks, in brief</th><th>How the product aligns</th><th>Status</th></tr>
+    <tr><td>CRISP-DM</td><td>Six phases from business understanding to deployment, iterated</td><td>This document's structure; nightly retraining and self-checks keep the cycle running</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>ISO/IEC 25010 (product quality)</td><td>Quality characteristics such as reliability, security, maintainability, usability</td><td>Quality requirements NFR-01 to NFR-12, each with a mechanism</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>ISO/IEC/IEEE 26514 (information for users)</td><td>Audience analysis, task-oriented content, consistent terminology</td><td>Reading paths by audience; task steps; one status vocabulary; glossary</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>ISO/IEC/IEEE 15289 (life-cycle information items)</td><td>Defined content for plans, descriptions and records</td><td>Document control, requirements, architecture, change log, test evidence</td><td><span class="tag tag--part">Partial</span></td></tr>
+    <tr><td>ISO 8601</td><td>Unambiguous dates and times</td><td>Stored in UTC ISO 8601; shown in local time with the time zone named</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>ISO/IEC 27001 (information security)</td><td>Risk-based security controls and management</td><td>Access control, cryptography, logging, secure development, supplier checks; no formal ISMS</td><td><span class="tag tag--part">Partial</span></td></tr>
+    <tr><td>OWASP Top 10 (2025)</td><td>The ten most critical web application risks</td><td>Live checklist with evidence in the app: 7 met, 3 partial on a correctly configured deployment</td><td><span class="tag tag--part">Partial</span></td></tr>
+    <tr><td>NIST SP 800-63B</td><td>Password and session guidance</td><td>Length over complexity, breached-password check, no forced expiry, lockouts; MFA not yet</td><td><span class="tag tag--part">Partial</span></td></tr>
+    <tr><td>BPMN 2.0, CMMN 1.1, DMN 1.x (OMG)</td><td>Notations for processes, cases and decisions</td><td>Figures 7.1 and 7.2 and the decision tables in 4.4</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>Six Sigma (DMAIC, SIPOC, SPC)</td><td>Define and measure defects; control with statistics</td><td>SIPOC, CTQ tree, DMAIC map, c-chart with run rules</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>ACM Code of Ethics (2018)</td><td>Contribute to society, avoid harm, be honest, respect privacy, keep systems secure</td><td>Mapped in 9.2</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>ASA Ethical Guidelines for Statistical Practice</td><td>Integrity of data and methods; responsibilities to stakeholders and data subjects</td><td>Mapped in 9.3</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>DASCA role families</td><td>Data engineering, analysis and science as distinct competencies</td><td>Mapped in 9.4</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>Data ecology</td><td>Data as an ecosystem of sources, stewards, flows and uses</td><td>Mapped in 9.5</td><td><span class="tag tag--ok">Aligned</span></td></tr>
+    <tr><td>WCAG 2.2</td><td>Accessible web content</td><td>Keyboard focus, contrast option, reduced motion, text sizes; not formally audited</td><td><span class="tag tag--part">Partial</span></td></tr>
+  </table></div>
+
+  <h3>9.2 ACM Code of Ethics</h3>
+  <div class="tbl"><table>
+    <tr><th>Principle</th><th>In practice</th></tr>
+    <tr><td>1.1 Contribute to society and human well-being</td><td>The product's goal is that students can print when they need to</td></tr>
+    <tr><td>1.2 Avoid harm</td><td>Data is about printers, never people; the AI never guesses who caused a problem</td></tr>
+    <tr><td>1.3 Be honest and trustworthy</td><td>No imputed data; evidence gates; demo data labelled on every page</td></tr>
+    <tr><td>1.6 Respect privacy</td><td>Visits shortened to the network; no passwords logged; names kept out of public issues</td></tr>
+    <tr><td>2.5 Give comprehensive evaluations, including risks</td><td>Chapter 5; known limits stated in the app and here</td></tr>
+    <tr><td>2.9 Design and implement systems that are robustly and usably secure</td><td>Chapter 6.4; docs/SECURITY.md; attacker-style tests</td></tr>
+    <tr><td>3.7 Recognize and take special care of systems that become integrated into society</td><td>Vendor terms respected; public pages opt-in only</td></tr>
+  </table></div>
+
+  <h3>9.3 ASA Ethical Guidelines for Statistical Practice</h3>
+  <div class="tbl"><table>
+    <tr><th>Guideline area</th><th>In practice</th></tr>
+    <tr><td>Professional integrity and accountability</td><td>Methods named and documented; sample sizes on every statistic; uncertainty shown as intervals</td></tr>
+    <tr><td>Integrity of data and methods</td><td>Raw data never edited; censoring handled (Kaplan–Meier); confounding controlled (Mantel–Haenszel); models gated against a baseline</td></tr>
+    <tr><td>Responsibilities to stakeholders</td><td>Plain-language summaries; "not enough evidence" said plainly; correlation not presented as cause</td></tr>
+    <tr><td>Responsibilities to data subjects</td><td>Minimal personal data; staff directory visibility limited by role</td></tr>
+  </table></div>
+
+  <h3>9.4 DASCA role families</h3>
+  <div class="tbl"><table>
+    <tr><th>Role family</th><th>Work demonstrated in this product</th></tr>
+    <tr><td>Data engineering</td><td>Resilient once-a-minute ingestion; append-only storage with Parquet compaction; incremental loading; imports and de-duplication; backup collection with signed transfer</td></tr>
+    <tr><td>Data analysis</td><td>KPI definitions with gates; dashboards; stories; exports; executive reporting</td></tr>
+    <tr><td>Data science</td><td>Survival analysis, SPC, robust regression, empirical Bayes, Monte Carlo, stratified rate ratios, gated machine learning with walk-forward evaluation, an evidence-bound AI analyst</td></tr>
+  </table></div>
+
+  <h3>9.5 Data ecology</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+flowchart LR
+  subgraph Sources
+    A1["Wepa page"]
+    A2["BSU web"]
+    A3["OpenStreetMap"]
+    A4["Weather"]
+  end
+  subgraph Stewards
+    B1["Administrator<br/>reference files · config"]
+    B2["Staff<br/>investigations"]
+  end
+  subgraph Store["Kept"]
+    C1["Readings<br/>append-only"]
+    C2["Records<br/>hash-chained"]
+  end
+  subgraph Uses
+    D1["Operations"]
+    D2["Planning"]
+    D3["Reporting"]
+    D4["Vendor evidence"]
+  end
+  Sources --> C1
+  B1 --> C1
+  B2 --> C2
+  C1 --> D1 & D2 & D3
+  C2 --> D4
+  D2 -. "decisions change the campus" .-> A1
+</pre>
+    <figcaption><b>Figure 9.1 · The data ecosystem.</b> Who supplies, who stewards, what is kept and how it is used.
+      Planning decisions (a new printer, longer desk hours) change the very system the data describes, which is why
+      history is kept raw and recomputed.</figcaption>
+  </figure>
+
+  <h3>9.6 Documentation and standards recommendations</h3>
+  <div class="tbl"><table>
+    <tr><th>#</th><th>Recommendation</th><th>Why</th><th>Effort</th></tr>
+    <tr><td>1</td><td>Single sign-on through BSU's Microsoft Entra ID with MFA</td><td>Closes the largest security gap; ties actions to people</td><td>Medium, needs BSU IT</td></tr>
+    <tr><td>2</td><td>Formal WCAG 2.2 AA audit with assistive technology</td><td>Accessibility claims should be tested, not assumed</td><td>Low</td></tr>
+    <tr><td>3</td><td>Architecture decision records (<code>docs/adr/</code>)</td><td>Keeps the reasons behind choices (no imputation, gated ML) with the code</td><td>Low</td></tr>
+    <tr><td>4</td><td>Software bill of materials (CycloneDX) per release</td><td>Supply-chain transparency; complements the vulnerability check</td><td>Low</td></tr>
+    <tr><td>5</td><td>Data retention policy for readings, visits and records</td><td>States how long each kind of data is kept and why</td><td>Low, needs a decision owner</td></tr>
+    <tr><td>6</td><td>Model card for the outage-risk model, published with each retrain</td><td>Documents data, metrics, limits and intended use (the app already computes these)</td><td>Low</td></tr>
+    <tr><td>7</td><td>ITSM integration by reference number (read-only link to tickets)</td><td>Traceability without duplicating BSU's ticketing system</td><td>Medium</td></tr>
+    <tr><td>8</td><td>Run the container as an unprivileged user</td><td>Limits the damage of any future flaw</td><td>Low</td></tr>
+    <tr><td>9</td><td>Written agreement with Wepa and BSU before any public use of status data</td><td>Required by Wepa's terms</td><td>Low</td></tr>
+    <tr><td>10</td><td>Docs as code: build this document in CI on each release</td><td>Documentation stays in step with the product</td><td>Low</td></tr>
+  </table></div>
+</section>
+
+<section class="chapter" id="appendix">
+  <div class="chapter__eyebrow">Appendices</div>
+  <h2>Reference</h2>
+
+  <h3>A.1 Configuration</h3>
+  <div class="tbl"><table>
+    <tr><th>Setting</th><th>Purpose</th></tr>
+    <tr><td><code>WEPA_DATA_DIR</code>, <code>WEPA_CAMPUS_DIR</code></td><td>Where readings and campus files are kept</td></tr>
+    <tr><td><code>WEPA_COLLECT</code></td><td>1 to collect in this process, 0 for dashboard only</td></tr>
+    <tr><td><code>WEPA_BASIC_AUTH</code>, <code>WEPA_SECRET_KEY</code></td><td>Administrator credential (hashed) and session signing key</td></tr>
+    <tr><td><code>WEPA_BREACH_CHECK</code></td><td>0 turns off the breached-password lookup</td></tr>
+    <tr><td><code>WEPA_PUBLIC_STATUS</code></td><td>1 makes student status pages public (agreement required)</td></tr>
+    <tr><td><code>WEPA_AI_PROVIDER</code>, <code>WEPA_AI_MODEL</code>, <code>ANTHROPIC_API_KEY</code>, <code>WEPA_AI_MAX_PER_HOUR</code></td><td>Optional AI analyst and its spending cap</td></tr>
+    <tr><td><code>WEPA_VULN_CHECK</code>, <code>WEPA_THREAT_INTEL</code>, <code>WEPA_NVD_API_KEY</code></td><td>Vulnerability checks and threat-intelligence look-ups</td></tr>
+    <tr><td><code>WEPA_GITHUB_TOKEN</code>, <code>WEPA_GITHUB_ISSUES_TOKEN</code>, <code>WEPA_GITHUB_REPO</code></td><td>Starting updates; filing feature requests</td></tr>
+    <tr><td><code>WEPA_FEEDBACK_NAMES</code></td><td>1 adds the sender's name to feature-request issues</td></tr>
+    <tr><td><code>WEPA_PEER_KEY</code></td><td>Shared key for backup collectors (32+ characters)</td></tr>
+    <tr><td><code>WEPA_SUPPLY_LEAD_DAYS</code></td><td>Days a supply order takes (default 7)</td></tr>
+  </table></div>
+
+  <h3>A.2 Commands</h3>
+  <div class="tbl"><table>
+    <tr><th>Command</th><th>Does</th></tr>
+    <tr><td><code>python -m wepa_monitor start</code></td><td>Collect and run the dashboard on one computer</td></tr>
+    <tr><td><code>python -m wepa_monitor demo --days 120</code></td><td>Generate synthetic demo history</td></tr>
+    <tr><td><code>python -m wepa_monitor dashboard --demo</code></td><td>Run the dashboard on demo data</td></tr>
+    <tr><td><code>python -m wepa_monitor campus --force</code></td><td>Refresh calendar, halls, library hours and classes</td></tr>
+    <tr><td><code>python -m wepa_monitor train-risk</code></td><td>Train and evaluate the outage-risk model now</td></tr>
+    <tr><td><code>python -m wepa_monitor users …</code></td><td>Manage staff accounts on the running app</td></tr>
+    <tr><td><code>python -m wepa_monitor selfcheck [--vulns]</code></td><td>Run the self-check</td></tr>
+    <tr><td><code>python -m wepa_monitor backup --primary URL</code></td><td>Stand by as a backup collector</td></tr>
+    <tr><td><code>python -m wepa_monitor export --tag mac</code></td><td>Package local data for import elsewhere</td></tr>
+    <tr><td><code>python -m wepa_monitor kml</code></td><td>Building pins for Google Earth</td></tr>
+  </table></div>
+
+  <h3>A.3 Release history</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px","cScale0":"#f6e9e7","cScale1":"#efe3d0","cScale2":"#f6e9e7"}}}%%
+timeline
+  title From terminal script to platform
+  2020 : v1 terminal script for ResNet Support Representatives
+  Oct 1 2026 : 0.1 snapshot pipeline and dashboard : 0.2 production server, forecasts
+  Oct 2 2026 : 0.3 stories, campus context, Rounds : 0.4 Azure deployment
+  Oct 3 2026 : 0.5 to 0.8 analytics, AI analyst, risk model, investigations, accounts : 1.0 security hardening
+  Oct 4 2026 : 1.1 self-maintenance and backups : 1.2 threat intelligence, OWASP, feature requests, whole-unit durations
+</pre>
+    <figcaption><b>Figure A.1 · Releases.</b> From <code>CHANGELOG.md</code>; each release links to its source commits in the app's Change log page.</figcaption>
+  </figure>
+
+  <h3>A.4 Glossary</h3>
+  <dl class="defs">
+    <dt>Availability</dt><dd>Share of observed time a printer could print.</dd>
+    <dt>Censored</dt><dd>An incident whose start or end is outside what was observed; kept, but handled so it doesn't bias averages.</dd>
+    <dt>CRISP-DM</dt><dd>Cross-Industry Standard Process for Data Mining: business understanding, data understanding, data preparation, modeling, evaluation, deployment.</dd>
+    <dt>CTQ</dt><dd>Critical to quality: a measurable characteristic that matters to the customer.</dd>
+    <dt>CVE, GHSA</dt><dd>Public identifiers for a security vulnerability (Common Vulnerabilities and Exposures; GitHub Security Advisory).</dd>
+    <dt>Degraded</dt><dd>Printing, with a warning.</dd>
+    <dt>Desk hours</dt><dd>When a support team's desk is staffed.</dd>
+    <dt>EPSS</dt><dd>Exploit Prediction Scoring System: probability a CVE is exploited in the next 30 days.</dd>
+    <dt>KEV</dt><dd>CISA's Known Exploited Vulnerabilities catalog.</dd>
+    <dt>MTBF, MTTR</dt><dd>Mean time between failures; mean time to repair.</dd>
+    <dt>No signal</dt><dd>No reading for 5 minutes; status unknown.</dd>
+    <dt>Observed time</dt><dd>Time covered by readings, at most 5 minutes per reading.</dd>
+    <dt>Out of service</dt><dd>Cannot print (a red row on Wepa's page).</dd>
+    <dt>ResNet</dt><dd>BSU's residential network and technology support team, which supports the residence-hall printers.</dd>
+    <dt>RSR</dt><dd>ResNet Support Representative: a student staff member.</dd>
+    <dt>SIPOC</dt><dd>Suppliers, inputs, process, outputs, customers.</dd>
+  </dl>
+
+  <h3>A.5 Sources and further reading</h3>
+  <ul>
+    <li>Chapman, P. et al. (2000). <em>CRISP-DM 1.0: Step-by-step data mining guide.</em></li>
+    <li>ISO/IEC 25010, ISO/IEC/IEEE 26514, ISO/IEC/IEEE 15289, ISO 8601, ISO/IEC 27001.</li>
+    <li>Object Management Group: BPMN 2.0, CMMN 1.1, DMN.</li>
+    <li>OWASP Top 10:2025, <a href="https://owasp.org/Top10/2025/">owasp.org/Top10/2025</a>.</li>
+    <li>NIST Special Publication 800-63B, Digital Identity Guidelines.</li>
+    <li>ACM Code of Ethics and Professional Conduct (2018).</li>
+    <li>American Statistical Association, Ethical Guidelines for Statistical Practice.</li>
+    <li>Data Science Council of America (DASCA), credential frameworks.</li>
+    <li>Kaplan, E. L. and Meier, P. (1958); Theil, H. (1950) and Sen, P. K. (1968); Mantel, N. and Haenszel, W. (1959).</li>
+    <li>OpenStreetMap contributors (ODbL); Open-Meteo (CC BY 4.0); OSV.dev; CISA KEV; NIST NVD; Microsoft MSRC; FIRST EPSS; Exploit-DB; Metasploit Framework.</li>
+  </ul>
+
+  <div class="foot">
+    <p><b>ResNet Print Ops</b> · product documentation RPO-DOC-001 · version 1.2.1 · October 2026.</p>
+    <p>Designed, built and documented by <b>Nicholas Freberg</b>, Bridgewater State University Class of 2020 and
+      former BSU ResNet Support Representative (2018–2020), for the students and staff who keep campus printing.</p>
+    <p>Set in Libre Franklin, Source Serif 4 and IBM Plex Mono, in BSU crimson on campus stone. An independent
+      portfolio project; not an official publication of Bridgewater State University or Wepa. Product names belong
+      to their owners.</p>
+  </div>
+</section>
+</div>

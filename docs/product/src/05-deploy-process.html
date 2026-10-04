@@ -1,0 +1,237 @@
+<section class="chapter" id="deployment">
+  <div class="chapter__eyebrow">Chapter 6 <span class="phase">CRISP-DM phase 6 · Deployment</span></div>
+  <h2>Deployment</h2>
+  <div class="audiences"><span class="aud aud--on">Engineers</span><span class="aud aud--on">IT leadership</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>The app runs in Microsoft Azure as one container that both collects and serves the website, with its data on
+      a file share that survives restarts. Updates roll out without taking the site down. A second computer can
+      stand by to collect if the main collector ever stops, and the app checks its own health and security every day.</p></div>
+
+  <h3>6.1 Architecture</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+flowchart TB
+  subgraph Users
+    U1["Staff browser"]
+    U2["Student phone<br/>(QR status page)"]
+    U3["Administrator CLI"]
+  end
+  subgraph Azure["Azure Container Apps (HTTPS ingress)"]
+    subgraph App["Container · python:3.12-slim · gunicorn"]
+      DASH["Dash web app<br/>pages · callbacks · exports"]
+      AUTH["Sign-in · sessions · CSRF · CSP"]
+      COL["Collector thread<br/>every 60 s · daily jobs"]
+      API["/_admin (accounts)<br/>/_peer (backups, signed)"]
+    end
+    FS[("Azure Files share<br/>code · data · records · security")]
+  end
+  subgraph Outside["Outside services"]
+    WEPA["Wepa status page"]
+    BSU["bridgew.edu"]
+    OSM["OpenStreetMap"]
+    AI["Claude API (optional)"]
+    GH["GitHub<br/>issues · update workflow"]
+    INTEL["OSV · CISA · NVD · MSRC · EPSS · Exploit-DB · Metasploit"]
+  end
+  BK["Backup collector<br/>(any spare computer)"]
+  U1 --> AUTH --> DASH
+  U2 --> DASH
+  U3 --> API
+  COL --> WEPA
+  COL --> BSU
+  COL --> INTEL
+  DASH --> AI
+  DASH --> GH
+  COL --> FS
+  DASH --> FS
+  BK <-->|"HMAC-signed"| API
+  BK --> WEPA
+</pre>
+    <figcaption><b>Figure 6.1 · Containers and connections.</b> One container runs both the website and the
+      collector; a lock on the share ensures only one copy collects. OpenStreetMap data is fetched once and kept.</figcaption>
+  </figure>
+
+  <h3>6.2 Every minute</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px","actorBkg":"#f6e9e7","actorBorder":"#8b1e24"}}}%%
+sequenceDiagram
+  participant C as Collector
+  participant W as Wepa page
+  participant S as File share
+  participant D as Dashboard
+  participant B as Browser
+  C->>W: GET status page (on the minute)
+  W-->>C: HTML, 31 rows
+  C->>C: parse by header text, normalize codes
+  C->>S: append snapshot rows and the attempt
+  D->>S: notice new data, load incrementally
+  D->>D: incidents, metrics, references
+  B->>D: refresh tick
+  D-->>B: updated pages and notifications
+</pre>
+    <figcaption><b>Figure 6.2 · The one-minute cycle.</b> Once a day the collector also compacts finished days,
+      refreshes campus data and weather, retrains the risk model, checks for vulnerabilities and sends queued
+      feature requests.</figcaption>
+  </figure>
+
+  <h3>6.3 Staying up</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+stateDiagram-v2
+  direction LR
+  [*] --> Standby
+  Standby --> Standby: main collector live (check every 15 s)
+  Standby --> Collecting: no reading from main for 60 s
+  Collecting --> Collecting: collect each minute, send readings to the dashboard
+  Collecting --> Handback: main collector live again
+  Handback --> Standby: stop collecting, report the period, send all readings
+  Standby --> Updating: main app runs a newer version
+  Updating --> Standby: git fast-forward, reinstall pinned packages, restart
+</pre>
+    <figcaption><b>Figure 6.3 · Backup collector.</b> Every message is signed with HMAC-SHA256 over method, path,
+      time, a one-time number and the body; replies are signed too, so an impostor cannot make a backup stand down.</figcaption>
+  </figure>
+
+  <h3>6.4 Security: confidentiality, integrity, availability</h3>
+  <div class="tbl"><table>
+    <tr><th>Principle</th><th>Controls</th></tr>
+    <tr><td>Confidentiality</td><td>Sign-in on every page; named accounts with roles; sessions end after 2 hours idle or 12 hours; NIST SP 800-63B passwords with breached-password refusal; lockouts; secrets stored as Azure secrets</td></tr>
+    <tr><td>Integrity</td><td>Append-only readings; hash-chained investigation history; CSRF tokens; Content Security Policy; hash-pinned package installs; signed backup messages</td></tr>
+    <tr><td>Availability</td><td>Rolling deploys; collector lock; backup collectors; optional second replica; gaps recorded, never guessed</td></tr>
+  </table></div>
+  <p>The Software page carries a live OWASP Top 10 (2025) checklist with evidence for each control, and
+    <code>docs/SECURITY.md</code> holds the threat model, attacker-style test results and known limits.</p>
+
+  <h3>6.5 Updates</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px","actorBkg":"#f6e9e7","actorBorder":"#8b1e24"}}}%%
+sequenceDiagram
+  participant V as Vulnerability check
+  participant A as Administrator
+  participant P as App (Software page)
+  participant G as GitHub Actions
+  participant R as Reviewer
+  participant Z as Azure
+  V->>P: finding with a fixed version
+  A->>P: prepare update package (UPD number)
+  A->>P: start, re-entering the password
+  P->>G: run the update workflow
+  G->>G: bump versions, re-pin hashes, change log, tests, scans
+  G-->>R: pull request (only if everything passes)
+  R->>G: review and merge
+  G->>Z: deploy (rolling)
+  Z-->>P: new version starts, "Software updated" in the feed
+</pre>
+    <figcaption><b>Figure 6.4 · An update, end to end.</b> The app never changes its own code. Each step is in the
+      audit log and the activity feed.</figcaption>
+  </figure>
+
+  <h3>6.6 Monitoring and maintenance plan</h3>
+  <div class="tbl"><table>
+    <tr><th>What</th><th>How often</th><th>Where to look</th><th>Action when wrong</th></tr>
+    <tr><td>Collector freshness, data quality</td><td>Continuous</td><td>System page, self-check</td><td>Read the live log; restart the app; check the backup</td></tr>
+    <tr><td>Known vulnerabilities</td><td>Daily</td><td>Software page</td><td>Prepare an update package for "Act now" first</td></tr>
+    <tr><td>Investigation audit trail</td><td>Every self-check</td><td>Software page</td><td>Restore records from the share's backup</td></tr>
+    <tr><td>Risk model gate and track record</td><td>Nightly retrain</td><td>Analytics → Forecasts and statistics</td><td>None needed; the gate hides a weak model</td></tr>
+    <tr><td>Reference files (stations, buildings)</td><td>When the campus changes</td><td>Stations page shows "Unassigned"</td><td>Edit <code>reference/*.csv</code>, deploy</td></tr>
+    <tr><td>Desk hours, holidays</td><td>Each term</td><td><code>config.py</code>; academic calendar</td><td>Update and deploy</td></tr>
+  </table></div>
+</section>
+
+<section class="chapter" id="process">
+  <div class="chapter__eyebrow">Chapter 7 <span class="phase">Process and case models</span></div>
+  <h2>How the work flows</h2>
+  <div class="audiences"><span class="aud aud--on">Supervisors</span><span class="aud aud--on">IT leadership</span><span class="aud">Student staff</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>Three standard notations describe the work around the product: BPMN for the routine outage process, CMMN for
+      investigations (which don't follow a fixed path), and DMN for decisions (chapter 4.4). A Six Sigma view shows
+      how the product supports continuous improvement.</p></div>
+
+  <h3>7.1 Outage to resolution (BPMN-style)</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"12.5px"}}}%%
+flowchart LR
+  subgraph L1["Printer and Wepa"]
+    direction TB
+    S((" ")) --> F["Fault occurs"] --> R["Row turns red<br/>on Wepa's page"]
+  end
+  subgraph L2["ResNet Print Ops (system)"]
+    direction TB
+    R --> D["Detect outage<br/>at next reading"] --> N["Number it, notify,<br/>add to work queue"]
+    N --> G{"Desk staffed<br/>now?"}
+    G -- "no" --> W["Mark 'support unavailable<br/>until …'; point students<br/>to nearest open printer"]
+    W --> Q["Queue for opening time"]
+  end
+  subgraph L3["Support staff"]
+    direction TB
+    G -- "yes" --> P["Plan round<br/>(Rounds page)"]
+    Q --> P
+    P --> X["Fix on site:<br/>clear jam, refill, power-cycle"]
+    X --> V{"Green<br/>within minutes?"}
+    V -- "no" --> E["Escalate:<br/>open or update investigation"]
+  end
+  subgraph L4["System"]
+    direction TB
+    V -- "yes" --> Z["Resolve outage;<br/>record duration and desk-hour split"] --> FIN(("End"))
+    E --> Z2["Investigation case<br/>(CMMN, 7.2)"]
+  end
+</pre>
+    <figcaption><b>Figure 7.1 · Outage process in four lanes.</b> Circles are start and end events, rounded boxes
+      tasks, diamonds gateways, as in BPMN 2.0. Drawn with flowchart tooling, so shapes approximate the standard.</figcaption>
+  </figure>
+
+  <h3>7.2 Investigations as a case (CMMN view)</h3>
+  <p>An investigation is knowledge work: people decide what to do next. CMMN models it as a case file with stages,
+    entry criteria (sentries) and milestones, rather than a fixed sequence.</p>
+  <div class="tbl"><table>
+    <tr><th>CMMN element</th><th>In the product</th></tr>
+    <tr><td>Case file</td><td>The investigation record: title, station, category, impact, assignee, root cause, actions, ITSM and Wepa case numbers, linked outages, notes</td></tr>
+    <tr><td>Stage: Analyze</td><td>Entry sentry: an assignee is set (also sets the escalation date)</td></tr>
+    <tr><td>Stage: Respond</td><td>Entry sentry: a root cause, marked suspected or confirmed</td></tr>
+    <tr><td>Stage: Review</td><td>Entry sentry: the action taken is recorded. Exit needs a different person (separation of duties)</td></tr>
+    <tr><td>Milestones</td><td>Closed Complete; Closed Incomplete; Closed Cancelled (each needs a written reason)</td></tr>
+    <tr><td>Discretionary tasks</td><td>Add a note; link outages; download the evidence packet; override impact</td></tr>
+    <tr><td>Event listener</td><td>The detector opens a case when a printer has 3 or more unreachable or hardware outages in 14 days</td></tr>
+    <tr><td>Case file integrity</td><td>Every change is an event with the previous event's SHA-256 hash; archived 2 years after closing</td></tr>
+  </table></div>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+stateDiagram-v2
+  direction LR
+  [*] --> New: opened by staff or the detector
+  New --> Analyze: assignee set
+  New --> ClosedCancelled: reason
+  Analyze --> Respond: root cause recorded
+  Analyze --> ClosedCancelled: reason
+  Analyze --> ClosedIncomplete: reason
+  Respond --> Review: action recorded
+  Respond --> Analyze: sent back, reason
+  Respond --> ClosedIncomplete: reason
+  Review --> ClosedComplete: second person, reason
+  Review --> ClosedIncomplete: reason
+  Review --> Respond: sent back, reason
+  Review --> Analyze: sent back, reason
+  ClosedComplete: Closed Complete
+  ClosedIncomplete: Closed Incomplete
+  ClosedCancelled: Closed Cancelled
+</pre>
+    <figcaption><b>Figure 7.2 · Investigation lifecycle.</b> Fields are editable only in New, Analyze and Respond.
+      Time in each state, send-backs and reassignments are measured on the Investigations page.</figcaption>
+  </figure>
+
+  <h3>7.3 Six Sigma: DMAIC with the product</h3>
+  <div class="tbl"><table>
+    <tr><th>Phase</th><th>Question</th><th>Where the product answers it</th></tr>
+    <tr><td>Define</td><td>What does a defect look like to a student?</td><td>An outage: a station that cannot print. CTQs in figure 1.2</td></tr>
+    <tr><td>Measure</td><td>How often, how long, where, when?</td><td>Availability, repair time, time between failures, desk-hour split, data quality</td></tr>
+    <tr><td>Analyze</td><td>Why?</td><td>Fault ranking by cause and hour, shared outages, busy-weighted downtime, humidity test, Kaplan–Meier, investigations</td></tr>
+    <tr><td>Improve</td><td>What would help most?</td><td>Staffing what-ifs, printer placement, reorder points, vendor escalation with evidence</td></tr>
+    <tr><td>Control</td><td>Did it stay better?</td><td>c-chart with run rules, period comparisons with change tests, Executive summary</td></tr>
+  </table></div>
+</section>

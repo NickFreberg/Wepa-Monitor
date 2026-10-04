@@ -5,6 +5,11 @@
 **[Read the case study](docs/CASE_STUDY.md)**: the problem, the architecture, the decisions behind it,
 and what's real vs demo data.
 
+**[Product documentation (PDF)](docs/product/ResNet-Print-Ops-Documentation.pdf)**: the full CRISP-DM
+lifecycle, requirements, data dictionary, architecture, BPMN/CMMN/DMN models, user guide and standards
+alignment ([HTML version](docs/product/ResNet-Print-Ops-Documentation.html); rebuild with
+`python docs/product/build.py --pdf`).
+
 A monitoring and analytics dashboard for the Wepa print stations at Bridgewater State University.
 It was first written as a terminal script for ResNet Support Representatives (see `legacy/`). This
 version adds minute-by-minute data capture, documented KPI/KRI definitions, and a styled web dashboard

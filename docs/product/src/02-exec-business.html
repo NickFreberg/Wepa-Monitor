@@ -1,0 +1,279 @@
+<section class="chapter" id="exec">
+  <div class="chapter__eyebrow">Chapter 0 <span class="phase">Executive summary</span></div>
+  <h2>A minute-by-minute record of every campus printer</h2>
+  <div class="audiences"><span class="aud aud--on">Everyone</span><span class="aud aud--on">IT leadership</span></div>
+  <p class="chapter__lede">Wepa publishes a status page for BSU's print stations that refreshes every minute and only
+    ever shows <em>now</em>. ResNet Print Ops reads it once a minute, keeps every reading, and turns the history into
+    answers: what is broken, for how long, why, when nobody was there to fix it, what to restock, and where a
+    student should walk instead.</p>
+
+  <div class="extras">
+    <div class="extra"><b class="lbl">What it watches</b>31 stations: 16 ResNet printers in and around the
+      residence halls, 14 in Student Computer Labs, 1 at a satellite campus.</div>
+    <div class="extra"><b class="lbl">How often</b>One reading every 60 seconds, every reading kept. Failed reads
+      are kept too, so gaps are visible rather than guessed.</div>
+    <div class="extra"><b class="lbl">Who it serves</b>Students, ResNet and IT Service Center staff, supervisors and
+      IT leadership, each with their own view.</div>
+    <div class="extra"><b class="lbl">How it is built</b>Python, pandas and Dash; about 20,500 lines of application
+      code and 190 automated tests; deployed on Azure Container Apps.</div>
+  </div>
+
+  <h3>What it does</h3>
+  <ul>
+    <li><b>Now:</b> every station's status in one vocabulary (Operational, Degraded, Out of service, No signal), a
+      ranked work queue, and a walking or van route to everything that needs a visit.</li>
+    <li><b>Then:</b> availability, time to repair, time between failures, faults by cause and hour, supplies and
+      parts, all with stated definitions and minimum-evidence rules.</li>
+    <li><b>Why:</b> plain-language stories, click-to-explain charts, statistical tests, and an optional AI analyst
+      that may only state figures it looked up.</li>
+    <li><b>Next:</b> supply reorder points, end-of-life forecasts for parts, and an outage-risk model that is only
+      shown when it beats a simple baseline.</li>
+    <li><b>Accountability:</b> permanent reference numbers for every outage, governed investigations with a
+      tamper-evident trail for Wepa cases, named staff accounts and an audit log.</li>
+    <li><b>Self-maintenance:</b> daily vulnerability checks ranked by real-world exploitation, reviewed update
+      packages, backup collectors and a self-check.</li>
+  </ul>
+
+  <figure class="plate">{{SVG_DESKS}}
+    <figcaption><b>Figure 0.1 · When a support desk is staffed.</b> Drawn from the desk hours configured in the app
+      (<code>config.SUPPORT_TEAMS</code>). ResNet's desk is open 38 hours a week and the IT Service Center's 35, out
+      of 168. For most of the week, an outage waits for a desk to open; that single fact shapes much of the product.</figcaption>
+  </figure>
+</section>
+
+<section class="chapter" id="business">
+  <div class="chapter__eyebrow">Chapter 1 <span class="phase">CRISP-DM phase 1 · Business understanding</span></div>
+  <h2>Business understanding</h2>
+  <div class="audiences"><span class="aud aud--on">Supervisors</span><span class="aud aud--on">IT leadership</span><span class="aud">Everyone</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>Students need to print, often late and close to a deadline. When a printer breaks, the student finds out at
+      the printer and staff find out later. The product exists to shorten that gap, to show where the gaps come
+      from, and to give the university evidence to act on, without adding work for student staff.</p></div>
+
+  <h3 id="bu-context">1.1 Background</h3>
+  <p>Bridgewater State University offers Wepa print stations across campus: in residence-hall areas (supported by
+    ResNet, the residential network team based in East Campus Commons), and in labs, the library, the student union
+    and a satellite campus (supported by the IT Service Center in Maxwell Library). Students pay per page through
+    Wepa and print papers, forms, tickets and boarding passes.</p>
+  <p>Wepa publishes a public status page listing every station with a color (green, yellow, red), alert codes,
+    printer text and consumable levels. It refreshes every minute and shows only the present. The original version of
+    this product (2020) was a terminal script for ResNet Support Representatives: choose your assigned area and it
+    beeped when a printer there went down.</p>
+
+  <h3 id="bu-problem">1.2 Problem statement</h3>
+  <p>Nobody could answer basic operational questions with evidence: which printers break most; how long outages
+    last and why; whether problems wait overnight because the desks are closed; what supplies will run out next;
+    and where a student should go when their printer is down. Without history, recurring hardware faults looked like
+    bad luck, and conversations with the vendor relied on memory.</p>
+
+  <h3 id="bu-stakeholders">1.3 Stakeholders</h3>
+  <div class="tbl"><table>
+    <tr><th>Stakeholder</th><th>Needs</th><th>Uses</th></tr>
+    <tr><td>Students</td><td>A working printer nearby, especially after hours</td><td>Student status pages (QR signs), indirectly everything</td></tr>
+    <tr><td>ResNet Support Representatives</td><td>Know what is broken, where to go first, what to carry</td><td>Overview, Rounds, station pages, Investigations</td></tr>
+    <tr><td>IT Service Center staff</td><td>The same, for labs and public spaces</td><td>Overview, Rounds, Stations</td></tr>
+    <tr><td>Supervisors (ResNet, ITSC)</td><td>Coverage, staffing, recurring faults, vendor evidence</td><td>Analytics, Planning, Investigations, Insights</td></tr>
+    <tr><td>IT leadership</td><td>Service level, trends, outcomes to report</td><td>Executive summary, IT Outcomes, exports</td></tr>
+    <tr><td>Residence Life</td><td>Printing in the halls students live in</td><td>Reports from supervisors</td></tr>
+    <tr><td>Wepa (vendor)</td><td>Clear, dated evidence when hardware fails repeatedly</td><td>Investigation evidence packets (PDF)</td></tr>
+  </table></div>
+
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"14px"}}}%%
+flowchart LR
+  W["Wepa status page<br/>(vendor, public)"] --> M(("ResNet Print Ops"))
+  C["bridgew.edu<br/>calendar · halls · library · courses"] --> M
+  O["OpenStreetMap<br/>paths · parking"] --> M
+  M --> R["ResNet staff"]
+  M --> I["IT Service Center staff"]
+  M --> S["Supervisors"]
+  M --> L["IT leadership"]
+  M --> ST["Students<br/>(status pages)"]
+  S -- "evidence packets" --> WV["Wepa support"]
+  S -- "ticket numbers" --> ITSM["BSU ITSM system"]
+</pre>
+    <figcaption><b>Figure 1.1 · Context.</b> What flows into the product and who it serves. The ITSM system and Wepa
+      support are referenced by number only; nothing is synchronized with them.</figcaption>
+  </figure>
+
+  <h4>Responsibilities (proposed RACI)</h4>
+  <div class="tbl"><table>
+    <tr><th>Activity</th><th>Student staff</th><th>Supervisor</th><th>IT leadership</th><th>Administrator</th><th>Wepa</th></tr>
+    <tr><td>Respond to an outage</td><td>R</td><td>A</td><td>I</td><td>–</td><td>C</td></tr>
+    <tr><td>Open and work an investigation</td><td>R</td><td>A</td><td>I</td><td>–</td><td>C</td></tr>
+    <tr><td>Review and close an investigation</td><td>–</td><td>R/A</td><td>I</td><td>–</td><td>–</td></tr>
+    <tr><td>Escalate a hardware pattern to Wepa</td><td>C</td><td>R/A</td><td>I</td><td>–</td><td>R (fix)</td></tr>
+    <tr><td>Monthly and annual reporting</td><td>–</td><td>R</td><td>A</td><td>–</td><td>–</td></tr>
+    <tr><td>Accounts, deploys, security updates</td><td>–</td><td>C</td><td>I</td><td>R/A</td><td>–</td></tr>
+  </table></div>
+  <p class="callout">R responsible · A accountable · C consulted · I informed. This is a recommendation for how the
+    roles map onto the product; it is not a published BSU policy.</p>
+
+  <h3 id="bu-objectives">1.4 Objectives and success criteria</h3>
+  <p>CRISP-DM separates business objectives from the data-mining goals that serve them. Success is measured by the
+    product's own figures once enough live history exists.</p>
+  <div class="tbl"><table>
+    <tr><th>Business objective</th><th>Data goal</th><th>Success criterion</th></tr>
+    <tr><td>Fix printers sooner</td><td>Detect each outage within a minute; rank the queue by impact</td><td>Median time to repair falls term over term</td></tr>
+    <tr><td>Fewer outages that wait overnight</td><td>Split downtime into desk hours and after hours per team</td><td>Share of downtime that starts after hours is known and tracked</td></tr>
+    <tr><td>Evidence for the vendor</td><td>Permanent reference numbers; recurring-fault detector; hash-chained investigations</td><td>Every Wepa case backed by a dated evidence packet</td></tr>
+    <tr><td>Supplies before they run out</td><td>Usage that survives part replacements; end-of-life forecasts; reorder points</td><td>No station out of a consumable that was forecast</td></tr>
+    <tr><td>Point students to a working printer</td><td>Walking-time network between buildings; access rules</td><td>Every printer has a named backup and walking time</td></tr>
+    <tr><td>Trustworthy numbers</td><td>Data-quality score; evidence gates; no imputation</td><td>Data quality 95 or above; every figure states its basis</td></tr>
+  </table></div>
+
+  <h3 id="bu-sipoc">1.5 SIPOC</h3>
+  <p>A Six Sigma SIPOC places the product in the service it supports: suppliers, inputs, process, outputs, customers.</p>
+  <div class="tbl"><table>
+    <tr><th>Suppliers</th><th>Inputs</th><th>Process</th><th>Outputs</th><th>Customers</th></tr>
+    <tr><td>Wepa<br>BSU web pages<br>OpenStreetMap<br>Open-Meteo<br>Vulnerability databases</td>
+      <td>Station status every minute<br>Calendar, halls, library hours, courses<br>Paths, parking<br>Hourly weather<br>Advisories</td>
+      <td>Collect → store → detect incidents → measure → explain → act → review</td>
+      <td>Live status and work queue<br>Routes<br>KPIs and reports<br>Investigations and evidence<br>Alerts</td>
+      <td>Students<br>Student staff<br>Supervisors<br>IT leadership<br>Wepa</td></tr>
+  </table></div>
+
+  <h3 id="bu-ctq">1.6 Voice of the customer, critical to quality</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+flowchart LR
+  N["Need:<br/>I can print when I need to"] --> D1["Driver: printers work"]
+  N --> D2["Driver: I know where to go"]
+  N --> D3["Driver: problems get fixed fast"]
+  D1 --> C1["CTQ: availability by station and building"]
+  D1 --> C2["CTQ: supplies replaced before end of life"]
+  D2 --> C3["CTQ: nearest open printer and walk time"]
+  D2 --> C4["CTQ: status page current within 1 minute"]
+  D3 --> C5["CTQ: time to repair, desk hours vs after hours"]
+  D3 --> C6["CTQ: recurring faults escalated with evidence"]
+</pre>
+    <figcaption><b>Figure 1.2 · CTQ tree.</b> From the student's need to measurable characteristics the product reports.</figcaption>
+  </figure>
+
+  <h3 id="bu-journeys">1.7 Customer journeys</h3>
+  <p>Three journeys, scored 1 (frustrating) to 5 (smooth). The scores are design assessments of the experience with
+    the product in place, not survey results.</p>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+journey
+  title A student, 11 PM, paper due at 8 AM
+  section At the printer
+    Sends the job, walks to the hall printer: 3: Student
+    Printer shows a jam: 1: Student
+  section Finding another
+    Scans the QR sign on the printer: 4: Student
+    Sees the nearest open printer and the walk: 5: Student
+  section Printing
+    Walks to East Campus Commons and prints: 4: Student
+  section Next morning
+    Outage already on the staff work queue with a reference number: 5: ResNet
+</pre>
+    <figcaption><b>Figure 1.3 · Student journey.</b> The QR sign and the "nearest open printer" rule turn a dead end
+      into a short walk. The outage was recorded at the minute it started, so staff do not depend on a report.</figcaption>
+  </figure>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+journey
+  title A ResNet Support Representative's shift
+  section Start of shift
+    Opens Overview, reads what needs attention: 5: RSR
+    Checks supplies to bring: 4: RSR
+  section On the round
+    Follows the Rounds route, urgent printers first: 5: RSR
+    Fixes a jam, status turns green within a minute: 5: RSR
+  section A repeat offender
+    Sees the third unreachable outage this fortnight: 3: RSR
+    Investigation already opened by the detector: 4: RSR, Supervisor
+</pre>
+    <figcaption><b>Figure 1.4 · Staff journey.</b> The detector opens an investigation when one printer has three or
+      more unreachable or hardware outages in 14 days.</figcaption>
+  </figure>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+journey
+  title IT leadership at month end
+  section Reporting
+    Opens the Executive summary for the month: 5: Director
+    Compares with last month and year to date: 4: Director
+  section Deciding
+    Reads where outages wait for a desk to open: 4: Director
+    Reviews the staffing what-if: 3: Director, Supervisor
+  section Telling the story
+    Prints the IT Outcomes page for the annual report: 5: Director
+</pre>
+    <figcaption><b>Figure 1.5 · Leadership journey.</b> The same numbers staff work from, summarized, with their definitions attached.</figcaption>
+  </figure>
+
+  <h3 id="bu-constraints">1.8 Constraints, assumptions and risks</h3>
+  <div class="tbl"><table>
+    <tr><th>Type</th><th>Item</th><th>Response</th></tr>
+    <tr><td>Constraint</td><td>Wepa's terms allow personal, non-commercial use of its site</td><td>Data is used for internal operations; not republished; written permission from Wepa and BSU before any public use</td></tr>
+    <tr><td>Constraint</td><td>The status page can change format without notice</td><td>Columns are found by header text; a mismatch fails loudly and is logged</td></tr>
+    <tr><td>Constraint</td><td>No access to Wepa's internal systems or job logs</td><td>Usage is inferred from consumable levels; stated as such</td></tr>
+    <tr><td>Assumption</td><td>The row color is Wepa's own verdict of severity</td><td>Used directly; codes only add names and fix categories</td></tr>
+    <tr><td>Assumption</td><td>Desk hours in configuration are the dependable coverage</td><td>Editable in one place; holidays from the academic calendar</td></tr>
+    <tr><td>Risk</td><td>Monitoring gaps (network, restarts)</td><td>Gaps recorded and excluded, never imputed; backup collectors</td></tr>
+    <tr><td>Risk</td><td>Over-reading thin evidence</td><td>Minimum-evidence gates; sample sizes on every statistic</td></tr>
+    <tr><td>Risk</td><td>AI stating something untrue</td><td>Read-only tools, a fact check of every number, links and HTML stripped</td></tr>
+    <tr><td>Risk</td><td>Vulnerable dependencies</td><td>Hash-pinned installs, daily scans, threat-intelligence ranking</td></tr>
+  </table></div>
+
+  <h3 id="requirements">1.9 Requirements</h3>
+  <p>Requirements are prioritized with MoSCoW and traced to the module that implements them. Status reflects version
+    1.2.1. Quality requirements are grouped by the ISO/IEC 25010 characteristic they serve.</p>
+  <div class="tbl"><table>
+    <caption>Functional requirements</caption>
+    <tr><th>ID</th><th>Requirement</th><th>Priority</th><th>Status</th><th>Where</th></tr>
+    <tr><td class="nw">FR-01</td><td>Read every station's status once a minute and log every attempt, successful or not</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>scrape.py</code>, <code>collector.py</code></td></tr>
+    <tr><td class="nw">FR-02</td><td>Keep raw readings append-only; never edit them</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>store.py</code></td></tr>
+    <tr><td class="nw">FR-03</td><td>Turn readings into outages, warnings, fault and paper-tray incidents with start, end and duration</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>events.py</code></td></tr>
+    <tr><td class="nw">FR-04</td><td>Count consumable usage correctly across part replacements</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>consumables.py</code></td></tr>
+    <tr><td class="nw">FR-05</td><td>Show every station's current status in one vocabulary</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>vocab.py</code>, Overview</td></tr>
+    <tr><td class="nw">FR-06</td><td>Publish KPIs with written definitions and minimum-evidence gates</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>metrics.py</code></td></tr>
+    <tr><td class="nw">FR-07</td><td>Give every outage a permanent reference number</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>refs.py</code></td></tr>
+    <tr><td class="nw">FR-08</td><td>Named staff accounts managed centrally; sign-in on every page</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>accounts.py</code>, <code>auth.py</code></td></tr>
+    <tr><td class="nw">FR-09</td><td>Monitor data quality and the collector itself</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td>System page</td></tr>
+    <tr><td class="nw">FR-10</td><td>Clearly labelled synthetic demo mode</td><td><span class="tag tag--must">Must</span></td><td><span class="tag tag--ok">Done</span></td><td><code>synth.py</code></td></tr>
+    <tr><td class="nw">FR-11</td><td>Ranked work queue and a route planner (walking or van)</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>ops.py</code>, <code>routing.py</code></td></tr>
+    <tr><td class="nw">FR-12</td><td>Nearest printer open to everyone, with walking time</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>nearby.py</code></td></tr>
+    <tr><td class="nw">FR-13</td><td>Split downtime by desk hours; say when support is unavailable</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>support.py</code></td></tr>
+    <tr><td class="nw">FR-14</td><td>Analytics: reliability, faults, supplies, usage, report card, planning, statistics</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td>Analytics page</td></tr>
+    <tr><td class="nw">FR-15</td><td>Plain-language stories, Ask the data, click-to-explain</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>narrative.py</code>, <code>ask.py</code></td></tr>
+    <tr><td class="nw">FR-16</td><td>Governed investigations with a tamper-evident history and evidence packet</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>investigations.py</code></td></tr>
+    <tr><td class="nw">FR-17</td><td>Activity feed and notifications</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>activity.py</code></td></tr>
+    <tr><td class="nw">FR-18</td><td>Export any view as CSV, Excel, JSON or PDF</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>export.py</code></td></tr>
+    <tr><td class="nw">FR-19</td><td>Campus context: calendar, halls, library hours, class schedules</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>campus.py</code>, <code>courses.py</code></td></tr>
+    <tr><td class="nw">FR-20</td><td>Daily vulnerability check, ranked by exploitation</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>vulns.py</code>, <code>threatintel.py</code></td></tr>
+    <tr><td class="nw">FR-21</td><td>Self-check and OWASP Top 10 checklist</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>selfcheck.py</code>, <code>owasp.py</code></td></tr>
+    <tr><td class="nw">FR-22</td><td>Executive summary and IT Outcomes report page</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>insights.py</code></td></tr>
+    <tr><td class="nw">FR-23</td><td>Outage-risk model, shown only when it beats a baseline</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>risk.py</code></td></tr>
+    <tr><td class="nw">FR-24</td><td>AI analyst with read-only tools and a fact check (optional)</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>ai.py</code>, <code>analyst.py</code></td></tr>
+    <tr><td class="nw">FR-25</td><td>Student status pages and printable QR signs (opt-in public)</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>dashboard/public.py</code></td></tr>
+    <tr><td class="nw">FR-26</td><td>Update packages built and tested by a reviewed pipeline</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>updates.py</code></td></tr>
+    <tr><td class="nw">FR-27</td><td>Backup collectors with a signed handshake</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>peer.py</code></td></tr>
+    <tr><td class="nw">FR-28</td><td>Feature requests filed as GitHub issues</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>feedback.py</code></td></tr>
+    <tr><td class="nw">FR-29</td><td>Campus map and Google Earth export</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>geo.py</code></td></tr>
+    <tr><td class="nw">FR-30</td><td>Single sign-on with BSU's Entra ID (MFA)</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--part">Planned</span></td><td>Needs BSU IT registration</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>Quality requirements (ISO/IEC 25010 characteristics)</caption>
+    <tr><th>ID</th><th>Characteristic</th><th>Requirement</th><th>How it is met</th></tr>
+    <tr><td class="nw">NFR-01</td><td>Reliability</td><td>The collector never stops on an error</td><td>Failures recorded as data; the loop continues</td></tr>
+    <tr><td class="nw">NFR-02</td><td>Reliability (availability)</td><td>No collection gap from a deploy or a collector failure</td><td>Rolling deploys with a collector lock; backup takes over after 60 s of silence and stands down within one 15 s check</td></tr>
+    <tr><td class="nw">NFR-03</td><td>Performance efficiency</td><td>Pages reflect a new reading within about 15 s</td><td>Incremental refresh; finished days read once (Parquet)</td></tr>
+    <tr><td class="nw">NFR-04</td><td>Security (confidentiality)</td><td>Every route needs a session; least privilege</td><td>Tested by walking every route; roles; CSP</td></tr>
+    <tr><td class="nw">NFR-05</td><td>Security (integrity)</td><td>Records provably unaltered</td><td>Append-only files; SHA-256 hash chain; hash-pinned installs</td></tr>
+    <tr><td class="nw">NFR-06</td><td>Interaction capability (usability)</td><td>Readable by anyone</td><td>One vocabulary; whole-unit durations; plain-language stories</td></tr>
+    <tr><td class="nw">NFR-07</td><td>Accessibility</td><td>Keyboard, contrast and motion preferences respected</td><td>Appearance menu; visible focus; reduced motion. A formal WCAG 2.2 audit is recommended</td></tr>
+    <tr><td class="nw">NFR-08</td><td>Maintainability</td><td>Rules changeable in one place; changes verified</td><td><code>config.py</code>; 190 automated tests; lint and scans in CI</td></tr>
+    <tr><td class="nw">NFR-09</td><td>Flexibility (portability)</td><td>Runs on a laptop, a VM or containers</td><td>Python 3.11/3.12; three documented deployments</td></tr>
+    <tr><td class="nw">NFR-10</td><td>Privacy</td><td>Collect the minimum about people</td><td>Visits shortened to network; no passwords logged; names kept out of GitHub issues</td></tr>
+    <tr><td class="nw">NFR-11</td><td>Statistical honesty</td><td>Never present a guess as a measurement</td><td>No imputation; evidence gates; sample sizes; demo labelled</td></tr>
+    <tr><td class="nw">NFR-12</td><td>Cost control</td><td>Optional AI cannot run away with spend</td><td>Calls per hour capped; answers cached</td></tr>
+  </table></div>
+</section>

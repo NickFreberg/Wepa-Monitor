@@ -1,0 +1,259 @@
+<section class="chapter" id="data">
+  <div class="chapter__eyebrow">Chapter 2 <span class="phase">CRISP-DM phase 2 · Data understanding</span></div>
+  <h2>Data understanding</h2>
+  <div class="audiences"><span class="aud aud--on">Data scientists</span><span class="aud aud--on">Engineers</span><span class="aud">Supervisors</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>One web page is the heart of it: Wepa's status page, read every minute. Around it sit campus facts (the
+      academic calendar, residence halls, library hours, class schedules), campus maps for walking routes, hourly
+      weather, and security advisories. Each source has known quirks, and each is handled openly rather than
+      smoothed over.</p></div>
+
+  <h3>2.1 Sources</h3>
+  <div class="tbl"><table>
+    <tr><th>Source</th><th>What it provides</th><th>Cadence</th><th>Terms and notes</th></tr>
+    <tr><td>Wepa status page<br><code>cs.wepanow.com/000BRIDGEW149.html</code></td><td>Per station: color (green, yellow, red), alert codes, printer text, toner, drum, belt and fuser levels, page timestamp</td><td>Every 60 s</td><td>Personal, non-commercial use under Wepa's terms; internal operations only</td></tr>
+    <tr><td>bridgew.edu</td><td>Academic calendar, residence halls, library hours</td><td>Calendar yearly, library weekly</td><td>Public university pages; committed copies kept as fallback</td></tr>
+    <tr><td>BSU course search</td><td>Class meetings by building and room</td><td>Monthly</td><td>Public schedule search</td></tr>
+    <tr><td>OpenStreetMap</td><td>Footpaths, roads and parking for routes and walking times</td><td>On demand</td><td>© OpenStreetMap contributors, ODbL</td></tr>
+    <tr><td>Open-Meteo</td><td>Hourly Bridgewater weather (humidity)</td><td>Daily</td><td>CC BY 4.0 data</td></tr>
+    <tr><td>OSV.dev, CISA, NIST NVD, Microsoft MSRC, FIRST EPSS, Exploit-DB, Metasploit</td><td>Known vulnerabilities in the app's own packages, and how urgent they are</td><td>Daily (catalogs weekly)</td><td>Only package names, versions and CVE numbers leave the server</td></tr>
+    <tr><td>Reference files (maintained by hand)</td><td>Station to building, area, type and access; building coordinates; van parking</td><td>When the campus changes</td><td><code>reference/stations.csv</code>, <code>buildings.csv</code>, <code>parking.csv</code></td></tr>
+  </table></div>
+
+  <h3>2.2 What a reading looks like</h3>
+  <p>Each minute produces one row per station. A trimmed example, as stored:</p>
+  <div class="tbl"><table>
+    <tr><th>scrape_ts</th><th>section</th><th>station_id</th><th>description</th><th>row_status</th><th>status_codes</th><th>toner_k</th><th>drum_k</th><th>belt</th><th>fuser</th></tr>
+    <tr><td><code>2026-10-02T23:41:00Z</code></td><td>ResNet</td><td><code>02132</code></td><td>East Campus Commons</td><td>red</td><td><code>paper_out_error</code></td><td class="num">41</td><td class="num">63</td><td class="num">88</td><td class="num">90</td></tr>
+  </table></div>
+  <p class="callout">Illustrative row in the stored format. Levels are percentages remaining; codes are normalized
+    (<code>Alert_paper_out_error</code> becomes <code>paper_out_error</code>).</p>
+
+  <h3>2.3 Known quirks</h3>
+  <ul>
+    <li><b>Severity comes from the row color.</b> Wepa's own green, yellow or red verdict is used directly. Codes add a
+      name and a fix category; only a row with no color falls back to the code table.</li>
+    <li><b>Codes carry details.</b> <code>Alert_Paper_Low_Letter_530_sheets_left</code> is folded into
+      <code>paper_low</code> so counts don't split by sheet count.</li>
+    <li><b>Only some codes have been seen live.</b> Three red codes and one yellow code are confirmed on BSU's page;
+      the rest come from the page's legend and are marked "inferred" until they appear.</li>
+    <li><b>Levels jitter.</b> Sensors wobble a point or two (51, 50, 51, 50); a replacement jumps by 15 or more points.</li>
+    <li><b>The page can change.</b> Columns are matched by header text. A rename or reorder fails the read loudly and
+      is logged, instead of writing values into the wrong fields.</li>
+    <li><b>Reads fail sometimes.</b> Network blips, Wepa maintenance and restarts all happen. Every attempt is
+      logged, so a gap is a measured fact.</li>
+  </ul>
+
+  <h3>2.4 Status codes</h3>
+  <div class="tbl"><table>
+    <tr><th>Code</th><th>Name</th><th>Fallback severity</th><th>Fix category</th><th>Seen on BSU's page</th></tr>
+    <tr><td><code>paper_out_error</code></td><td>Paper out</td><td>red</td><td>Refill / reseat paper</td><td>Yes</td></tr>
+    <tr><td><code>printer_down</code></td><td>Printer down</td><td>red</td><td>Inspect printer</td><td>Yes</td></tr>
+    <tr><td><code>tray_missing</code></td><td>Tray missing</td><td>red</td><td>Refill / reseat paper</td><td>Yes</td></tr>
+    <tr><td><code>paper_low</code></td><td>Paper low</td><td>yellow</td><td>Refill / reseat paper</td><td>Yes</td></tr>
+    <tr><td><code>paper_jam</code></td><td>Paper jam</td><td>red</td><td>Clear jam</td><td>Inferred</td></tr>
+    <tr><td><code>not_reachable</code></td><td>Not reachable</td><td>red</td><td>Check network / restart station</td><td>Inferred</td></tr>
+    <tr><td><code>fatal_error</code>, <code>service_call</code></td><td>Fatal error, service call</td><td>red</td><td>Power-cycle printer</td><td>Inferred</td></tr>
+    <tr><td><code>cover_open</code></td><td>Top cover open</td><td>red</td><td>Inspect printer</td><td>Inferred</td></tr>
+    <tr><td><code>toner_critical</code>, <code>drum_critical</code>, <code>toner_sensor_error</code></td><td>Consumable critical</td><td>red</td><td>Replace consumable</td><td>Inferred</td></tr>
+    <tr><td><code>toner_low</code>, <code>incorrect_tray_size</code></td><td>Toner low, wrong tray size</td><td>yellow</td><td>Replace consumable / paper</td><td>Inferred</td></tr>
+  </table></div>
+
+  <h3>2.5 Data quality</h3>
+  <p>Data quality is measured, scored and shown on the System page, so every figure can be read with its reliability
+    in mind.</p>
+  <figure class="plate">{{SVG_DQ}}
+    <figcaption><b>Figure 2.1 · How the data quality score is built.</b> The weights are fixed in
+      <code>metrics.data_quality</code>: freshness (time since the last good reading), completeness (readings received
+      versus one per station per minute), validity (levels within 0 to 100) and station coverage.</figcaption>
+  </figure>
+  <div class="extras">
+    <div class="extra"><b class="lbl">For data scientists</b>Observed time is explicit. Each reading covers the time
+      until the station's next reading, up to 5 minutes; anything longer is unobserved and excluded from every
+      rate. Availability is therefore a ratio of observed minutes, never of wall-clock minutes.</div>
+    <div class="extra"><b class="lbl">For supervisors</b>A low data-quality day means that day's numbers rest on less
+      evidence, not that they are wrong. The System page shows which days, and the live log shows why.</div>
+  </div>
+</section>
+
+<section class="chapter" id="preparation">
+  <div class="chapter__eyebrow">Chapter 3 <span class="phase">CRISP-DM phase 3 · Data preparation</span></div>
+  <h2>Data preparation</h2>
+  <div class="audiences"><span class="aud aud--on">Engineers</span><span class="aud aud--on">Data scientists</span></div>
+  <div class="inshort"><b class="lbl">In short</b>
+    <p>Raw readings are stored exactly as read and never edited. Everything else is computed from them: when each
+      outage started and ended, how much toner was really used, how long printers were available. If a rule
+      changes, the whole history is simply recomputed.</p></div>
+
+  <h3>3.1 Pipeline</h3>
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+flowchart LR
+  A["Wepa status page"] -->|"every 60 s"| B["scrape.py<br/>parse by header text"]
+  B --> C[("snapshots/<br/>YYYY-MM-DD.csv")]
+  B --> D[("scrape_log/<br/>every attempt")]
+  C -->|"after midnight"| E[("Parquet<br/>finished days")]
+  E --> F["events.py<br/>observed spans · incidents"]
+  C --> F
+  F --> G["consumables.py<br/>usage · replacements"]
+  F --> H["rollup.py<br/>hourly coverage per day"]
+  G --> I["metrics.py<br/>KPIs with gates"]
+  H --> I
+  I --> J["ops · insights · advanced<br/>queue · stories · statistics"]
+  J --> K["Dashboard · exports · AI tools"]
+  F --> R["refs.py<br/>permanent numbers"]
+  R --> K
+</pre>
+    <figcaption><b>Figure 3.1 · From page to dashboard.</b> Storage is append-only CSV for today and Parquet for
+      finished days. Imported history (from another computer or a backup collector) sits beside it and is merged on
+      load, with duplicate minutes dropped.</figcaption>
+  </figure>
+
+  <h3>3.2 Cleaning and construction rules</h3>
+  <dl class="defs">
+    <dt>One reading per minute</dt><dd>When two collectors overlap (a deploy, a backup), duplicates for the same
+      station and minute are dropped; for the scrape log, a success wins over a failure.</dd>
+    <dt>Observed time</dt><dd>A reading covers the time to the next one, up to 5 minutes. Longer gaps are unobserved:
+      never counted as up or down.</dd>
+    <dt>Incidents</dt><dd>Consecutive readings of one station in the same state. An incident opens at the first
+      reading showing it and resolves at the first that doesn't. Gaps under 6 hours with the same state on both
+      sides are bridged.</dd>
+    <dt>Censored starts</dt><dd>An incident already open when monitoring began has an unknown start. It is kept
+      (it is real) but excluded from repair-time averages.</dd>
+    <dt>Replacements</dt><dd>A rise of 15 points or more is a part replacement, logged with what the old part had
+      left, and never counted as negative usage.</dd>
+    <dt>Usage</dt><dd>Between replacements, usage is the first reading minus the lowest reading so far, so jitter is
+      counted once. 100 points equals one part's worth.</dd>
+    <dt>Desk hours</dt><dd>Each outage is split into time while its team's desk was staffed and time after hours,
+      using the configured hours and the academic calendar's holidays.</dd>
+    <dt>Reference numbers</dt><dd>Every outage gets a permanent number by its cause: <code>OUT</code> unreachable,
+      <code>JAM</code> jammed, <code>PAP</code> paper, <code>SUP</code> consumable out, <code>ERR</code> hardware or
+      system; investigations <code>INV</code>, update packages <code>UPD</code>, feature requests <code>REQ</code>.
+      Nine digits; never reused.</dd>
+  </dl>
+
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
+stateDiagram-v2
+  direction LR
+  [*] --> Operational
+  Operational --> Degraded: yellow reading
+  Operational --> OutOfService: red reading
+  Degraded --> OutOfService: red reading
+  Degraded --> Operational: green reading (warning resolved)
+  OutOfService --> Operational: green reading (outage resolved)
+  OutOfService --> Degraded: yellow reading
+  Operational --> NoSignal: no reading for 5 min
+  Degraded --> NoSignal: no reading for 5 min
+  OutOfService --> NoSignal: no reading for 5 min
+  NoSignal --> Operational: reading resumes
+  OutOfService: Out of service
+  NoSignal: No signal
+</pre>
+    <figcaption><b>Figure 3.2 · Station states.</b> The four words used everywhere. "No signal" is not a fault; it
+      means the station's status is unknown, and that time is left out of every rate.</figcaption>
+  </figure>
+
+  <h3>3.3 Worked example: the replacement rule</h3>
+  <div class="tbl"><table>
+    <tr><th>Time</th><th>Black toner</th><th>Counted as</th><th>Running total</th></tr>
+    <tr><td>09:00</td><td class="num">12%</td><td>–</td><td class="num">0</td></tr>
+    <tr><td>11:00</td><td class="num">7%</td><td>usage +5</td><td class="num">5</td></tr>
+    <tr><td>13:00</td><td class="num">3%</td><td>usage +4</td><td class="num">9</td></tr>
+    <tr><td>13:20</td><td class="num">100%</td><td><b>replacement</b> (3% left in the old cartridge)</td><td class="num">9</td></tr>
+    <tr><td>16:00</td><td class="num">94%</td><td>usage +6</td><td class="num"><b>15</b></td></tr>
+  </table></div>
+
+  <h3 id="dictionary">3.4 Data dictionary</h3>
+  <p>Every stored field the product reads or writes. Times are UTC in storage and shown in Eastern time. Records under
+    <code>records/</code> are append-only JSON lines unless noted.</p>
+
+  <figure class="plate">
+<pre class="mermaid">
+%%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"12px"}}}%%
+erDiagram
+  BUILDING ||--o{ STATION : houses
+  STATION ||--o{ SNAPSHOT : "read each minute"
+  STATION ||--o{ INCIDENT : "derived"
+  INCIDENT ||--o| REFERENCE : "numbered"
+  STATION ||--o{ REPLACEMENT : "derived"
+  STATION ||--o{ INVESTIGATION : "subject of"
+  INVESTIGATION ||--o{ INV_EVENT : "history"
+  INVESTIGATION }o--o{ REFERENCE : "links outages"
+  USER ||--o{ INV_EVENT : "makes"
+  SCRAPE_ATTEMPT }o--|| SNAPSHOT : "produces"
+  BUILDING { string building PK string short_name float lat float lon string campus }
+  STATION { string station_id PK string building FK string area string station_type string access }
+  SNAPSHOT { datetime scrape_ts string station_id FK string row_status string status_codes float toner_k }
+  INCIDENT { string station_id FK string severity datetime start datetime end float duration_s }
+  REFERENCE { string ref PK string key string issue }
+  INVESTIGATION { string ref PK string state string title }
+  INV_EVENT { int seq PK string action string hash string prev }
+  USER { string username PK string role bool active }
+</pre>
+    <figcaption><b>Figure 3.3 · Entities and relationships.</b> Stored entities (snapshots, attempts, references,
+      investigation events, users) and derived ones (incidents, replacements) computed on load.</figcaption>
+  </figure>
+
+  <div class="tbl"><table>
+    <caption>snapshots/ · one row per station per successful read</caption>
+    <tr><th>Field</th><th>Type</th><th>Meaning</th></tr>
+    <tr><td><code>scrape_ts</code></td><td>datetime, UTC</td><td>When the page was read</td></tr>
+    <tr><td><code>page_ts</code></td><td>datetime, UTC</td><td>The timestamp printed on Wepa's page</td></tr>
+    <tr><td><code>section</code></td><td>text</td><td>Page section: ResNet, Student Computer Labs, Satellite Campuses</td></tr>
+    <tr><td><code>station_id</code></td><td>text, 5 digits</td><td>Wepa's station number (P.S.#); key to the reference file</td></tr>
+    <tr><td><code>description</code></td><td>text</td><td>Wepa's station description</td></tr>
+    <tr><td><code>row_status</code></td><td>green / yellow / red</td><td>Wepa's verdict for the row</td></tr>
+    <tr><td><code>status_codes</code></td><td>text, <code>;</code>-separated</td><td>Normalized alert codes</td></tr>
+    <tr><td><code>printer_text</code></td><td>text</td><td>Printer message, e.g. a tray warning</td></tr>
+    <tr><td><code>toner_k|c|m|y</code></td><td>number 0–100</td><td>Toner remaining, black, cyan, magenta, yellow</td></tr>
+    <tr><td><code>drum_k|c|m|y</code></td><td>number 0–100</td><td>Drum life remaining</td></tr>
+    <tr><td><code>belt</code>, <code>fuser</code></td><td>number 0–100</td><td>Transfer belt and fuser life remaining</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>scrape_log/ · one row per attempt, successful or not</caption>
+    <tr><th>Field</th><th>Type</th><th>Meaning</th></tr>
+    <tr><td><code>attempt_ts</code></td><td>datetime, UTC</td><td>When the read was attempted</td></tr>
+    <tr><td><code>ok</code></td><td>boolean</td><td>Whether the page was read and parsed</td></tr>
+    <tr><td><code>http_status</code></td><td>integer</td><td>HTTP status code, if any</td></tr>
+    <tr><td><code>duration_ms</code></td><td>integer</td><td>How long the read took</td></tr>
+    <tr><td><code>n_stations</code></td><td>integer</td><td>Stations found on the page</td></tr>
+    <tr><td><code>error</code></td><td>text</td><td>Why it failed (never contains credentials)</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>reference/stations.csv · maintained by hand</caption>
+    <tr><th>Field</th><th>Type</th><th>Meaning</th></tr>
+    <tr><td><code>station_id</code></td><td>text</td><td>Wepa station number</td></tr>
+    <tr><td><code>building</code></td><td>text</td><td>Building name; key to <code>buildings.csv</code></td></tr>
+    <tr><td><code>area</code></td><td>text</td><td>Campus area, e.g. University Park</td></tr>
+    <tr><td><code>station_type</code></td><td>residence / lab / satellite</td><td>What kind of place it serves</td></tr>
+    <tr><td><code>access</code></td><td>public / residents</td><td>Who can walk up to it. Blank means residents for residence-hall printers and public otherwise. East Campus Commons is <code>public</code>: a ResNet printer in a building every student uses</td></tr>
+    <tr><td><code>notes</code></td><td>text</td><td>Location detail</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>Incidents (derived on load) · outages and warnings</caption>
+    <tr><th>Field</th><th>Type</th><th>Meaning</th></tr>
+    <tr><td><code>station_id</code></td><td>text</td><td>Station</td></tr>
+    <tr><td><code>severity</code></td><td>red / yellow</td><td>Outage (out of service) or warning (degraded)</td></tr>
+    <tr><td><code>start</code>, <code>end</code></td><td>datetime</td><td>First reading showing it; first reading after it cleared</td></tr>
+    <tr><td><code>status</code></td><td>open / resolved</td><td>Shown as Ongoing or Resolved</td></tr>
+    <tr><td><code>censored_start</code></td><td>boolean</td><td>Already open when monitoring began</td></tr>
+    <tr><td><code>duration_s</code></td><td>seconds</td><td>Length, shown in days, hours and minutes</td></tr>
+    <tr><td><code>staffed_s</code>, <code>after_s</code>, <code>wait_s</code></td><td>seconds</td><td>Time inside and outside desk hours; wait until the desk opened</td></tr>
+    <tr><td><code>ref</code></td><td>text</td><td>Permanent reference number (outages only)</td></tr>
+  </table></div>
+  <div class="tbl"><table>
+    <caption>records/ · the product's own records</caption>
+    <tr><th>File</th><th>One line per</th><th>Key fields</th></tr>
+    <tr><td><code>refs.jsonl</code></td><td>Reference number issued</td><td><code>ref</code>, <code>key</code> (station and start), <code>issue</code>, <code>created</code></td></tr>
+    <tr><td><code>investigations.jsonl</code></td><td>Change to an investigation</td><td><code>seq</code>, <code>ts</code>, <code>inv</code>, <code>user</code>, <code>action</code>, <code>changes</code> (old and new), <code>note</code>, <code>prev</code>, <code>hash</code></td></tr>
+    <tr><td><code>system_events.jsonl</code></td><td>App event for the activity feed</td><td><code>kind</code>, <code>title</code>, <code>detail</code>, <code>href</code></td></tr>
+    <tr><td><code>versions.jsonl</code></td><td>Version first run</td><td><code>version</code>, <code>previous</code>, <code>commit</code></td></tr>
+    <tr><td><code>updates.jsonl</code></td><td>Update package change</td><td><code>ref</code> (UPD), <code>state</code>, <code>spec</code></td></tr>
+    <tr><td><code>feedback.jsonl</code></td><td>Feature request change</td><td><code>ref</code> (REQ), <code>kind</code>, <code>state</code>, <code>issue</code></td></tr>
+    <tr><td><code>vulns.json</code> (snapshot)</td><td>Latest vulnerability check</td><td>findings with ids, severity, fix, priority, sources</td></tr>
+    <tr><td><code>security/users.json</code> (snapshot)</td><td>Staff directory</td><td>username, name, email, role, active, resident, hall, phone, scrypt hash, session epoch</td></tr>
+  </table></div>
+</section>
