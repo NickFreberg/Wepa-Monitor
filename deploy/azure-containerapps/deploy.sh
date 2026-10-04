@@ -17,6 +17,9 @@
 #   PEER_KEY=…              shared key for backup collectors (stored as a secret; see docs/SECURITY.md)
 #   GITHUB_UPDATE_TOKEN=…   lets the administrator start software updates from the app (stored as a secret)
 #   GITHUB_ISSUES_TOKEN=…   lets people's feature requests become GitHub issues (stored as a secret)
+#   ANTHROPIC_API_KEY=…     turns on the AI assistant with Claude (stored as a secret); AI_MODEL=… to pick a model
+#   ASK_SECRETS=1           ask for each optional key above with hidden typing (nothing lands in shell history);
+#                           press Enter to skip one and keep what the app already has
 #   REPLICAS=2              run two copies for availability (one collects, the other takes over at once)
 set -euo pipefail
 
@@ -30,7 +33,15 @@ IMAGE="docker.io/library/python:3.12-slim"
 cd "$(git rev-parse --show-toplevel)"
 command -v az >/dev/null 2>&1 || { echo "Install the Azure CLI first: brew install azure-cli" >&2; exit 1; }
 PY=".venv/bin/python"; [ -x "$PY" ] || PY="python3"
-"$PY" -c "import werkzeug" 2>/dev/null || { echo "Run this from the project with its .venv set up (see README)." >&2; exit 1; }
+# Azure Cloud Shell (e.g. from the Azure phone app) has sha1sum rather than macOS's shasum.
+command -v shasum >/dev/null 2>&1 || shasum() { sha1sum "$@"; }
+if [ "${ASK_SECRETS:-0}" = 1 ]; then
+  echo "==> Optional keys (typing is hidden; press Enter to skip one and keep the app's current value)"
+  read -r -s -p "    Claude API key (sk-ant-…): " ANTHROPIC_API_KEY; echo
+  read -r -s -p "    GitHub token for feature requests (Issues: read and write): " GITHUB_ISSUES_TOKEN; echo
+  read -r -s -p "    GitHub token for starting updates (Actions: read and write): " GITHUB_UPDATE_TOKEN; echo
+  read -r -s -p "    Backup-collector key (32+ characters): " PEER_KEY; echo
+fi
 git diff --quiet HEAD -- || echo "Note: uncommitted changes aren't deployed (git archive HEAD)." >&2
 
 echo "==> Checking your Azure sign-in"
@@ -93,6 +104,8 @@ APP_EXISTS=0
 az containerapp show -g "$RESOURCE_GROUP" -n "$APP_NAME" -o none 2>/dev/null && APP_EXISTS=1
 AUTH=""
 if [ "$APP_EXISTS" = 0 ] || [ "${SITE_PASSWORD_RESET:-0}" = 1 ]; then
+  "$PY" -c "import werkzeug" 2>/dev/null || "$PY" -m pip install --user -q werkzeug \
+    || { echo "Setting the site password needs Python's werkzeug: pip install --user werkzeug" >&2; exit 1; }
   echo "==> Choose a username and password for the dashboard (you'll type these in the browser)"
   read -r -p "    Username: " SITE_USER
   while :; do
@@ -166,12 +179,23 @@ else
     az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "github-issues-token=$GITHUB_ISSUES_TOKEN" -o none
     EXTRA_ENV="$EXTRA_ENV WEPA_GITHUB_ISSUES_TOKEN=secretref:github-issues-token"
   fi
+  if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "anthropic-key=$ANTHROPIC_API_KEY" -o none
+    EXTRA_ENV="$EXTRA_ENV WEPA_AI_PROVIDER=anthropic ANTHROPIC_API_KEY=secretref:anthropic-key"
+  fi
+  if [ -n "${AI_MODEL:-}" ]; then
+    EXTRA_ENV="$EXTRA_ENV WEPA_AI_MODEL=$AI_MODEL"
+  fi
+  unset ANTHROPIC_API_KEY GITHUB_ISSUES_TOKEN GITHUB_UPDATE_TOKEN PEER_KEY
   if [ -n "${REPLICAS:-}" ]; then
     az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --min-replicas "$REPLICAS" --max-replicas "$REPLICAS" -o none
   fi
   echo "==> Rolling out the new code (the current copy keeps serving until the new one is ready)"
+  # Apps created before requirements.lock existed: switch their start command to hash-checked installs.
+  START="pip install --no-cache-dir --disable-pip-version-check -q --require-hashes -r /mnt/wepa/app/requirements.lock && cd /mnt/wepa/app && exec gunicorn --bind=0.0.0.0:8000 --workers 1 --threads 8 --timeout 300 wepa_monitor.wsgi:server"
   # shellcheck disable=SC2086
-  az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --set-env-vars "DEPLOYED_AT=$(date +%s)" $EXTRA_ENV -o none
+  az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --command "/bin/sh" "-c" --args "$START" \
+    --set-env-vars "DEPLOYED_AT=$(date +%s)" $EXTRA_ENV -o none
   # Single-revision mode only moves traffic once the new revision passes its startup probe, which
   # waits for the package install (2-5 minutes). The old one then stops; the new one takes over collecting.
   if [ "${SKIP_WAIT:-0}" != 1 ]; then

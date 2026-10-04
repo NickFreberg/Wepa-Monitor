@@ -34,6 +34,26 @@ The script:
 
 The first start takes 2–5 minutes.
 
+## Update from your phone (Azure app → Cloud Shell)
+
+No laptop needed. Cloud Shell is a terminal inside Azure that is already signed in.
+
+1. In the Azure app, open **Cloud Shell** (the `>_` icon) and choose **Bash**.
+2. Get the code and deploy (copy each line exactly):
+
+   ```bash
+   git clone https://github.com/nickfreberg/wepa-monitor.git && cd wepa-monitor
+   ASK_SECRETS=1 ./deploy/azure-containerapps/deploy.sh
+   ```
+
+3. It asks for each optional key with hidden typing. Paste a key and press Enter, or just press Enter to
+   skip it (the app keeps what it already has). Keys go straight into Container Apps secrets; nothing is
+   written to the repository, the screen or the shell history.
+4. Wait for "Done." (2-5 minutes; the site stays up meanwhile), then open the app and check the Software
+   page.
+
+Next time: `cd wepa-monitor && git pull && ./deploy/azure-containerapps/deploy.sh`.
+
 ## Day to day
 
 | Task | How |
