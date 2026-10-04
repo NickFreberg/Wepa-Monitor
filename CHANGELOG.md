@@ -1,0 +1,166 @@
+# Change log
+
+Every release of ResNet Print Ops, newest first, in plain English. Security fixes name the
+vulnerability (CVE or GitHub advisory) with links to the original sources. The app shows this file on
+its Change log page; click a version number in the activity feed to open that release.
+
+Format: one `## [version] - date` heading per release, a one-line summary, then `### New`,
+`### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
+their own entry here through the update pipeline (see docs/SECURITY.md).
+
+## [1.1.0] - 2026-10-04
+The app now watches its own health and security: known vulnerabilities in its packages, software
+updates you can start from the app, backup collectors that cover outages and hand back cleanly, and a
+self-check the assistant can explain.
+
+### New
+- Software page: the running version, what changed in it, every known vulnerability in the installed packages, and a self-check of the whole app.
+- Daily vulnerability check of every installed package against OSV.dev (PyPI and GitHub advisories). Each finding shows its CVE or GHSA number, severity, the version that fixes it, a plain-English summary and links to the sources.
+- Update packages: the app works out which package versions fix the open vulnerabilities, and the administrator can start the update from the app. GitHub then makes the change, runs every test and security scan, and opens a pull request; nothing is installed until it passes and is approved.
+- Change log pages. Software updates appear in the activity feed; click the version to read what changed.
+- Backup collectors: a second computer can stand by, take over collecting within about a minute of the main collector stopping, keep the dashboard current, and step down within a minute of the main collector returning. Every message between them is signed. After handing back it sends what it collected and updates itself to the main app's version.
+- Self-check: collector freshness, data quality, the investigation audit trail, vulnerabilities, version, backups, configuration and disk, in one list. The assistant can run it and answer questions about the app itself.
+- Security documentation (docs/SECURITY.md): threat model, how confidentiality, integrity and availability are protected, attacker-style test results, and known limits.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
+## [1.0.0] - 2026-10-03
+Security hardening ahead of wider use.
+
+### Security
+- Content Security Policy on every page; scripts and styles only from the app itself, maps only from named tile servers.
+- Exact, hash-checked package versions (requirements.lock) for every install, in testing and in Azure.
+- Every push and every day: a known-vulnerability scan of all packages (pip-audit with OSV) and static analysis of the app's code (bandit).
+- XML from outside sources is parsed with defusedxml, which refuses entity-expansion attacks.
+- AI answers are shown without links, images or HTML, so a manipulated answer can't send people elsewhere.
+- Attacker-style tests: signed-out access to every page and file, path tricks, oversize uploads, cross-site form posts and password guessing.
+
+### Sources
+- [commit 6b54580](https://github.com/nickfreberg/wepa-monitor/commit/6b54580)
+
+## [0.8.0] - 2026-10-03
+Investigations, permanent reference numbers and named staff accounts.
+
+### New
+- Investigations (INV numbers): root-cause records for recurring hardware problems, with a governed workflow, impact rating, tamper-evident history and an evidence PDF for Wepa.
+- Permanent reference numbers for every outage, jam, paper and supply event (OUT, JAM, PAP, SUP, ERR).
+- Staff directory with a sign-in page, secure sessions, profile pictures and phone numbers, managed by the administrator from the command line.
+- Lifecycle metrics: time in each investigation state, send-backs, reassignments and time spent.
+
+### Sources
+- [commit 8b1bd13](https://github.com/nickfreberg/wepa-monitor/commit/8b1bd13)
+- [commit b75a014](https://github.com/nickfreberg/wepa-monitor/commit/b75a014)
+- [commit e2eb598](https://github.com/nickfreberg/wepa-monitor/commit/e2eb598)
+
+## [0.7.0] - 2026-10-03
+New analyses, student status pages and an executive status vocabulary.
+
+### New
+- Shared outages: several printers going down together, told apart from busy moments.
+- Student status pages with printable QR signs.
+- Busy-weighted downtime and supply reorder points.
+- A test of whether humid weather goes with more paper jams.
+- A case study and refreshed screenshots.
+
+### Changed
+- Status words: Operational, Degraded, Out of service, No signal; Ongoing and Resolved; "Support unavailable until …" when the help desk is closed.
+
+### Sources
+- [commit 324d114](https://github.com/nickfreberg/wepa-monitor/commit/324d114)
+- [commit b9ed73b](https://github.com/nickfreberg/wepa-monitor/commit/b9ed73b)
+- [commit 4a18f27](https://github.com/nickfreberg/wepa-monitor/commit/4a18f27)
+- [commit e12899e](https://github.com/nickfreberg/wepa-monitor/commit/e12899e)
+- [commit e36a147](https://github.com/nickfreberg/wepa-monitor/commit/e36a147)
+
+## [0.6.0] - 2026-10-03
+The AI analyst and the outage-risk model.
+
+### New
+- Claude as an AI provider, and an Assistant pane on every page.
+- The assistant works as an analyst: read-only tools over all the data, an expert brief, and a fact check of every number it writes.
+- An outage-risk machine-learning model that is only shown when it beats a simple baseline.
+- Continuous integration: lint and the full test suite on every push.
+
+### Sources
+- [commit be5dbfe](https://github.com/nickfreberg/wepa-monitor/commit/be5dbfe)
+- [commit 60af0d7](https://github.com/nickfreberg/wepa-monitor/commit/60af0d7)
+- [commit e9ab685](https://github.com/nickfreberg/wepa-monitor/commit/e9ab685)
+- [commit 05b46d4](https://github.com/nickfreberg/wepa-monitor/commit/05b46d4)
+- [commit a25a893](https://github.com/nickfreberg/wepa-monitor/commit/a25a893)
+
+## [0.5.0] - 2026-10-03
+New header, System and IT Outcomes pages, deeper analytics and AI summaries.
+
+### New
+- Appearance menu, data export, the System page and the IT Outcomes report.
+- Availability through the day, what cost the most printing time, usage and report-card tabs.
+- AI-written summaries (GitHub Copilot or any OpenAI-compatible service).
+- Planning and deeper statistics, and class schedules from BSU's course search.
+
+### Changed
+- Clearer fault types; outages told as stories; backups measured in miles; no dollar costs.
+
+### Sources
+- [commit 77bbe72](https://github.com/nickfreberg/wepa-monitor/commit/77bbe72)
+- [commit 4a4d8a5](https://github.com/nickfreberg/wepa-monitor/commit/4a4d8a5)
+- [commit 209ba85](https://github.com/nickfreberg/wepa-monitor/commit/209ba85)
+- [commit 9c6dae7](https://github.com/nickfreberg/wepa-monitor/commit/9c6dae7)
+- [commit bf2bc01](https://github.com/nickfreberg/wepa-monitor/commit/bf2bc01)
+
+## [0.4.0] - 2026-10-02
+Running in Azure.
+
+### New
+- Azure deployment: App Service, a virtual machine, and Azure Container Apps (the one in use).
+- An optional site login.
+- Importing data collected on another computer.
+- Zero-downtime deploys.
+
+### Fixed
+- A crash in the first hour of data.
+
+### Sources
+- [commit 4ad2ad9](https://github.com/nickfreberg/wepa-monitor/commit/4ad2ad9)
+- [commit f569e12](https://github.com/nickfreberg/wepa-monitor/commit/f569e12)
+- [commit 2bf8a9f](https://github.com/nickfreberg/wepa-monitor/commit/2bf8a9f)
+- [commit e9e44ff](https://github.com/nickfreberg/wepa-monitor/commit/e9e44ff)
+
+## [0.3.0] - 2026-10-02
+Plain-language stories, campus context and route planning.
+
+### New
+- Plain-language stories, "Ask the data", click-to-explain charts and support desk hours.
+- Campus context from bridgew.edu: the academic calendar, residence halls and library hours.
+- Rounds: a route planner for printer visits, on foot or by transit van.
+
+### Sources
+- [commit b25af8f](https://github.com/nickfreberg/wepa-monitor/commit/b25af8f)
+- [commit cfdf818](https://github.com/nickfreberg/wepa-monitor/commit/cfdf818)
+- [commit 2d97787](https://github.com/nickfreberg/wepa-monitor/commit/2d97787)
+
+## [0.2.0] - 2026-10-01
+A production server, the dashboard's structure and forecasts.
+
+### New
+- Day rollups and a production web server.
+- Sidebar navigation, drill-through to each station, the activity feed and the BSU theme.
+- Forecasts and statistical models.
+
+### Sources
+- [commit d5c73fc](https://github.com/nickfreberg/wepa-monitor/commit/d5c73fc)
+- [commit 76242d4](https://github.com/nickfreberg/wepa-monitor/commit/76242d4)
+- [commit 684fe5c](https://github.com/nickfreberg/wepa-monitor/commit/684fe5c)
+
+## [0.1.0] - 2026-10-01
+The monitor rebuilt: a once-a-minute snapshot of Wepa's status page and a web dashboard.
+
+### New
+- A snapshot pipeline and web dashboard.
+- A campus map with building locations and a Google Earth export.
+- One command to collect and view, with macOS setup instructions.
+
+### Sources
+- [commit 49af3c7](https://github.com/nickfreberg/wepa-monitor/commit/49af3c7)
+- [commit 026d285](https://github.com/nickfreberg/wepa-monitor/commit/026d285)
+- [commit dd74bcc](https://github.com/nickfreberg/wepa-monitor/commit/dd74bcc)

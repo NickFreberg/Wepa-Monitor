@@ -177,8 +177,15 @@ def activity_list(ev: pd.DataFrame, show_date: bool = False) -> html.Ul:
     for r in ev.itertuples(index=False):
         local = r.ts.tz_convert(config.LOCAL_TZ)
         when = local.strftime("%b %-d, %-I:%M %p") if show_date else local.strftime("%-I:%M %p")
-        title = station_link(r.station_id, r.title, "feed__title") if r.station_id else \
-            html.Span(r.title, className="feed__title")
+        href = getattr(r, "href", "") or ""
+        if r.station_id:
+            title = station_link(r.station_id, r.title, "feed__title")
+        elif href.startswith("/"):
+            title = dcc.Link(r.title, href=href, className="feed__title link")
+        elif href.startswith("https://"):
+            title = html.A(r.title, href=href, target="_blank", rel="noopener noreferrer", className="feed__title link")
+        else:
+            title = html.Span(r.title, className="feed__title")
         items.append(html.Li(className=f"feed__item feed__item--{r.severity}", children=[
             html.Span(icon(SEV_ICON.get(r.severity, "info")), className="feed__icon"),
             html.Div([title, html.Div(r.detail, className="feed__detail") if r.detail else None],

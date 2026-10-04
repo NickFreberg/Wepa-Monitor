@@ -210,6 +210,10 @@ class Toolkit:
                  "location, root cause, actions, Wepa case and ITSM references. Read-only. Give a reference for one "
                  "investigation's full record, or nothing for the list.",
                  {"ref": {"type": "string", "description": "Optional: an INV reference"}}, self.investigations),
+            Tool("self_check", "The app's check of itself: collector freshness, data quality, the investigation "
+                 "audit trail, sign-in and security settings, known vulnerabilities in its packages (CVE numbers, "
+                 "fixes), the running version and what changed in it, update packages and backup collectors. Use "
+                 "for any question about the app itself.", {}, self.self_check),
             Tool("ask_dashboard", "The dashboard's own built-in answer to a plain-English question (a quick "
                  "cross-check, or for things like hall support contacts).",
                  {"question": {"type": "string"}}, self.ask_dashboard, ["question"]),
@@ -664,6 +668,22 @@ class Toolkit:
         return _table(t, {"ref": "reference", "title": "name", "state": "state", "location": "kiosk location",
                           "assignee": "assigned to", "archived": "archived"}, n=40,
                       title=f"{len(t)} investigation(s), newest first.")
+
+    def self_check(self) -> str:
+        from . import __version__, selfcheck, updates, vulns
+        checks = selfcheck.run(self.ds)
+        _, sentence = selfcheck.summary(checks)
+        lines = [f"Self-check: {sentence}"]
+        lines += [f"- [{c.status.upper()}] {c.area} / {c.name}: {c.detail}" + (f" (To fix: {c.fix})" if c.fix else "")
+                  for c in checks]
+        rel = updates.release(__version__)
+        if rel:
+            lines.append(f"Version {__version__} ({rel.date}) change summary: {rel.summary}")
+        for f in vulns.findings(self.ds.data_dir)[:10]:
+            lines.append(f"- Vulnerability {f.headline_id} ({', '.join(f.ids[1:3])}) in {f.package} {f.installed}, "
+                         f"{f.severity}: {f.summary} Fixed in: {f.fixed or 'no fix yet'}."
+                         + (" (install tool, not used by the running app)" if f.tooling else ""))
+        return "\n".join(lines)
 
     def ask_dashboard(self, question) -> str:
         from . import ask, narrative as N

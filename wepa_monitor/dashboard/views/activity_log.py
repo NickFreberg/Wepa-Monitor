@@ -9,7 +9,7 @@ from ..components import headline, icon, segmented
 from .common import empty, scope_ids
 from .overview import activity_list
 
-GROUPS = ["Status", "Paper", "Parts", "Monitoring"]
+GROUPS = ["Status", "Paper", "Parts", "Monitoring", "System"]
 MAX_ROWS = 400
 QUICK = [("Today", 0), ("Last 7 days", 7), ("Last 30 days", 30), ("Everything", -1)]
 TZ = config.LOCAL_TZ
@@ -44,7 +44,7 @@ def layout(ds: M.Dataset, params: dict):
                   for t, d in QUICK], className="quick"),
         html.Div([icon("search"), dcc.Input(id="ac-q", type="search", placeholder="Search activity",
                                             value=params.get("q", ""), debounce=0.25, className="search__input")], className="search"),
-        segmented("ac-groups", [{"label": g, "value": g} for g in GROUPS], ["Status", "Parts", "Monitoring"],
+        segmented("ac-groups", [{"label": g, "value": g} for g in GROUPS], ["Status", "Parts", "Monitoring", "System"],
                   multi=True),
     ]), dcc.Loading(html.Div(id="ac-body"), type="dot", delay_show=500)]
 
@@ -76,7 +76,8 @@ def render(ds: M.Dataset, scope, d0, d1, groups, query):
     counts = ev["kind"].value_counts()
     parts = [f"{counts[k]:,} {text}" for k, text in (
         ("down", "outages"), ("warning", "warnings"), ("replaced", "parts replaced"),
-        ("tray_empty", "trays ran empty"), ("data_gap", "monitoring gaps")) if counts.get(k, 0)]
+        ("tray_empty", "trays ran empty"), ("data_gap", "monitoring gaps"),
+        ("software_updated", "software updates")) if counts.get(k, 0)]
     summary = f"{len(ev):,} events, {span}" + (": " + ", ".join(parts) if parts else "") + "."
     shown = ev.head(MAX_ROWS)
     local_day = shown["ts"].dt.tz_convert(TZ).dt.date

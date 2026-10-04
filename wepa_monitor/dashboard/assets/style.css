@@ -965,3 +965,26 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .inv-tile__value { font-size: 20px; font-weight: 750; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .inv-tile__sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .inv-subhead { margin: 14px 0 6px; font-size: 14px; }
+
+/* --- Software page and change log --------------------------------------------------------------- */
+.sw-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sw-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.sw-start { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.sw-start .acct-input { width: 220px; max-width: 100%; }
+.vuln-list { display: grid; gap: 8px; }
+.vuln { border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 12px; background: var(--surface); }
+.vuln[open] { box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+.vuln__head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; cursor: pointer; list-style: none; }
+.vuln__head::-webkit-details-marker { display: none; }
+.vuln p { margin: 10px 0 4px; }
+.vuln__links { font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.changelog { margin-bottom: 14px; }
+.changelog__head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; margin-bottom: 4px; }
+.changelog__ver { font-size: 18px; font-weight: 800; color: var(--ink); text-decoration: none; }
+.changelog__ver:hover { text-decoration: underline; }
+.changelog h4 { margin: 14px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.changelog__list { margin: 0; padding-left: 20px; }
+.changelog__list li { margin: 3px 0; }
+.md-inline p { margin: 0; display: inline; }
+.changelog__nav { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
+.inv-state--critical { background: color-mix(in srgb, var(--critical) 16%, transparent); color: var(--critical-text); }

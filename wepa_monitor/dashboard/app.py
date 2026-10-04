@@ -19,7 +19,7 @@ from .. import activity, config, export, geo, metrics as M, routing, security
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
-from .views import account_view, assistant, investigations_view
+from .views import account_view, assistant, investigations_view, software
 from .views import (activity_log, analytics, executive, insights_view, outcomes, overview, rounds, station,
                     stations, system)
 from .views.common import PERIODS, area_key
@@ -28,7 +28,7 @@ NAV = [("/", "Overview", "home"), ("/insights", "Insights", "sparkle"), ("/round
        ("/stations", "Stations", "grid"), ("/analytics", "Analytics", "chart"),
        ("/executive", "Executive", "briefcase"), ("/outcomes", "IT Outcomes", "award"),
        ("/investigations", "Investigations", "search"),
-       ("/system", "System", "pulse")]
+       ("/system", "System", "pulse"), ("/software", "Software", "shield")]
 PAGE_META = {
     "/": ("Overview", "What needs attention right now."),
     "/insights": ("Insights", "The story behind the numbers. Pick a time range, or ask a question."),
@@ -43,6 +43,10 @@ PAGE_META = {
     "/account": ("My account", "Your picture, contact phone and password."),
     "/directory": ("Directory", "Everyone with an account, managed centrally by the administrator."),
     "/investigation": ("Investigation", "One investigation: its record, decisions and audit trail."),
+    "/software": ("Software", "The running version, known vulnerabilities, updates, backup collectors and a "
+                              "self-check of the whole app."),
+    "/changelog": ("Change log", "What changed in each version, in plain English, with sources."),
+    "/release": ("Change log", "What changed in this version, in plain English, with sources."),
 }
 USES_PERIOD = {"/analytics", "/station"}
 USES_SCOPE = {"/", "/insights", "/stations", "/analytics", "/executive", "/activity", "/outcomes"}
@@ -136,6 +140,8 @@ def _route(path: str | None) -> str:
         return "/station"
     if path.startswith("/investigations/"):
         return "/investigation"
+    if path.startswith("/changelog/"):
+        return "/release"
     return {"/management": "/analytics", "/operations": "/", "/quality": "/system"}.get(path, path)
 
 
@@ -343,6 +349,13 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     app.server.config["WEPA_CACHE"] = cache
     security.install(app.server, data_dir)
     _harden(app)
+    from .. import peer, sysevents, updates
+    sysevents.configure(data_dir)
+    peer.install(app.server, data_dir)
+    try:
+        updates.record_running(data_dir)
+    except OSError as exc:
+        security.log(f"couldn't record the running version: {exc}", "warn")
     from . import public
     public.register(app.server, cache)
 
@@ -383,7 +396,9 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         links = [dcc.Link([icon(ic), html.Span(label)], href=href, title=label,
                           className="nav__link" + (" is-active" if route == href or
                                                    (href == "/stations" and route == "/station") or
-                                                   (href == "/investigations" and route == "/investigation") else ""))
+                                                   (href == "/investigations" and route == "/investigation") or
+                                                   (href == "/software" and route in ("/changelog", "/release"))
+                                                   else ""))
                  for href, label, ic in NAV]
         if route == "/station":
             title, sub = "Station", "Status, history and consumables for one print station."
@@ -476,6 +491,12 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return account_view.directory()
         if route == "/investigation":
             return investigations_view.detail_layout((path or "").rstrip("/").rsplit("/", 1)[-1])
+        if route == "/software":
+            return software.layout()
+        if route == "/changelog":
+            return software.changelog_layout()
+        if route == "/release":
+            return software.changelog_layout((path or "").rstrip("/").rsplit("/", 1)[-1])
         return html.Div([html.P("That page doesn't exist."), dcc.Link("Go to the overview", href="/", className="link")],
                         className="empty empty--page")
 
@@ -688,6 +709,20 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         return dcc.send_bytes(data, filename, type=mime), f"Downloaded {filename}"
 
     # --- my account ----------------------------------------------------------------------------------
+    @app.callback(Output("sw-body", "children"), Input("sw-tick", "n_intervals"), Input("sw-msg", "children"))
+    def sw_body(_, __):
+        return software.render(cache.get())
+
+    @app.callback(Output("sw-msg", "children"), Output("sw-pw", "value"),
+                  Input("sw-check", "n_clicks"), Input("sw-prepare", "n_clicks"), Input("sw-start", "n_clicks"),
+                  State("sw-pw", "value"), prevent_initial_call=True)
+    def sw_act(_c, _p, _s, pw):
+        trig = ctx.triggered_id
+        if not trig:
+            raise PreventUpdate
+        msg, tone = software.act(cache.get(), trig, pw)
+        return html.Span(msg, className="inv-ok" if tone == "ok" else "inv-err"), ""
+
     @app.callback(Output("acct-body", "children"), Input("url", "pathname"))
     def acct_body(path):
         if _route(path) != "/account":

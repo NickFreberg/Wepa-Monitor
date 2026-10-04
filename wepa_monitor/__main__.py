@@ -10,6 +10,8 @@
     python -m wepa_monitor campus [--force]    refresh calendar, hall and library data from bridgew.edu
     python -m wepa_monitor network             rebuild the campus walking/driving network from OpenStreetMap
     python -m wepa_monitor export --tag mac    package local data for import into another collector's folder
+    python -m wepa_monitor backup --primary URL  stand by as a backup collector (takes over if the main one stops)
+    python -m wepa_monitor selfcheck           the app's check of itself (add --vulns to look up packages now)
 """
 from __future__ import annotations
 
@@ -37,8 +39,11 @@ def main(argv: list[str] | None = None) -> int:
                        help="also keep a gzipped copy of each raw page (about 7 MB/day)")
     sub.add_parser("compact", help="compact finished days to parquet")
     sub.add_parser("train-risk", help="train and evaluate the outage-risk model now")
-    from . import cli_users
+    from . import cli_users, peer
     cli_users.add_parser(sub)
+    peer.add_parser(sub)
+    sc = sub.add_parser("selfcheck", help="check every part of the app: collector, data, records, security, versions")
+    sc.add_argument("--vulns", action="store_true", help="also look up installed packages in OSV.dev now")
     sub.add_parser("network", help="rebuild the campus walking/driving network from OpenStreetMap")
     exp = sub.add_parser("export", help="package local data as import files for another collector's data folder")
     exp.add_argument("--tag", default="import", help="letters/digits naming this source, e.g. mac")
@@ -124,6 +129,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "users":
         return cli_users.run(args)
+
+    if args.cmd == "backup":
+        return peer.run_cli(args)
+
+    if args.cmd == "selfcheck":
+        from . import metrics, selfcheck, vulns
+        data_dir = args.data_dir or config.LIVE_DATA_DIR
+        if args.vulns:
+            vulns.refresh(data_dir, force=True)
+        ds = metrics.load(data_dir) if (data_dir / "snapshots").exists() else None
+        checks = selfcheck.run(ds, data_dir)
+        mark = {"ok": "OK  ", "warn": "WARN", "fail": "FAIL", "info": "note"}
+        for c in checks:
+            print(f"  {mark[c.status]}  {c.name:<28} {c.detail}" + (f"\n        -> {c.fix}" if c.fix else ""))
+        tone, sentence = selfcheck.summary(checks)
+        print(f"\n{sentence}")
+        return 1 if tone == "critical" else 0
 
     if args.cmd == "train-risk":
         from . import metrics, risk

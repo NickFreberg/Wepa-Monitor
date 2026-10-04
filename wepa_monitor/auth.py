@@ -26,7 +26,7 @@ from urllib.parse import quote, urlparse
 
 IDLE_S = 2 * 3600
 ABSOLUTE_S = 12 * 3600
-OPEN_PATHS = ("/login", "/logout", "/assets/bsu-bear.png", "/favicon.ico", "/_admin/")
+OPEN_PATHS = ("/login", "/logout", "/assets/bsu-bear.png", "/favicon.ico", "/_admin/", "/_peer/")
 
 
 def enabled() -> bool:

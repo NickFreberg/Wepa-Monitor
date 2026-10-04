@@ -29,7 +29,7 @@ PREFIX = {"not_reachable": "OUT", "offline": "OUT", "paper_jam": "JAM", "paper_o
           "tray_missing": "PAP", "toner_empty": "SUP", "drum_end": "SUP"}
 DEFAULT_PREFIX = "ERR"
 KINDS = {"OUT": "Unreachable", "JAM": "Jammed", "PAP": "Paper", "SUP": "Consumable out", "ERR": "Hardware or system",
-         "INV": "Investigation"}
+         "INV": "Investigation", "UPD": "Software update"}
 DIGITS = 9
 
 _lock = threading.Lock()

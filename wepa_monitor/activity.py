@@ -9,22 +9,25 @@ from __future__ import annotations
 
 import pandas as pd
 
-from . import config, rules
+from . import config, rules, sysevents
 from .metrics import Dataset
 
-COLUMNS = ["ts", "kind", "severity", "station_id", "station", "building", "title", "detail"]
+COLUMNS = ["ts", "kind", "severity", "station_id", "station", "building", "title", "detail", "href"]
 
 KIND_LABEL = {
     "down": "Outage began", "recovered": "Resolved", "warning": "Degraded", "warning_cleared": "Restored",
     "replaced": "Part replaced", "tray_empty": "Tray empty", "tray_refilled": "Tray refilled",
     "data_gap": "Monitoring gap", "data_restored": "Monitoring restored",
+    **{k: v[0] for k, v in sysevents.KINDS.items()},
 }
 KIND_GROUP = {
     "down": "Status", "recovered": "Status", "warning": "Status", "warning_cleared": "Status",
     "replaced": "Parts", "tray_empty": "Paper", "tray_refilled": "Paper",
     "data_gap": "Monitoring", "data_restored": "Monitoring",
+    **{k: "System" for k in sysevents.KINDS},
 }
-NOTIFY_KINDS = {"down", "recovered", "data_gap", "data_restored"}
+NOTIFY_KINDS = {"down", "recovered", "data_gap", "data_restored", "backup_active", "backup_handover",
+                "software_updated", "vuln_found"}
 MIN_GAP_MINUTES = 5
 
 
@@ -51,10 +54,10 @@ def events(ds: Dataset, since: pd.Timestamp | None = None, ids=None) -> pd.DataF
     building = ds.stations.set_index("station_id")["building"].to_dict()
     rows: list[dict] = []
 
-    def add(ts, kind, severity, sid, title, detail=""):
+    def add(ts, kind, severity, sid, title, detail="", href=""):
         rows.append({"ts": ts, "kind": kind, "severity": severity, "station_id": sid or "",
                      "station": label.get(sid, sid or ""), "building": building.get(sid, ""),
-                     "title": title, "detail": detail})
+                     "title": title, "detail": detail, "href": href})
 
     # What each red incident was about: the fault codes that opened with it.
     faults = ds.fault_inc[["station_id", "start", "code", "detail"]]
@@ -113,6 +116,9 @@ def events(ds: Dataset, since: pd.Timestamp | None = None, ids=None) -> pd.DataF
 
     if ids is None:
         _monitoring_gaps(ds, since, add)
+        # The app's own events: software updates, vulnerabilities, backup collectors.
+        for r in sysevents.frame(ds.data_dir, since).itertuples(index=False):
+            add(r.ts, r.kind, r.severity, None, r.title, r.detail, r.href)
 
     if not rows:
         return pd.DataFrame(columns=COLUMNS)

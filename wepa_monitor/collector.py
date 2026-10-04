@@ -42,6 +42,15 @@ def _retrain_risk(data_dir: Path) -> None:
         print(f"outage-risk retrain skipped: {type(exc).__name__}: {exc}", flush=True)
 
 
+def _check_vulnerabilities(data_dir: Path) -> None:
+    """Daily: look up every installed package in OSV.dev (a no-op if checked in the last 24 h)."""
+    try:
+        from . import vulns
+        vulns.refresh(data_dir, log=lambda m: print(m, flush=True))
+    except Exception as exc:  # noqa: BLE001 - optional; the collector carries on
+        print(f"vulnerability check skipped: {type(exc).__name__}: {exc}", flush=True)
+
+
 def collect_forever(data_dir: Path, archive_html: bool = False, quiet: bool = False) -> None:
     """Scrape on every minute boundary; once a day, compact finished days and refresh campus data."""
     last_compact = None
@@ -59,6 +68,7 @@ def collect_forever(data_dir: Path, archive_html: bool = False, quiet: bool = Fa
                 courses.refresh(log=lambda m: print(m, flush=True))      # monthly; a no-op otherwise
                 _refresh_weather(data_dir)
                 _retrain_risk(data_dir)
+                _check_vulnerabilities(data_dir)
                 last_compact = today
         except Exception as exc:  # noqa: BLE001 - a disk hiccup must not kill the collector thread
             print(f"collector error: {type(exc).__name__}: {exc}", flush=True)

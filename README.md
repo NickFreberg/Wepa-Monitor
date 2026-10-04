@@ -181,6 +181,13 @@ any chart, and every chart carries a one-line takeaway in plain words.
 - **System:** is the monitor healthy (a picture of the moving parts with live status), a read-only
   live log, data quality, who's using the site (visits anonymized to the network) and sign-in security
   (failed sign-ins without passwords, temporary blocks after repeated failures), and AI status.
+- **Software:** the app's check of itself (collector, data quality, audit trail, sign-in, versions,
+  backups, disk), every known vulnerability in its installed packages (CVE/GHSA numbers, severity, the
+  fixing version, plain-English summary and sources, checked daily against OSV.dev), update packages the
+  administrator can start (GitHub builds, tests and opens a pull request; the app never rewrites itself),
+  backup collectors, and the **Change log** (click any version in the activity feed). See
+  [docs/SECURITY.md](docs/SECURITY.md) for the threat model, how confidentiality, integrity and
+  availability are protected, the attacker-style tests, backup-collector setup and known limits.
 
 **Header**, on every page: the **filter** (sections, areas, or search for specific stations), the
 **period** where it applies, **Export** (the current filter and period as CSV, Excel, JSON or PDF),
@@ -445,6 +452,11 @@ wepa_monitor/
   narrative.py     plain-language stories for any period
   ask.py           "Ask the data": a rule-based question interpreter (no AI model)
   analyst.py       the AI analyst's read-only tools over all the data (used only when AI is on)
+  vulns.py         daily known-vulnerability check of installed packages (OSV.dev), with plain-English findings
+  updates.py       version history, CHANGELOG.md parsing, update packages (GitHub workflow_dispatch)
+  peer.py          backup collectors: signed handshake, failover, handback upload, self-update
+  selfcheck.py     the app's check of itself (Software page, CLI, and the assistant's self_check tool)
+  sysevents.py     the app's own events (updates, vulnerabilities, backups) for the activity feed
   risk.py          outage-risk machine learning: features, walk-forward test vs a baseline, go-live gate
   campus.py        bridgew.edu parsers (academic calendar, residence halls, library hours) and day phases
   routing.py       Rounds planner: campus graph from OpenStreetMap, Dijkstra, stop ordering, van parking

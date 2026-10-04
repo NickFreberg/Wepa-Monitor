@@ -14,6 +14,9 @@
 #   SITE_PASSWORD_RESET=1   set a new site username/password on this run
 #   LOCATION=eastus2        region (default: eastus, then a few fallbacks on the first run)
 #   SKIP_WAIT=1             don't wait for the restarted app to answer
+#   PEER_KEY=…              shared key for backup collectors (stored as a secret; see docs/SECURITY.md)
+#   GITHUB_UPDATE_TOKEN=…   lets the administrator start software updates from the app (stored as a secret)
+#   REPLICAS=2              run two copies for availability (one collects, the other takes over at once)
 set -euo pipefail
 
 RESOURCE_GROUP="${RESOURCE_GROUP:-rg-resnet-print-ops}"
@@ -71,6 +74,9 @@ az containerapp env storage set -g "$RESOURCE_GROUP" -n "$ENV_NAME" --storage-na
 echo "==> Uploading the committed code"
 WORKDIR="$(mktemp -d)"; trap 'rm -rf "$WORKDIR"' EXIT
 mkdir -p "$WORKDIR/app" && git archive HEAD | tar -x -C "$WORKDIR/app"
+# Which commit is running, for the Software page and the backup collectors' version handshake.
+printf '{"commit": "%s", "built_at": "%s"}\n' "$(git rev-parse --short HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > "$WORKDIR/app/build.json"
 # Files are overwritten in place, not deleted first, so the running copy never finds its code missing.
 # CLEAN=1 removes files that no longer exist in the repo (brief gap for the running copy).
 if [ "${CLEAN:-0}" = 1 ]; then
@@ -145,8 +151,22 @@ else
   if [ -n "$AUTH" ]; then
     az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "basic-auth=$AUTH" -o none
   fi
+  # Optional secrets: kept as Container Apps secrets, passed to the app by reference, never in plain env.
+  EXTRA_ENV=""
+  if [ -n "${PEER_KEY:-}" ]; then
+    az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "peer-key=$PEER_KEY" -o none
+    EXTRA_ENV="$EXTRA_ENV WEPA_PEER_KEY=secretref:peer-key"
+  fi
+  if [ -n "${GITHUB_UPDATE_TOKEN:-}" ]; then
+    az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "github-token=$GITHUB_UPDATE_TOKEN" -o none
+    EXTRA_ENV="$EXTRA_ENV WEPA_GITHUB_TOKEN=secretref:github-token"
+  fi
+  if [ -n "${REPLICAS:-}" ]; then
+    az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --min-replicas "$REPLICAS" --max-replicas "$REPLICAS" -o none
+  fi
   echo "==> Rolling out the new code (the current copy keeps serving until the new one is ready)"
-  az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --set-env-vars "DEPLOYED_AT=$(date +%s)" -o none
+  # shellcheck disable=SC2086
+  az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --set-env-vars "DEPLOYED_AT=$(date +%s)" $EXTRA_ENV -o none
   # Single-revision mode only moves traffic once the new revision passes its startup probe, which
   # waits for the package install (2-5 minutes). The old one then stops; the new one takes over collecting.
   if [ "${SKIP_WAIT:-0}" != 1 ]; then

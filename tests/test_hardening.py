@@ -40,8 +40,8 @@ def test_every_route_needs_a_session(app):
         path = _concrete(rule.rule)
         for method in sorted(rule.methods - {"HEAD", "OPTIONS"}):
             r = c.open(path, method=method)
-            if path in OPEN:
-                continue
+            if path in OPEN or (path.startswith("/_peer/") and r.status_code in (401, 404)):
+                continue                        # backup-collector API: signed requests only (404 when off)
             assert r.status_code in (302, 400, 401, 403), f"{method} {rule.rule} answered {r.status_code} without sign-in"
             assert b"Boyden" not in r.data and b"printer" not in r.data.lower()[:0] or True
 

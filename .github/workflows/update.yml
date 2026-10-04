@@ -1,0 +1,82 @@
+name: Software update package
+
+# Started from the app's Software page (or by hand from the Actions tab). Builds the update on its own
+# branch, runs every test and security scan, and opens a pull request for review. Nothing is deployed
+# from here: merging the pull request and the normal deploy do that.
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Upgrades, space-separated name==version (from the app's update package)"
+        required: true
+      ticket:
+        description: "Update package reference (UPD#########)"
+        required: false
+        default: ""
+      requested_by:
+        description: "Who started it in the app"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: software-update
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check the request
+        env:
+          PACKAGES: ${{ inputs.packages }}
+          TICKET: ${{ inputs.ticket }}
+        run: |
+          for p in $PACKAGES; do
+            echo "$p" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9._-]*==[A-Za-z0-9][A-Za-z0-9.+!_-]*$' || { echo "bad package spec: $p"; exit 1; }
+          done
+          [ -z "$TICKET" ] || echo "$TICKET" | grep -Eq '^UPD[0-9]{9}$' || { echo "bad ticket"; exit 1; }
+      - name: Prepare the update (versions, lock file, change log)
+        env:
+          PACKAGES: ${{ inputs.packages }}
+          TICKET: ${{ inputs.ticket }}
+          BY: ${{ inputs.requested_by }}
+        run: |
+          pip install uv requests packaging
+          python scripts/prepare_update.py $PACKAGES --ticket "$TICKET" --by "$BY"
+      - name: Install exactly what will ship
+        run: |
+          python -m pip install --upgrade pip
+          pip install --require-hashes -r requirements.lock
+          pip install ruff pip-audit bandit
+      - name: Lint and test
+        run: |
+          ruff check wepa_monitor tests scripts
+          pytest -q
+      - name: Security scans
+        run: |
+          pip-audit --disable-pip --require-hashes -r requirements.lock --vulnerability-service osv
+          bandit -q -r wepa_monitor -ll
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TICKET: ${{ inputs.ticket }}
+        run: |
+          VERSION=$(python -c "import wepa_monitor; print(wepa_monitor.__version__)")
+          BRANCH="update/${TICKET:-manual}-$VERSION"
+          git config user.name "wepa-monitor update bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add requirements.txt requirements.lock CHANGELOG.md wepa_monitor/__init__.py
+          git commit -m "$(head -1 update-pr.md)"
+          git push -u origin "$BRANCH"
+          gh pr create --title "$(head -1 update-pr.md)" --body-file update-pr.md --base "${{ github.ref_name }}"
