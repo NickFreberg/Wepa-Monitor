@@ -187,14 +187,24 @@ else
     EXTRA_ENV="$EXTRA_ENV WEPA_AI_MODEL=$AI_MODEL"
   fi
   unset ANTHROPIC_API_KEY GITHUB_ISSUES_TOKEN GITHUB_UPDATE_TOKEN PEER_KEY
+  # Secrets saved on an earlier run are wired up again without asking for them (rerunning is safe).
+  SECRETS=" $(az containerapp secret list -g "$RESOURCE_GROUP" -n "$APP_NAME" --query "[].name" -o tsv 2>/dev/null | tr '\n' ' ') "
+  case "$SECRETS" in *" anthropic-key "*) case "$EXTRA_ENV" in *ANTHROPIC_API_KEY*) ;; *)
+    EXTRA_ENV="$EXTRA_ENV WEPA_AI_PROVIDER=anthropic ANTHROPIC_API_KEY=secretref:anthropic-key" ;; esac ;; esac
+  case "$SECRETS" in *" github-issues-token "*) case "$EXTRA_ENV" in *WEPA_GITHUB_ISSUES_TOKEN*) ;; *)
+    EXTRA_ENV="$EXTRA_ENV WEPA_GITHUB_ISSUES_TOKEN=secretref:github-issues-token" ;; esac ;; esac
+  case "$SECRETS" in *" github-token "*) case "$EXTRA_ENV" in *WEPA_GITHUB_TOKEN=*) ;; *)
+    EXTRA_ENV="$EXTRA_ENV WEPA_GITHUB_TOKEN=secretref:github-token" ;; esac ;; esac
+  case "$SECRETS" in *" peer-key "*) case "$EXTRA_ENV" in *WEPA_PEER_KEY*) ;; *)
+    EXTRA_ENV="$EXTRA_ENV WEPA_PEER_KEY=secretref:peer-key" ;; esac ;; esac
   if [ -n "${REPLICAS:-}" ]; then
     az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --min-replicas "$REPLICAS" --max-replicas "$REPLICAS" -o none
   fi
   echo "==> Rolling out the new code (the current copy keeps serving until the new one is ready)"
-  # Apps created before requirements.lock existed: switch their start command to hash-checked installs.
-  START="pip install --no-cache-dir --disable-pip-version-check -q --require-hashes -r /mnt/wepa/app/requirements.lock && cd /mnt/wepa/app && exec gunicorn --bind=0.0.0.0:8000 --workers 1 --threads 8 --timeout 300 wepa_monitor.wsgi:server"
+  # Start through start.sh (hash-checked installs); also moves apps created before it existed over to it.
   # shellcheck disable=SC2086
-  az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --command "/bin/sh" "-c" --args "$START" \
+  az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --command "/bin/sh" \
+    --args "/mnt/wepa/app/deploy/azure-containerapps/start.sh" \
     --set-env-vars "DEPLOYED_AT=$(date +%s)" $EXTRA_ENV -o none
   # Single-revision mode only moves traffic once the new revision passes its startup probe, which
   # waits for the package install (2-5 minutes). The old one then stops; the new one takes over collecting.
