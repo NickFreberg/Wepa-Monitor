@@ -174,6 +174,81 @@
     };
   })();
 
+  // 6 7. Whenever the number 67 shows up anywhere (text, chart labels, tooltips, what someone types), two hands
+  // bob "6... 7..." in a pink panel, the page shakes a little, and a ring wobbles around the 67. Only 67 as a
+  // number of its own: not 167, 670, 0.67, 67.5 or 1,067. Each show lasts under 5 seconds (WCAG 2.2.2), nothing
+  // flashes (2.3.1), Escape dismisses it, and reduced motion gets a still version. It's decorative: aria-hidden.
+  var SIXSEVEN = /(^|[^\d.,#])67(?![\d]|[.,]\d)/;
+  var seen67 = new WeakMap(), showing67 = null, scan67Timer = null;
+  function calm67() {
+    return document.documentElement.dataset.motion === "reduce" ||
+      (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+  function hide67() {
+    if (!showing67) { return; }
+    clearTimeout(showing67.timer);
+    showing67.els.forEach(function (el) { el.remove(); });
+    showing67 = null;
+  }
+  function show67(rect) {
+    if (showing67) { return; }
+    var still = calm67(), els = [];
+    var panel = document.createElement("div");
+    panel.className = "sixseven" + (still ? " sixseven--still" : "");
+    panel.setAttribute("aria-hidden", "true");
+    panel.innerHTML = '<div class="sixseven__hand sixseven__hand--six"><img src="/assets/six-seven-hand.svg" alt=""><b>6</b></div>' +
+      '<div class="sixseven__hand sixseven__hand--seven"><img src="/assets/six-seven-hand.svg" alt=""><b>7</b></div>';
+    document.body.appendChild(panel); els.push(panel);
+    if (rect && rect.width) {
+      var ring = document.createElement("div");
+      ring.className = "sixseven-ring" + (still ? " sixseven--still" : "");
+      ring.setAttribute("aria-hidden", "true");
+      ring.style.left = (rect.left - 8) + "px"; ring.style.top = (rect.top - 6) + "px";
+      ring.style.width = (rect.width + 16) + "px"; ring.style.height = (rect.height + 12) + "px";
+      document.body.appendChild(ring); els.push(ring);
+    }
+    var shell = document.querySelector(".shell");
+    if (shell && !still) {
+      shell.classList.remove("is-sixseven"); void shell.offsetWidth; shell.classList.add("is-sixseven");
+      setTimeout(function () { shell.classList.remove("is-sixseven"); }, 600);
+    }
+    showing67 = { els: els, timer: setTimeout(hide67, 4600) };
+  }
+  function rangeRect(node, index) {
+    try {
+      var r = document.createRange();
+      r.setStart(node, index); r.setEnd(node, index + 2);
+      return r.getBoundingClientRect();
+    } catch (err) { return null; }
+  }
+  function scan67() {
+    scan67Timer = null;
+    if (!document.body) { return; }
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode: function (n) {
+        var p = n.parentElement;
+        if (!p || !n.nodeValue || n.nodeValue.indexOf("67") < 0) { return NodeFilter.FILTER_REJECT; }
+        if (p.closest("script, style, noscript, .sixseven, [hidden]")) { return NodeFilter.FILTER_REJECT; }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var first = null, n;
+    while ((n = walker.nextNode())) {
+      if (seen67.get(n) === n.nodeValue) { continue; }
+      seen67.set(n, n.nodeValue);
+      var m = SIXSEVEN.exec(n.nodeValue);
+      if (!m || !n.parentElement.getClientRects().length) { continue; }
+      if (!first) { first = rangeRect(n, m.index + m[1].length); }
+    }
+    if (first) { show67(first); }
+  }
+  function queue67() { if (!scan67Timer) { scan67Timer = setTimeout(scan67, 350); } }
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (t && typeof t.value === "string" && SIXSEVEN.test(t.value)) { show67(t.getBoundingClientRect()); }
+  }, true);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hide67(); } });
+
   var stick = new WeakMap();
   // Live logs (System page) and the assistant's conversation stay scrolled to the newest line,
   // unless the reader has scrolled up to look at something.
@@ -208,6 +283,6 @@
   new MutationObserver(function () {
     if (pending) { return; }
     pending = true;
-    requestAnimationFrame(function () { pending = false; followLog(); clampHover(); });
+    requestAnimationFrame(function () { pending = false; followLog(); clampHover(); queue67(); });
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();

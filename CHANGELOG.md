@@ -8,6 +8,16 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.3] - 2026-10-04
+A certain number is now impossible to ignore.
+
+### New
+- One number in particular gets a reaction wherever it appears: in text, chart labels, hover tooltips or what you type. Only the number on its own counts, not when it's part of a bigger number or a decimal. The reaction lasts under five seconds, never flashes, ignores clicks, goes away with Escape, and holds still when reduced motion is on.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- WCAG 2.2 success criteria 2.2.2 Pause, Stop, Hide and 2.3.1 Three Flashes or Below Threshold: https://www.w3.org/TR/WCAG22/
+
 ## [1.4.2] - 2026-10-04
 Cosmic comes alive, and it's about printing now.
 

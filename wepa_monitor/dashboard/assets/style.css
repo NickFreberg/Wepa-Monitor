@@ -1283,3 +1283,34 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 .sandman-stop:focus-visible { outline: 2px solid #e6e6e6; outline-offset: 2px; }
 @media (max-width: 900px) { .sandman-banner:not([hidden]) { top: 120px; left: 50%; width: calc(100vw - 24px); font-size: 15px;
   letter-spacing: .2em; } }
+
+/* 6 7 (ui.js): two hands bob "6... 7..." whenever the number 67 appears. Decorative, under 5 s, no flashing,
+   still for reduced motion, never blocks a click. */
+.sixseven { position: fixed; left: 50%; bottom: 24px; z-index: 90; width: min(460px, calc(100vw - 32px)); height: 240px;
+  transform: translateX(-50%); pointer-events: none; border-radius: 22px; overflow: hidden;
+  background: radial-gradient(circle at 30% 30%, #ff8ad8 0, transparent 60%), #f25fc6;
+  box-shadow: 0 18px 50px rgba(120, 20, 90, .45), inset 0 0 0 4px #ffffff;
+  animation: sixseven-in .45s cubic-bezier(.2, 1.6, .4, 1) both, sixseven-out .4s ease-in 4.15s forwards; }
+.sixseven__hand { position: absolute; bottom: 2px; width: 48%; }
+.sixseven__hand img { display: block; width: 100%; }
+.sixseven__hand--six { left: 0; animation: sixseven-bob .5s ease-in-out infinite alternate; }
+.sixseven__hand--seven { right: 0; transform: scaleX(-1); animation: sixseven-bob-flip .5s ease-in-out -.5s infinite alternate; }
+.sixseven__hand b { position: absolute; left: 50%; top: -50px; transform: translateX(-50%); font: 900 80px/1 "Arial Rounded MT Bold",
+  "Nunito", "Trebuchet MS", Arial, sans-serif; color: #1638f0;
+  text-shadow: 4px 0 #fff, -4px 0 #fff, 0 4px #fff, 0 -4px #fff, 3px 3px #fff, -3px 3px #fff, 3px -3px #fff, -3px -3px #fff,
+    6px 8px 0 rgba(60, 0, 50, .25); }
+.sixseven__hand--seven b { transform: translateX(-50%) scaleX(-1); }
+.sixseven-ring { position: fixed; z-index: 89; pointer-events: none; border: 4px solid #f25fc6; border-radius: 14px;
+  box-shadow: 0 0 0 3px #ffffff, 0 0 18px rgba(242, 95, 198, .7); animation: sixseven-wobble .35s ease-in-out 12 alternate; }
+.is-sixseven { animation: sixseven-shake .55s ease-in-out; }
+@keyframes sixseven-in { from { transform: translate(-50%, 140%) rotate(-6deg); } to { transform: translate(-50%, 0) rotate(0); } }
+@keyframes sixseven-out { to { transform: translate(-50%, 140%) rotate(5deg); } }
+@keyframes sixseven-bob { from { transform: translateY(18px) rotate(4deg); } to { transform: translateY(-22px) rotate(-5deg); } }
+@keyframes sixseven-bob-flip { from { transform: scaleX(-1) translateY(18px) rotate(4deg); } to { transform: scaleX(-1) translateY(-22px) rotate(-5deg); } }
+@keyframes sixseven-wobble { from { transform: rotate(-5deg) scale(1.08); } to { transform: rotate(5deg) scale(1.18); } }
+@keyframes sixseven-shake { 0%, 100% { transform: none; } 20% { transform: translateX(-6px) rotate(-.4deg); }
+  40% { transform: translateX(6px) rotate(.4deg); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+.sixseven--still, .sixseven--still .sixseven__hand, .sixseven-ring.sixseven--still { animation: none !important; }
+.sixseven--still.sixseven { animation: none !important; }
+@media print { .sixseven, .sixseven-ring { display: none; } }
+@media (max-width: 600px) { .sixseven { height: 190px; } .sixseven__hand b { font-size: 60px; top: -36px; } }
