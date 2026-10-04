@@ -22,7 +22,7 @@ BASE = {"red": 100, "yellow": 40, "tray": 20, "consumable_now": 30, "consumable_
 def current_status(ds: Dataset, ids=None) -> pd.DataFrame:
     """Latest snapshot per station, plus 'stale' when the station has gone quiet."""
     cur = ds.latest if ids is None else ds.latest[ds.latest["station_id"].isin(ids)]
-    cur = cur.merge(ds.stations[["station_id", "label", "building", "area", "station_type", "owner", "campus"]],
+    cur = cur.merge(ds.stations[["station_id", "label", "building", "area", "station_type", "access", "owner", "campus"]],
                     on="station_id", how="left")
     age = (ds.as_of - cur["scrape_ts"]).dt.total_seconds()
     cur["stale"] = age > config.MAX_OBSERVED_GAP_S

@@ -103,7 +103,9 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
             "that are the only one in their building.", charts.walk_bars(theme, cov, A.WALK_ALERT_MIN),
             graph_id="walk-bars", story=story,
             explain="Residence-hall printers are behind card access, so the backup is the nearest academic building, "
-                    "library or student union printer. Red bars are coverage gaps.",
+                    "library, student union or East Campus Commons printer (ECC is run by ResNet, but its dining "
+                    "hall, Dunkin', bookstore and ResNet office make it open to every student). Red bars are "
+                    "coverage gaps.",
             nerd="Walking times are shortest paths (Dijkstra) on the OpenStreetMap footpath network at 3 mph, "
                  "door to door between building centers.",
             table=data_table(cov, [("label", "Printer", None), ("nearest", "Nearest open printer", None),

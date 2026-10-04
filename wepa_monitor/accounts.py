@@ -169,7 +169,7 @@ def residence_halls() -> list[str]:
     try:
         from . import reference
         st = reference.load_stations()
-        names |= set(st.loc[st["station_type"] == "residence", "building"].dropna())
+        names |= set(st.loc[(st["station_type"] == "residence") & (st["access"] != "public"), "building"].dropna())
     except Exception:  # noqa: BLE001
         pass
     return sorted(names)

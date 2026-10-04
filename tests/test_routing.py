@@ -82,3 +82,23 @@ def test_parking_list_overrides_osm(tmp_path, monkeypatch):
     assert spots.loc["Moakley Center", "park_source"] == "your parking list"
     assert spots.loc["Moakley Center", "park_lat"] == pytest.approx(41.9901)
     assert spots.loc["Hunt Hall", "park_source"].startswith("nearest lot")
+
+
+def test_east_campus_commons_counts_as_open_to_everyone():
+    """ECC is a ResNet printer, but in a building every student uses, so it's a valid backup."""
+    from wepa_monitor import reference
+    st = reference.load_stations().set_index("building")
+    assert st.loc["East Campus Commons", "access"] == "public"
+    assert (reference.load_stations().query("station_type == 'residence' and building != 'East Campus Commons'")
+            ["access"] == "residents").all()
+    import pandas as pd
+    from wepa_monitor import nearby
+    cur = pd.DataFrame([
+        {"station_id": "1", "label": "Crimson", "building": "Crimson Hall", "station_type": "residence",
+         "access": "residents", "state": "red", "campus": "Main"},
+        {"station_id": "2", "label": "ECC", "building": "East Campus Commons", "station_type": "residence",
+         "access": "public", "state": "green", "campus": "Main"},
+        {"station_id": "3", "label": "Scott", "building": "Scott Hall", "station_type": "residence",
+         "access": "residents", "state": "green", "campus": "Main"}])
+    b = nearby.backups(cur, "1")
+    assert "East Campus Commons" in set(b["building"]) and "Scott Hall" not in set(b["building"])

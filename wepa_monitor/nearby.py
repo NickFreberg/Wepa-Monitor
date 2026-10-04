@@ -2,8 +2,8 @@
 
 Distances follow the campus path network (OpenStreetMap footways, the same network Rounds uses),
 not straight lines. Residence-hall printers are behind card access, so a student whose printer is
-down is pointed to the nearest *open* printer: one in an academic building, the library or the
-student union, that is printing right now.
+down is pointed to the nearest *open* printer: one in an academic building, the library, the student
+union or East Campus Commons (a ResNet printer in a building every student uses), printing right now.
 """
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def walk_meters(a: str, b: str) -> float:
 
 def backups(cur: pd.DataFrame, station_id: str, limit: int = 3) -> pd.DataFrame:
     """Where to send students when `station_id` is down: other working printers in the same
-    building, then the nearest working printers anyone can walk into (not residence halls).
+    building, then the nearest working printers anyone can walk into (reference access "public").
 
     cur: ops.current_status rows. Returns station_id, label, building, state, kind
     ('same building' | 'open to everyone'), meters, seconds.
@@ -78,7 +78,9 @@ def backups(cur: pd.DataFrame, station_id: str, limit: int = 3) -> pd.DataFrame:
     home = me.iloc[0]["building"]
     up = cur[(cur["station_id"] != station_id) & ~cur["state"].isin(["red", "stale"])]
     same = up[up["building"] == home].assign(kind="same building", meters=0.0, seconds=0.0)
-    public = up[(up["building"] != home) & (up["station_type"] != "residence")
+    access = up["access"] if "access" in up else up["station_type"].map(
+        lambda t: "residents" if t == "residence" else "public")
+    public = up[(up["building"] != home) & (access == "public")
                 & (up.get("campus", pd.Series("Main", index=up.index)).fillna("Main") == "Main")]
     if len(public):
         secs = public["building"].map(lambda x: walk_seconds(home, x))

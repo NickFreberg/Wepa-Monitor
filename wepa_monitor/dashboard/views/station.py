@@ -197,8 +197,9 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
         backup_sub = (f"{row['building']} has {len(same)} other printer{'s' if len(same) != 1 else ''}; below "
                       "them, the nearest working printers anyone can walk into.")
     else:
-        backup_sub = ("The nearest working printers anyone can walk into (residence halls are card access, so "
-                      "they're left out). Distances follow campus walkways.")
+        backup_sub = ("The nearest working printers anyone can walk into. Residence halls are card access, so "
+                      "they're left out; East Campus Commons is included, since every student uses that building. "
+                      "Distances follow campus walkways.")
     neighbours = html.Ul(items, className="neighbours") if items else html.P(
         "No working printer nearby right now.", className="card__note")
     ev_all = activity.events(ds, since=start, ids=ids)

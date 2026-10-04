@@ -26,6 +26,13 @@ def load_buildings() -> pd.DataFrame:
 
 def load_stations() -> pd.DataFrame:
     df = pd.read_csv(config.REFERENCE_DIR / "stations.csv", dtype=str).fillna("")
+    # Who can walk up to the printer: residence-hall printers are behind card access ("residents"),
+    # everything else is open ("public"). The access column overrides that, e.g. East Campus Commons is
+    # a ResNet printer in a building every student uses (dining hall, Dunkin', bookstore, ResNet office).
+    if "access" not in df:
+        df["access"] = ""
+    df["access"] = df["access"].where(df["access"] != "", df["station_type"].map(
+        lambda t: "residents" if t == "residence" else "public"))
     geo = load_buildings()[["building", "short_name", "lat", "lon", "campus"]]
     return df.merge(geo, on="building", how="left")
 
