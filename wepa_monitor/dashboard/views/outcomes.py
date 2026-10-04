@@ -119,7 +119,7 @@ def render(ds: M.Dataset, theme: str, year, scope, draft: int = 0):
           "labs, the library and the student union, are where students turn in papers, print boarding passes "
           "and pick up last-minute study guides. For years the only window into them was Wepa's own status "
           "page: a list of green, yellow and red rows that showed the moment, but never the pattern.")
-    p2 = (f"ResNet Print Ops changed that. It reads the status page once a minute, every minute, and keeps "
+    p2 = (f"BSU Student Printing Ops changed that. It reads the status page once a minute, every minute, and keeps "
           f"what it sees: {_num(checks)} station check-ins over {days:,.0f} days {when}. From those readings it "
           "works out when each printer went down, why, how long it took to fix, which supplies are about to run "
           "out, and which printers are busiest, then explains it in plain language for anyone at BSU.")
@@ -247,7 +247,7 @@ def _year_word(year, ds) -> str:
 
 
 OUTCOMES_PROMPT = """Write the copy for a one-page feature in Bridgewater State University's annual "IT Outcomes" report
-(theme: Opportunities. Collaborations. Results.) about ResNet Print Ops, a tool that monitors the campus Wepa print
+(theme: Opportunities. Collaborations. Results.) about BSU Student Printing Ops, a tool that monitors the campus Wepa print
 stations every minute. Match the report's voice: upbeat, proud of the IT and ResNet teams, concrete, readable by
 anyone on campus. Use ONLY the facts given; copy numbers exactly; no invented people, quotes, names, titles or dates.
 If the data covers only a short time, say so honestly. No prices or costs.

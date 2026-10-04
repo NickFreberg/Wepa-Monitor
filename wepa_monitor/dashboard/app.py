@@ -243,7 +243,7 @@ def _shell(ds: M.Dataset):
         html.Aside(className="sidebar", children=[
             dcc.Link(className="brand", href="/", title="Overview", children=[
                 html.Img(src="/assets/bsu-bear.png", alt="Bridgewater State Bears", className="brand__logo"),
-                html.Div([html.Div("ResNet Print Ops", className="brand__name"),
+                html.Div([html.Div("BSU Student Printing Ops", className="brand__name"),
                           html.Div("Bridgewater State University", className="brand__sub")]),
             ]),
             html.Nav(id="nav", className="nav", **{"aria-label": "Main"}),
@@ -344,7 +344,7 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     cache = DataCache(data_dir)
     if preload:
         cache.get()   # load and process the data now, so the first page view is instant
-    app = Dash(__name__, title="ResNet Print Ops", suppress_callback_exceptions=True,
+    app = Dash(__name__, title="BSU Student Printing Ops", suppress_callback_exceptions=True,
                update_title=None, assets_folder=str(Path(__file__).parent / "assets"))
     app.layout = lambda: _shell(cache.get())
     app.server.config["WEPA_CACHE"] = cache

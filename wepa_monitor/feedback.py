@@ -93,7 +93,7 @@ def issue_body(row: dict) -> str:
         f"a {row.get('role', 'staff')} user"
     quoted = "\n".join("> " + line if line else ">" for line in _neutralize(row["body"]).split("\n"))
     return (f"{quoted}\n\n---\n"
-            f"**{KINDS[row['kind']][0]}** {row['ref']} · sent from ResNet Print Ops {__version__}"
+            f"**{KINDS[row['kind']][0]}** {row['ref']} · sent from BSU Student Printing Ops {__version__}"
             f"{' · page ' + _neutralize(row['page']) if row.get('page') else ''} · by {_neutralize(who)}\n\n"
             "_Filed automatically from the app's “Suggest a feature” form._")
 

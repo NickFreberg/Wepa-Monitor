@@ -1,3 +1,3 @@
-"""ResNet Print Ops: a monitor for Bridgewater State University's Wepa print stations."""
+"""BSU Student Printing Ops: a monitor for Bridgewater State University's Wepa print stations."""
 
-__version__ = "1.2.1"
+__version__ = "1.2.2"

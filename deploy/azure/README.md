@@ -1,6 +1,6 @@
 # Hosting on Azure App Service
 
-This puts ResNet Print Ops on a permanent HTTPS address (`https://resnet-print-ops-xxxxxx.azurewebsites.net`)
+This puts BSU Student Printing Ops on a permanent HTTPS address (`https://resnet-print-ops-xxxxxx.azurewebsites.net`)
 that collects a snapshot every minute, around the clock, and sits behind Microsoft sign-in.
 
 **What it runs on:** one Linux App Service on the **Basic B1** plan (1 core, 1.75 GB RAM),

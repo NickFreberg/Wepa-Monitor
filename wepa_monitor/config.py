@@ -19,7 +19,7 @@ STATUS_URL = os.environ.get(
     "WEPA_STATUS_URL", "https://cs.wepanow.com/000BRIDGEW149.html&filter="
 )
 HTTP_TIMEOUT_S = 30
-USER_AGENT = "BSU-ResNet-Wepa-Monitor/2.0 (+https://github.com/nickfreberg/wepa-monitor)"
+USER_AGENT = "BSU-Student-Printing-Ops/1.2 (+https://github.com/nickfreberg/wepa-monitor)"
 
 # Bridgewater, MA. All "time of day" and "per day" metrics use this zone.
 LOCAL_TZ = "America/New_York"

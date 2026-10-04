@@ -160,7 +160,7 @@ flowchart LR
     direction TB
     S((" ")) --> F["Fault occurs"] --> R["Row turns red<br/>on Wepa's page"]
   end
-  subgraph L2["ResNet Print Ops (system)"]
+  subgraph L2["BSU Student Printing Ops (system)"]
     direction TB
     R --> D["Detect outage<br/>at next reading"] --> N["Number it, notify,<br/>add to work queue"]
     N --> G{"Desk staffed<br/>now?"}

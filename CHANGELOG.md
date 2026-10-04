@@ -1,12 +1,27 @@
 # Change log
 
-Every release of ResNet Print Ops, newest first, in plain English. Security fixes name the
+Every release of BSU Student Printing Ops (called ResNet Print Ops until version 1.2.2), newest first, in plain English. Security fixes name the
 vulnerability (CVE or GitHub advisory) with links to the original sources. The app shows this file on
 its Change log page; click a version number in the activity feed to open that release.
 
 Format: one `## [version] - date` heading per release, a one-line summary, then `### New`,
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
+
+## [1.2.2] - 2026-10-04
+ResNet Print Ops is now BSU Student Printing Ops, a name that covers every station it watches, from the
+residence halls to the labs, the library and the satellite campus. East Campus Commons now counts as a
+printer every student can walk into.
+
+### Changed
+- New name everywhere people see it: the app, the sign-in page, exports, evidence packets, feature requests, the assistant and the documentation. The Azure app keeps its address.
+- East Campus Commons is offered as a nearby printer when another one is down. It is run by ResNet, but its dining hall, Dunkin', bookstore and ResNet office make it open to every student. A new access column in the station list records who can walk up to each printer.
+
+### New
+- Product documentation (docs/product/): the full CRISP-DM lifecycle, requirements, data dictionary, architecture, process models, user guide and standards alignment, as a web page and a PDF.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
 
 ## [1.2.1] - 2026-10-04
 Times read in whole units, and the layout fits any window.

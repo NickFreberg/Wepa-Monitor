@@ -82,8 +82,8 @@ font-weight:700;cursor:pointer}.err{color:var(--bad);font-weight:600;font-size:1
 def _page(title: str, body: str) -> str:
     return (f"<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' "
             f"content='width=device-width,initial-scale=1'><meta name='robots' content='noindex'>"
-            f"<title>{html.escape(title)} · ResNet Print Ops</title><style>{PAGE_CSS}</style></head><body>"
-            f"<main class='card'><div class='brand'><img src='/assets/bsu-bear.png' alt=''><div><b>ResNet Print Ops</b>"
+            f"<title>{html.escape(title)} · BSU Student Printing Ops</title><style>{PAGE_CSS}</style></head><body>"
+            f"<main class='card'><div class='brand'><img src='/assets/bsu-bear.png' alt=''><div><b>BSU Student Printing Ops</b>"
             f"<span>Bridgewater State University</span></div></div>{body}</main></body></html>")
 
 

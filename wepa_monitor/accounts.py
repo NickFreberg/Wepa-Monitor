@@ -47,7 +47,7 @@ MAX_ACCOUNT_FAILURES = 5
 ACCOUNT_LOCK_S = 15 * 60
 PHOTO_MAX_BYTES = 5 * 1024 * 1024
 PHOTO_SIZE = 256
-CONTEXT_WORDS = ("wepa", "resnet", "bridgewater", "bsuresnet", "printops", "password")
+CONTEXT_WORDS = ("wepa", "resnet", "bridgewater", "bsuresnet", "printops", "printing", "studentprinting", "password")
 COMMON = set("""
 123456789012 1234567890123 password1234 password12345 passwordpassword qwertyuiopas qwerty123456 1q2w3e4r5t6y
 iloveyou1234 letmein12345 welcome12345 admin1234567 administrator abc123456789 111111111111 000000000000
@@ -203,7 +203,7 @@ def breached(pw: str) -> bool:
         import requests
         h = hashlib.sha1(pw.encode(), usedforsecurity=False).hexdigest().upper()   # the HIBP range API is keyed by SHA-1
         r = requests.get(f"https://api.pwnedpasswords.com/range/{h[:5]}", timeout=3,
-                         headers={"Add-Padding": "true", "User-Agent": "ResNet-Print-Ops"})
+                         headers={"Add-Padding": "true", "User-Agent": "BSU-Student-Printing-Ops"})
         if r.status_code != 200:
             return False
         return any(line.split(":")[0] == h[5:] and line.split(":")[1].strip() != "0" for line in r.text.splitlines())

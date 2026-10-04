@@ -455,7 +455,7 @@ def evidence_pdf(ds: M.Dataset, ref: str) -> bytes | None:
             self.set_xy(10, 4)
             self.set_text_color(255, 255, 255)
             self.set_font("Helvetica", "B", 11)
-            self.cell(0, 6, _latin1(f"ResNet Print Ops - Evidence packet {ref}"))
+            self.cell(0, 6, _latin1(f"BSU Student Printing Ops - Evidence packet {ref}"))
             self.set_text_color(0, 0, 0)
             self.ln(14)
 

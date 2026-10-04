@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy ResNet Print Ops to Azure App Service (Linux, Python 3.12, Basic B1 plan).
+# Deploy BSU Student Printing Ops to Azure App Service (Linux, Python 3.12, Basic B1 plan).
 #
 # Run from the repository root on your Mac:
 #     ./deploy/azure/deploy.sh

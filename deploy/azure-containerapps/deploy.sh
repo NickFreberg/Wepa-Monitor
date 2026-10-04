@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy ResNet Print Ops to Azure Container Apps: no VM or App Service quota needed.
+# Deploy BSU Student Printing Ops to Azure Container Apps: no VM or App Service quota needed.
 #
 # Run from the repository root on your Mac (with the project's .venv set up):
 #     ./deploy/azure-containerapps/deploy.sh

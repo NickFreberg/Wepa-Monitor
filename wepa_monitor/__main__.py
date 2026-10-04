@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         _scrape_once(data_dir, False)
         threading.Thread(target=_collect_forever, args=(data_dir, False, True), daemon=True).start()
         logging.getLogger("werkzeug").setLevel(logging.WARNING)   # hide per-request log lines
-        print(f"\nResNet Print Ops is running at {url}\n"
+        print(f"\nBSU Student Printing Ops is running at {url}\n"
               "Collecting a snapshot every minute; leave this window open. Press Ctrl+C to stop.\n", flush=True)
         if not args.no_browser:
             threading.Timer(1.5, webbrowser.open, args=(url,)).start()

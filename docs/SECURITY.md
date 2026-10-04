@@ -1,6 +1,6 @@
 # Security, updates and availability
 
-How ResNet Print Ops protects its data and stays up, what has been tested, and what it can't promise.
+How BSU Student Printing Ops protects its data and stays up, what has been tested, and what it can't promise.
 No software is "pentest-proof". This page states what is protected, how it was checked, and the known
 limits, so they can be weighed honestly.
 

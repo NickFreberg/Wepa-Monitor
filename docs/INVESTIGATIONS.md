@@ -1,6 +1,6 @@
 # Investigations: governance
 
-How ResNet Print Ops documents recurring printer problems, and the rules that keep the record
+How BSU Student Printing Ops documents recurring printer problems, and the rules that keep the record
 trustworthy enough to hand to Wepa.
 
 ## Purpose and scope

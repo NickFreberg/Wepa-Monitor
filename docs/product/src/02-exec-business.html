@@ -3,7 +3,7 @@
   <h2>A minute-by-minute record of every campus printer</h2>
   <div class="audiences"><span class="aud aud--on">Everyone</span><span class="aud aud--on">IT leadership</span></div>
   <p class="chapter__lede">Wepa publishes a status page for BSU's print stations that refreshes every minute and only
-    ever shows <em>now</em>. ResNet Print Ops reads it once a minute, keeps every reading, and turns the history into
+    ever shows <em>now</em>. BSU Student Printing Ops reads it once a minute, keeps every reading, and turns the history into
     answers: what is broken, for how long, why, when nobody was there to fix it, what to restock, and where a
     student should walk instead.</p>
 
@@ -82,7 +82,7 @@
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"14px"}}}%%
 flowchart LR
-  W["Wepa status page<br/>(vendor, public)"] --> M(("ResNet Print Ops"))
+  W["Wepa status page<br/>(vendor, public)"] --> M(("BSU Student Printing Ops"))
   C["bridgew.edu<br/>calendar · halls · library · courses"] --> M
   O["OpenStreetMap<br/>paths · parking"] --> M
   M --> R["ResNet staff"]
@@ -225,7 +225,7 @@ journey
 
   <h3 id="requirements">1.9 Requirements</h3>
   <p>Requirements are prioritized with MoSCoW and traced to the module that implements them. Status reflects version
-    1.2.1. Quality requirements are grouped by the ISO/IEC 25010 characteristic they serve.</p>
+    1.2.2. Quality requirements are grouped by the ISO/IEC 25010 characteristic they serve.</p>
   <div class="tbl"><table>
     <caption>Functional requirements</caption>
     <tr><th>ID</th><th>Requirement</th><th>Priority</th><th>Status</th><th>Where</th></tr>

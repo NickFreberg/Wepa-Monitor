@@ -164,7 +164,7 @@ def build(ds: M.Dataset, what: str, fmt: str, ids, scope_text: str, period: str)
         "period": f"{start.tz_convert(TZ):%b %-d, %Y %-I:%M %p} to {end.tz_convert(TZ):%b %-d, %Y %-I:%M %p}",
         "generated": f"{datetime.now(ZoneInfo(TZ)):%Y-%m-%d %H:%M %Z}",
         "data_as_of": f"{stamp:%Y-%m-%d %H:%M %Z}",
-        "source": "Wepa status page, collected every minute by ResNet Print Ops",
+        "source": "Wepa status page, collected every minute by BSU Student Printing Ops",
         "notes": "Times are US Eastern. Usage is toner burned (Wepa publishes no page counts). Supplies are "
                  "counted in parts, not dollars.",
     }
@@ -232,7 +232,7 @@ def _pdf(tables: dict[str, pd.DataFrame], meta: dict) -> bytes:
             self.set_xy(10, 4)
             self.set_text_color(255, 255, 255)
             self.set_font("Helvetica", "B", 11)
-            self.cell(0, 6, _latin1("ResNet Print Ops - " + meta["title"]))
+            self.cell(0, 6, _latin1("BSU Student Printing Ops - " + meta["title"]))
             self.set_text_color(0, 0, 0)
             self.ln(14)
 

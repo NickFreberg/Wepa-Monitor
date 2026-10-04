@@ -1,13 +1,13 @@
-# ResNet Print Ops — Wepa Print Station Monitor
+# BSU Student Printing Ops — Wepa Print Station Monitor
 
 [![CI](https://github.com/NickFreberg/Wepa-Monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/NickFreberg/Wepa-Monitor/actions/workflows/ci.yml)
 
 **[Read the case study](docs/CASE_STUDY.md)**: the problem, the architecture, the decisions behind it,
 and what's real vs demo data.
 
-**[Product documentation (PDF)](docs/product/ResNet-Print-Ops-Documentation.pdf)**: the full CRISP-DM
+**[Product documentation (PDF)](docs/product/BSU-Student-Printing-Ops-Documentation.pdf)**: the full CRISP-DM
 lifecycle, requirements, data dictionary, architecture, BPMN/CMMN/DMN models, user guide and standards
-alignment ([HTML version](docs/product/ResNet-Print-Ops-Documentation.html); rebuild with
+alignment ([HTML version](docs/product/BSU-Student-Printing-Ops-Documentation.html); rebuild with
 `python docs/product/build.py --pdf`).
 
 A monitoring and analytics dashboard for the Wepa print stations at Bridgewater State University.

@@ -1,4 +1,4 @@
-/* ResNet Print Ops: design tokens for three themes (light, dark, BSU crimson) and the app shell. */
+/* BSU Student Printing Ops: design tokens for three themes (light, dark, BSU crimson) and the app shell. */
 
 :root {
   color-scheme: light;
@@ -1063,3 +1063,6 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .tile__value { white-space: normal; overflow-wrap: break-word; }
 .tile__value--long { font-size: clamp(17px, 1.35vw, 22px); line-height: 1.22; letter-spacing: -0.01em; }
 .tile__sub, .tile__label { overflow-wrap: break-word; }
+/* The product name wraps onto two lines in the sidebar rather than being cut off. */
+.brand__name { white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
+.brand > div { min-width: 0; }

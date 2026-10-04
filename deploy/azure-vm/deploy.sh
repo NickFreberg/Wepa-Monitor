@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy ResNet Print Ops to a small Azure Linux VM (Ubuntu 24.04, Standard_B1ms: 1 vCPU, 2 GB RAM).
+# Deploy BSU Student Printing Ops to a small Azure Linux VM (Ubuntu 24.04, Standard_B1ms: 1 vCPU, 2 GB RAM).
 #
 # Run from the repository root on your Mac:
 #     ./deploy/azure-vm/deploy.sh

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs ON the VM as root (deploy.sh calls it): installs or updates ResNet Print Ops.
+# Runs ON the VM as root (deploy.sh calls it): installs or updates BSU Student Printing Ops.
 #
 #   FQDN=<host> [ACME_EMAIL=...] bash setup.sh /tmp/app.tar.gz   < "username\npassword" (blank keeps current)
 #
@@ -51,7 +51,7 @@ mv "$APP/app.new" "$APP/app"
 
 cat > /etc/systemd/system/wepa.service <<UNIT
 [Unit]
-Description=ResNet Print Ops (dashboard + every-minute collector)
+Description=BSU Student Printing Ops (dashboard + every-minute collector)
 After=network-online.target
 Wants=network-online.target
 

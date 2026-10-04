@@ -1,8 +1,8 @@
 """Build the product documentation: assemble src/*.html, draw charts from the app's real settings, embed
 screenshots, and write a single self-contained page.
 
-    python docs/product/build.py            -> docs/product/ResNet-Print-Ops-Documentation.html
-    python docs/product/build.py --pdf      -> also docs/product/ResNet-Print-Ops-Documentation.pdf
+    python docs/product/build.py            -> docs/product/BSU-Student-Printing-Ops-Documentation.html
+    python docs/product/build.py --pdf      -> also docs/product/BSU-Student-Printing-Ops-Documentation.pdf
 
 The PDF is printed with Chromium (Playwright); diagrams are drawn by Mermaid in the browser.
 """
@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 
 from wepa_monitor import config  # noqa: E402
 
-OUT = HERE / "ResNet-Print-Ops-Documentation.html"
+OUT = HERE / "BSU-Student-Printing-Ops-Documentation.html"
 MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"
 SHOTS = {"overview": "overview-bsu.png", "station": "station-detail.png", "investigation": "investigation.png",
          "assistant": "assistant.png"}
@@ -127,7 +127,7 @@ def pdf(html_path: Path) -> Path:
         pg.pdf(path=str(out), format="Letter", print_background=True, prefer_css_page_size=True,
                display_header_footer=True, header_template="<span></span>",
                footer_template="<div style='width:100%;font:8px Arial;color:#776d66;padding:0 0.6in;"
-                               "display:flex;justify-content:space-between'><span>ResNet Print Ops · RPO-DOC-001 · v1.2.1"
+                               "display:flex;justify-content:space-between'><span>BSU Student Printing Ops · SPO-DOC-001 · v1.2.2"
                                "</span><span class='pageNumber'></span></div>")
         br.close()
     tmp.unlink()

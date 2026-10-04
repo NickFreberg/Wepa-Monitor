@@ -1,4 +1,4 @@
-# Case study: ResNet Print Ops
+# Case study: BSU Student Printing Ops
 
 *A monitoring and analytics platform for the 31 Wepa print stations at Bridgewater State University.*
 

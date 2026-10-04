@@ -1,6 +1,6 @@
 # Accounts and sign-in
 
-ResNet Print Ops keeps one central staff directory, managed by the administrator, and signs people in
+BSU Student Printing Ops keeps one central staff directory, managed by the administrator, and signs people in
 following NIST SP 800-63B practices (multi-factor authentication aside).
 
 ## The directory
