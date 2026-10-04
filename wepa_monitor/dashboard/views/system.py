@@ -26,15 +26,8 @@ def layout():
 
 
 def _ago(seconds: float) -> str:
-    if seconds is None or not np.isfinite(seconds):
-        return "never"
-    if seconds < 90:
-        return f"{seconds:.0f} seconds ago"
-    if seconds < 5400:
-        return f"{seconds / 60:.0f} minutes ago"
-    if seconds < 172800:
-        return f"{seconds / 3600:.1f} hours ago"
-    return f"{seconds / 86400:.1f} days ago"
+    from ... import durations
+    return durations.ago(seconds)
 
 
 def _stage(name: str, what: str, status: str, tone: str, ic: str) -> html.Div:

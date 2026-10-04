@@ -87,8 +87,8 @@ def _busy_downtime(ds, theme, ids, start, end, plabel):
         "Which downtime cost the most printing?", f"Hours down, and the same hours weighted by how busy that "
         f"printer usually is at that time of the week, last {plabel}.", charts.impact_bars(theme, t),
         graph_id="busy-downtime", story=[impact.summary(t)], icon_name=("clock", "crimson"),
-        table=data_table(t, [("label", "Printer", None), ("down_h", "Hours down", lambda v: f"{v:,.1f}"),
-                             ("weighted_h", "Busy-weighted hours", lambda v: f"{v:,.1f}"),
+        table=data_table(t, [("label", "Printer", None), ("down_h", "Time down", fmt_hours),
+                             ("weighted_h", "Busy-weighted time down", fmt_hours),
                              ("rank_plain", "Rank (plain)", None), ("rank_busy", "Rank (weighted)", None)],
                          link_col=("label", "station_id")),
         explain=["An hour down at noon on a busy printer costs students more printing than an hour down at 3 AM "
@@ -164,7 +164,7 @@ def _reliability(ds, theme, ids, start, end, plabel, opts):
             detail.append(f"{c['label'].lower()} cost the most printing time ({c['share']:.0%} of it)")
         if len(drivers["station"]):
             st = drivers["station"].iloc[0]
-            detail.append(f"{st['label']} lost the most ({st['down_h']:,.0f} printer-hours)")
+            detail.append(f"{st['label']} lost the most ({fmt_hours(st['down_h'])})")
         if mttr_r.value is not None:
             detail.append(f"a typical outage took {fmt_minutes(mttr_r.extra['median'])} to fix")
         hl = headline(N.availability_tone(avail.value),
@@ -176,7 +176,7 @@ def _reliability(ds, theme, ids, start, end, plabel, opts):
     tiles = html.Div(className="tiles", children=[
         metric_tile("Availability", avail, lambda v: f"{v:.2f}%",
                     "Observed printer-minutes not in red ÷ all observed printer-minutes. Unobserved time is excluded.",
-                    unit_note=f"{avail.extra.get('down_h', 0):,.0f} printer-hours down" if avail.value else ""),
+                    unit_note=f"{fmt_hours(avail.extra.get('down_h', 0))} of printer downtime" if avail.value else ""),
         metric_tile("Mean time to repair (MTTR) · down", mttr_r, fmt_minutes,
                     "Mean time from a red status appearing to clearing.", _n_note(mttr_r)),
         metric_tile("Mean time to clear · warnings", mttr_y, fmt_minutes,
@@ -187,7 +187,7 @@ def _reliability(ds, theme, ids, start, end, plabel, opts):
                     _n_note(paper, "paper-outs")),
         metric_tile("Tray empty time", tray, fmt_minutes,
                     "Mean duration of a single tray reporting empty, even while another tray keeps printing.",
-                    f"{tray.extra.get('total_h', 0):,.0f} tray-hours in total"),
+                    f"{fmt_hours(tray.extra.get('total_h', 0))} of empty-tray time in total"),
     ])
 
     fleet = M.availability_daily(ds, start, end, ids)
@@ -253,8 +253,8 @@ def _reliability(ds, theme, ids, start, end, plabel, opts):
             ("after", "Began after hours", None),
             ("median_wait_s", "Median wait for desk", lambda v: fmt_minutes(v / 60)),
             ("median_desk_fix_s", "Desk time to fix", lambda v: fmt_minutes(v / 60)),
-            ("staffed_h", "Down in desk hours", lambda v: f"{v:,.0f} h"),
-            ("after_h", "Down after hours", lambda v: f"{v:,.0f} h")]) if len(summ) else None)
+            ("staffed_h", "Down in desk hours", fmt_hours),
+            ("after_h", "Down after hours", fmt_hours)]) if len(summ) else None)
 
     phases = insights.by_phase(ds, start, end, ids)
     phase_card = chart_card(
@@ -294,7 +294,7 @@ def _reliability(ds, theme, ids, start, end, plabel, opts):
                             "lines are holidays."],
                    table=data_table(fleet, [("local_date", "Date", lambda d: f"{d:%Y-%m-%d}"),
                                             ("availability", "Availability", lambda v: f"{v:.2f}%"),
-                                            ("observed_h", "Observed printer-h", lambda v: f"{v:,.1f}")])),
+                                            ("observed_h", "Printer time observed", fmt_hours)])),
         chart_card("Through the day", "Share of the time printers could print, by hour, weekdays vs weekends.",
                    charts.hourly_availability(theme, prof, owners_in(ds, ids)) if len(prof) else None,
                    body=None if len(prof) else empty("Not enough data yet.", big=False), story=hour_story,
@@ -305,7 +305,7 @@ def _reliability(ds, theme, ids, start, end, plabel, opts):
                             "wait overnight: that's a coverage question, not a repair-speed one."],
                    table=data_table(prof, [("daytype", "Days", None), ("hour", "Hour", lambda h: _hour(int(h))),
                                            ("availability", "Availability", lambda v: f"{v:.2f}%"),
-                                           ("down_h", "Printer-h lost", lambda v: f"{v:,.1f}")])),
+                                           ("down_h", "Printer time lost", fmt_hours)])),
         chart_card("What cost the most printing time", "Printer-hours lost to outages, by main cause.",
                    charts.driver_bars(theme, drivers["cause"]) if len(drivers["cause"]) else None,
                    body=None if len(drivers["cause"]) else empty("No outages in this period.", big=False),
@@ -314,7 +314,7 @@ def _reliability(ds, theme, ids, start, end, plabel, opts):
                            "caused it. Long outages weigh more than frequent short ones, because that's what "
                            "students feel.",
                    table=data_table(drivers["station"].head(15), [
-                       ("label", "Station", None), ("down_h", "Printer-h lost", lambda v: f"{v:,.1f}"),
+                       ("label", "Station", None), ("down_h", "Printer time lost", fmt_hours),
                        ("outages", "Outages", None), ("share", "Share", lambda v: f"{v:.0%}")])),
         chart_card("Building coverage", "Share of time at least one printer in the building could print.",
                    charts.building_bars(theme, b) if len(b) else None, graph_id={"type": "xg", "chart": "building_cov"},
@@ -621,17 +621,18 @@ def _p(p: float) -> str:
 
 
 def eol_window(row) -> str:
-    """'now', '3.2 days (2.9-3.6)' or '12 days' for a row of models.eol_forecast."""
+    """'now', '3 days, 5 hours (between 2 days, 22 hours and 3 days, 14 hours)' for a row of models.eol_forecast."""
     d = row["days"]
     if d is None or not np.isfinite(d):
         return "—"
     if d == 0:
         return "now"
-    text = f"{d:.1f} days" if d < 10 else f"{d:.0f} days"
+    from ... import durations
+    text = durations.days(d)
     lo, hi = row.get("days_early"), row.get("days_late")
     if row.get("method") == "regression" and lo is not None and np.isfinite(lo) and hi is not None and np.isfinite(hi) \
-            and hi - lo >= 0.1:
-        text += f" ({lo:.1f}-{hi:.1f})" if d < 10 else f" ({lo:.0f}-{hi:.0f})"
+            and hi - lo >= 1 / 24:
+        text += f" (between {durations.days(lo)} and {durations.days(hi)})"
     return text
 
 
@@ -649,7 +650,7 @@ def _stats(ds, theme, ids, start, end, plabel, _):
         day, night = ttf.medians[names[0]], ttf.medians[names[1]]
         if ttf.p_value < 0.05 and np.isfinite(day) and np.isfinite(night) and night > day:
             findings.append(f"Outages that start after support-desk hours take {night / day:.1f}× longer to fix "
-                            f"(typically {night:.1f} hours vs {day:.1f})")
+                            f"(typically {fmt_hours(night)} vs {fmt_hours(day)})")
     if cc is not None:
         findings.append(f"{len(cc.signals)} control-chart signal{'s' if len(cc.signals) != 1 else ''} "
                         f"in daily faults" if cc.signals else "Daily faults stayed within normal limits")

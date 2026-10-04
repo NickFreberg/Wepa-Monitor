@@ -1,6 +1,8 @@
 """Plotly figure builders. Every figure takes `theme` and returns a styled go.Figure."""
 from __future__ import annotations
 
+from .. import durations
+
 import math
 
 import numpy as np
@@ -33,8 +35,9 @@ def availability_daily(theme: str, fleet: pd.DataFrame, by_section: pd.DataFrame
                             hovertemplate="%{y:.1f}%<extra>" + section + "</extra>")
     fig.add_scatter(x=fleet["local_date"], y=fleet["availability"], name="All BSU stations", mode="lines",
                     line=dict(width=2.5, color=t["ink"]),
-                    customdata=np.stack([fleet["observed_h"], ["All BSU stations"] * len(fleet)], axis=1),
-                    hovertemplate="%{y:.1f}% · %{customdata[0]:,.0f} printer-h observed<extra>All BSU stations</extra>")
+                    customdata=np.stack([fleet["observed_h"], ["All BSU stations"] * len(fleet),
+                                         [durations.hours(v, nbsp=False) for v in fleet["observed_h"]]], axis=1),
+                    hovertemplate="%{y:.1f}% · %{customdata[2]} of printer time observed<extra>All BSU stations</extra>")
     lo = float(np.nanmin(fleet["availability"])) if len(fleet) else 90
     if by_section is not None and len(by_section):
         lo = min(lo, float(np.nanmin(by_section["availability"])))
@@ -69,8 +72,10 @@ def mttr_weekly(theme: str, weekly: pd.DataFrame) -> go.Figure:
             continue
         fig.add_scatter(x=d[xcol], y=d["median_min"], name=name, mode="lines+markers",
                         line=dict(width=2, color=STATUS[tone]), marker=dict(size=8),
-                        customdata=np.stack([d["n"], d["mean_min"], [sev] * len(d)], axis=1),
-                        hovertemplate="median %{y:.0f} min · mean %{customdata[1]:.0f} min · "
+                        customdata=np.stack([d["n"], d["mean_min"], [sev] * len(d),
+                                             [durations.minutes(v, nbsp=False) for v in d["median_min"]],
+                                             [durations.minutes(v, nbsp=False) for v in d["mean_min"]]], axis=1),
+                        hovertemplate="median %{customdata[3]} · mean %{customdata[4]} · "
                                       "%{customdata[0]} incidents<extra>" + name + "</extra>")
     fig.update_layout(**layout(theme, 280, hovermode="x unified", yaxis=dict(ticksuffix=" min", rangemode="tozero",
                                                                              title=dict(text="median minutes"))))
@@ -146,9 +151,10 @@ def owner_hours(theme: str, summ: pd.DataFrame) -> go.Figure:
         fig.add_bar(y=summ["owner"], x=summ[col], orientation="h", name=name, marker=dict(color=color),
                     text=[f"{v:.0f}%" if v >= 14 else "" for v in share], textposition="inside",
                     insidetextanchor="middle", textfont=dict(color="#ffffff", size=11),
-                    customdata=np.stack([summ["owner"], [part] * len(summ), share, summ["hours"]], axis=1),
+                    customdata=np.stack([summ["owner"], [part] * len(summ), share, summ["hours"],
+                                         [durations.hours(v, nbsp=False) for v in summ[col]]], axis=1),
                     hovertemplate="<b>%{y}</b> (%{customdata[3]})<br>" + name +
-                                  ": %{x:,.0f} printer-hours down (%{customdata[2]:.0f}%)<extra></extra>")
+                                  ": %{customdata[4]} of printer downtime (%{customdata[2]:.0f}%)<extra></extra>")
     fig.update_layout(**layout(theme, 70 * len(summ) + 90, barmode="stack", bargap=0.35,
                                legend=dict(orientation="h", y=1.15, x=0, traceorder="normal"),
                                xaxis=dict(showgrid=True, title=dict(text="printer-hours down")),
@@ -362,8 +368,10 @@ def status_timeline(theme: str, segments: pd.DataFrame, start=None, end=None, ow
                                          local_e.dt.strftime("%a %b %-d %-I:%M %p"),
                                          ((d["end"] - d["start"]).dt.total_seconds() / 60).round(),
                                          [state] * len(d), d["start"].map(lambda x: x.isoformat()),
-                                         d["end"].map(lambda x: x.isoformat())], axis=1),
-                    hovertemplate=label + ": %{customdata[0]} → %{customdata[1]} (%{customdata[2]:,.0f} min)"
+                                         d["end"].map(lambda x: x.isoformat()),
+                                         [durations.human(v, nbsp=False) for v in
+                                          (d["end"] - d["start"]).dt.total_seconds()]], axis=1),
+                    hovertemplate=label + ": %{customdata[0]} → %{customdata[1]} (%{customdata[6]})"
                                   "<extra></extra>")
     fig.update_layout(**layout(theme, 150, barmode="overlay", bargap=0.15, barcornerradius=0,
                                xaxis=dict(type="date", showgrid=True, range=None if start is None else [
@@ -482,10 +490,11 @@ def km_curves(theme: str, ttf) -> go.Figure:
         x = np.r_[km["t"].to_numpy(), max(km["t"].max(), 24)]
         y = np.r_[km["survival"].to_numpy(), km["survival"].iloc[-1]] * 100
         med = ttf.medians[name]
-        med_txt = f", median {med:.1f} h" if np.isfinite(med) else ""
+        med_txt = f", median {durations.hours(med, nbsp=False)}" if np.isfinite(med) else ""
         fig.add_scatter(x=x, y=y, mode="lines", line=dict(shape="hv", width=2.5, color=t["series"][i]),
                         name=f"{name} (n={ttf.n[name]}{med_txt})", customdata=[name] * len(x),
-                        hovertemplate="After %{x:.1f} h: %{y:.0f}% still down<extra>" + name + "</extra>")
+                        text=[durations.hours(v, nbsp=False) for v in x],
+                        hovertemplate="After %{text}: %{y:.0f}% still down<extra>" + name + "</extra>")
         if np.isfinite(med):   # where the curve crosses 50%
             fig.add_scatter(x=[med], y=[50], mode="markers", showlegend=False, hoverinfo="skip",
                             marker=dict(size=9, color=t["series"][i], line=dict(color=t["surface"], width=2)))
@@ -668,8 +677,9 @@ def hourly_availability(theme: str, prof: pd.DataFrame, teams: list[str] | None 
         fig.add_scatter(x=d["hour"], y=d["availability"], name=dt, mode="lines+markers",
                         line=dict(width=2.5 if i == 0 else 2, color=t["series"][i], dash=dash),
                         marker=dict(size=7, color=t["series"][i], line=dict(color=t["surface"], width=1.5)),
-                        customdata=np.stack([d["down_h"], [dt] * len(d), d["hour"]], axis=1),
-                        hovertemplate="%{y:.1f}% able to print · %{customdata[0]:,.0f} printer-h lost<extra>"
+                        customdata=np.stack([d["down_h"], [dt] * len(d), d["hour"],
+                                             [durations.hours(v, nbsp=False) for v in d["down_h"]]], axis=1),
+                        hovertemplate="%{y:.1f}% able to print · %{customdata[3]} of printer time lost<extra>"
                                       + dt + "</extra>")
     lo = float(np.nanmin(prof["availability"])) if len(prof) else 90
     fig.update_layout(**layout(theme, 300, hovermode="x unified", shapes=shapes,
@@ -685,11 +695,12 @@ def driver_bars(theme: str, d: pd.DataFrame, n: int = 8, color_slot: int = 0) ->
     d = d.head(n).iloc[::-1]
     fig = go.Figure(go.Bar(
         y=d["label"], x=d["down_h"], orientation="h", marker=dict(color=t["series"][color_slot]),
-        text=[f"{h:,.0f} h · {s:.0%}" for h, s in zip(d["down_h"], d["share"])], textposition="outside",
+        text=[f"{durations.hours(h, nbsp=False)} · {s:.0%}" for h, s in zip(d["down_h"], d["share"])], textposition="outside",
         cliponaxis=False, textfont=dict(color=t["secondary"], size=11),
-        customdata=np.stack([d["key"].astype(str), d["outages"]], axis=1),
-        hovertemplate="<b>%{y}</b><br>%{x:,.0f} printer-hours lost in %{customdata[1]} outage(s)<extra></extra>"))
-    fig.update_layout(**layout(theme, max(200, 34 * len(d) + 50), margin=dict(r=90),
+        customdata=np.stack([d["key"].astype(str), d["outages"],
+                             [durations.hours(v, nbsp=False) for v in d["down_h"]]], axis=1),
+        hovertemplate="<b>%{y}</b><br>%{customdata[2]} of printer time lost in %{customdata[1]} outage(s)<extra></extra>"))
+    fig.update_layout(**layout(theme, max(200, 34 * len(d) + 50), margin=dict(r=210),
                                xaxis=dict(showgrid=True, title=dict(text="printer-hours lost"), rangemode="tozero"),
                                yaxis=dict(showgrid=False, tickfont=dict(color=t["secondary"]))))
     return fig
@@ -772,13 +783,15 @@ def walk_bars(theme: str, cov: pd.DataFrame, alert_min: float) -> go.Figure:
     fig = go.Figure(go.Bar(
         y=d["label"], x=d["walk_min"], orientation="h",
         marker=dict(color=[STATUS["critical"] if g else t["series"][0] for g in d["gap"]]),
-        text=[f"{m:.0f} min · {nearby_fmt(mt)}" for m, mt in zip(d["walk_min"], d["meters"])],
+        text=[f"{durations.minutes(m, nbsp=False)} · {nearby_fmt(mt)}" for m, mt in zip(d["walk_min"], d["meters"])],
         textposition="outside", cliponaxis=False, textfont=dict(color=t["secondary"], size=11),
-        customdata=np.stack([d["station_id"], d["nearest"], d["down_h"]], axis=1),
-        hovertemplate="<b>%{y}</b><br>%{x:.0f}-minute walk to %{customdata[1]}<br>down %{customdata[2]:.0f} h in "
+        customdata=np.stack([d["station_id"], d["nearest"], d["down_h"],
+                             [durations.minutes(m, nbsp=False) for m in d["walk_min"]],
+                             [durations.hours(h, nbsp=False) for h in d["down_h"]]], axis=1),
+        hovertemplate="<b>%{y}</b><br>%{customdata[3]} walk to %{customdata[1]}<br>down %{customdata[4]} in "
                       "this period<extra></extra>"))
     fig.add_vline(x=alert_min, line=dict(color=STATUS["critical"], width=1, dash="dot"),
-                  annotation_text=f"{alert_min:.0f} min", annotation_position="top",
+                  annotation_text=durations.minutes(alert_min, nbsp=False), annotation_position="top",
                   annotation_font=dict(size=11, color=t["secondary"]))
     fig.update_layout(**layout(theme, max(240, 24 * len(d) + 70), margin=dict(r=110, t=30),
                                xaxis=dict(showgrid=True, title=dict(text="minutes' walk to a backup"), rangemode="tozero"),
@@ -870,10 +883,12 @@ def impact_bars(theme: str, t: pd.DataFrame, n: int = 8) -> go.Figure:
     d = t.head(n).iloc[::-1]
     fig = go.Figure([
         go.Bar(y=d["label"], x=d["down_h"], orientation="h", name="Hours down", marker=dict(color=tk["neutral_bar"]),
-               hovertemplate="<b>%{y}</b><br>%{x:,.0f} hours down<extra></extra>"),
+               text=[durations.hours(v, nbsp=False) for v in d["down_h"]], textposition="none",
+               hovertemplate="<b>%{y}</b><br>%{text} down<extra></extra>"),
         go.Bar(y=d["label"], x=d["weighted_h"], orientation="h", name="Busy-weighted hours",
                marker=dict(color=tk["series"][0]),
-               hovertemplate="<b>%{y}</b><br>%{x:,.0f} busy-weighted hours<extra></extra>")])
+               text=[durations.hours(v, nbsp=False) for v in d["weighted_h"]], textposition="none",
+               hovertemplate="<b>%{y}</b><br>%{text} busy-weighted<extra></extra>")])
     fig.update_layout(**layout(theme, max(240, 46 * len(d) + 70), barmode="group", bargap=0.25,
                                legend=dict(orientation="h", y=1.08, x=0),
                                xaxis=dict(showgrid=True, title=dict(text="hours"), rangemode="tozero"),

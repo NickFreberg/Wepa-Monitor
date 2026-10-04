@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import __version__, config, store
+from . import __version__, config, durations, store
 
 POLL_S = 15
 FAILOVER_S = 60
@@ -248,7 +248,7 @@ def install(server, data_dir: Path) -> None:
         elif kind == "handover":
             mins = max(0.0, (until - since) / 60)
             sysevents.add("backup_handover", f"Main collector back; backup '{bid}' stood down",
-                          f"The backup covered {fmt(since)} to {fmt(until)} ({mins:.0f} min) and sent its "
+                          f"The backup covered {fmt(since)} to {fmt(until)} ({durations.minutes(mins)}) and sent its "
                           "readings here.", href="/software#backups", data_dir=data_dir, ts=until)
             _note_peer(data_dir, bid, state="standby", last_cover={"since": since, "until": until})
         elif kind == "updated":

@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 from dash import dcc, html
 
-from ... import activity, config, geo, metrics as M, models, ops, support, vocab
+from ... import activity, config, durations, geo, metrics as M, models, ops, support, vocab
 from .. import charts
 from ..components import campus_line, chart_card, data_table, desk_line, explore_hint, fmt_minutes, headline, icon, station_link, tile
 from .common import empty, scope_ids
@@ -73,7 +73,7 @@ def render(ds: M.Dataset, theme: str, scope, basemap: str = "street"):
         tile("Degraded", str(yel), "printing, but need a look", tone="warning" if yel else None,
              href="/stations?status=yellow"),
         tile("Availability, last 24 h", f"{a24.value:.1f}%" if a24.value is not None else "—",
-             f"{a24.extra.get('down_h', 0):.1f} printer-hours down" if a24.value is not None else a24.note,
+             f"{durations.hours(a24.extra.get('down_h', 0))} of printer downtime" if a24.value is not None else a24.note,
              compare=compare, ok=a24.ok),
         tile("Near end of life", str(due), "stations with a consumable due within 2 days"),
     ])

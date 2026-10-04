@@ -2,6 +2,8 @@
 'likely to go down in the next 24 hours' list (Overview and station pages)."""
 from __future__ import annotations
 
+from ... import durations
+
 import pandas as pd
 from dash import html
 
@@ -36,7 +38,7 @@ def _pct(v) -> str:
 
 def _ago(ts: str) -> str:
     h = (pd.Timestamp.now(tz="UTC") - pd.Timestamp(ts)).total_seconds() / 3600
-    return "just now" if h < 1 else f"{h:.0f} hours ago" if h < 48 else f"{h / 24:.0f} days ago"
+    return "just now" if h < 1 else durations.hours(h) + " ago"
 
 
 def _gate_rows(card: dict) -> html.Ul:

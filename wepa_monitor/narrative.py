@@ -11,6 +11,8 @@ can bold key numbers and turn station names into links:
 """
 from __future__ import annotations
 
+from . import durations
+
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -90,12 +92,8 @@ def clip(ds: M.Dataset, p: Period) -> Period:
 # --- helpers -------------------------------------------------------------------------------------
 
 def dur(seconds: float) -> str:
-    m = seconds / 60
-    if m < 90:
-        return f"{m:.0f} min"
-    if m < 48 * 60:
-        return f"{m / 60:.1f} hours"
-    return f"{m / 1440:.1f} days"
+    from . import durations
+    return durations.human(seconds)
 
 
 def hour(h: int) -> str:
@@ -467,7 +465,7 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
             lead.append(f", {'up' if d > 0 else 'down'} {abs(d):.1f} points from {p.prev_label}")
     lead.append(". ")
     down_h = a.extra.get("down_h", 0)
-    lead += ["Altogether that's about ", ("b", f"{down_h:,.0f} printer-hours"), " when a station couldn't print."]
+    lead += ["Altogether that's about ", ("b", durations.hours(down_h)), " of printer time when a station couldn't print."]
     note = history_note(ds, p)
     if note:
         lead += [" " + note]
@@ -534,7 +532,7 @@ def story(ds: M.Dataset, p: Period, ids=None, scope_label: str = "BSU print stat
         seg = []
         if len(due):
             first = due.iloc[0]
-            when_txt = "now" if first["days"] == 0 else f"in about {first['days']:.0f} day{'s' if round(first['days']) != 1 else ''}"
+            when_txt = "now" if first["days"] == 0 else f"in about {durations.days(first['days'])}"
             seg += ["Looking ahead: ", ("b", plural(len(due), "consumable")),
                     f" {'is' if len(due) == 1 else 'are'} at or within a week of end of life, most urgently ",
                     ("st", first["station_id"], nm.get(first["station_id"], first["station_id"])),

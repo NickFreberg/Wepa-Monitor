@@ -8,6 +8,18 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.2.1] - 2026-10-04
+Times read in whole units, and the layout fits any window.
+
+### Changed
+- Every length of time is written in whole units, never decimals: "3 hours, 15 minutes", and past a day "2 days, 4 hours, 10 minutes". This covers tiles, tables, stories, chart labels and hovers, the activity feed, investigations and the assistant's answers. Totals across printers read as printer time ("75 days, 16 hours of printer downtime") instead of printer-hours.
+- The sidebar's width follows the window. It becomes an icon rail on tablet-size windows and a strip along the top on phones, and its color runs the full length of every page. On short windows the navigation tightens, and it scrolls if it still doesn't fit.
+- The top bar's margins match the page content, button labels give way to icons before anything wraps, and on very wide screens its tools line up with the content's right edge.
+
+### Fixed
+- Long values in the summary tiles no longer push the page wider than the window; they wrap at the commas.
+- Chart labels for long durations are no longer cut off.
+
 ## [1.2.0] - 2026-10-04
 Vulnerabilities are now ranked by real-world exploitation, the app checks itself against the OWASP Top 10,
 and anyone signed in can suggest a feature that goes straight to GitHub as an issue.

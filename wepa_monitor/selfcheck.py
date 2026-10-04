@@ -27,7 +27,8 @@ class Check:
 
 
 def _ago(s: float) -> str:
-    return f"{s:.0f} s" if s < 120 else f"{s / 60:.0f} min" if s < 7200 else f"{s / 3600:.1f} h"
+    from . import durations
+    return f"{s:.0f} seconds" if s < 90 else durations.human(s)
 
 
 def run(ds=None, data_dir: Path | None = None) -> list[Check]:

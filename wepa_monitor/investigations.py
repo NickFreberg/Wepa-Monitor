@@ -428,16 +428,8 @@ def archive_due(data_dir) -> None:
 def fmt_dur(seconds) -> str:
     if seconds is None or (isinstance(seconds, float) and not np.isfinite(seconds)):
         return "—"
-    s = max(float(seconds), 0.0)
-    d, rem = divmod(s, 86400)
-    h, rem = divmod(rem, 3600)
-    m = rem // 60
-    nb = "\u00a0"                                   # keep "3 d 4 h" on one line
-    if d:
-        return f"{int(d)}{nb}d{nb}{int(h)}{nb}h"
-    if h:
-        return f"{int(h)}{nb}h{nb}{int(m)}{nb}m"
-    return f"{int(m)}{nb}m"
+    from . import durations
+    return durations.human(seconds)
 
 
 def _owner(ds, station_id):

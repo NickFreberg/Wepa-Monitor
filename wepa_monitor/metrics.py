@@ -7,6 +7,8 @@ dashboard grays out anything that does not meet the gating rules in config.
 """
 from __future__ import annotations
 
+from . import durations
+
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -271,12 +273,12 @@ def mtbf(ds: Dataset, start, end, ids=None) -> Metric:
     if up_h == 0:
         return Metric(None, 0, False, "no observations in window")
     if failures == 0:
-        return Metric(None, 0, False, f"no failures in {up_h:,.0f} printer-hours", {"up_h": up_h})
+        return Metric(None, 0, False, f"no failures in {durations.hours(up_h)} of printer time", {"up_h": up_h})
     n_st = len(ids) if ids is not None else ds.stations.shape[0]
     days_per_station = up_h / 24 / max(n_st, 1)
     ok = failures >= config.MIN_INCIDENTS_FOR_MEAN and days_per_station >= config.MIN_DAYS_FOR_BURN_RATE
     note = "" if ok else (f"only {failures} failure(s)" if failures < config.MIN_INCIDENTS_FOR_MEAN
-                          else f"only {days_per_station:.1f} days observed - low confidence")
+                          else f"only {durations.days(days_per_station)} observed - low confidence")
     return Metric(up_h / failures, failures, ok, note, {"up_h": up_h})
 
 

@@ -8,6 +8,8 @@ same score the route planner will use:
 """
 from __future__ import annotations
 
+from . import durations
+
 import numpy as np
 import pandas as pd
 
@@ -79,7 +81,7 @@ def work_queue(ds: Dataset, ids=None) -> pd.DataFrame:
                 rules.FIX_CATEGORIES["consumable"])
         elif pd.notna(c["days_to_replace"]) and c["days_to_replace"] <= 2:
             add(c["station_id"], "consumable_soon",
-                f"{c['label']} at {c['level']:.0f}% (~{c['days_to_replace']:.1f} days left)",
+                f"{c['label']} at {c['level']:.0f}% (about {durations.days(c['days_to_replace'])} left)",
                 "Bring a replacement on the next round")
 
     if not rows:

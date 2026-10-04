@@ -20,19 +20,15 @@ def fmt_num(v, digits=1, suffix=""):
 
 
 def fmt_minutes(m):
-    if m is None or (isinstance(m, float) and not math.isfinite(m)):
-        return "—"
-    if m < 90:
-        return f"{m:,.0f} min"
-    if m < 48 * 60:
-        return f"{m / 60:,.1f} h"
-    return f"{m / 1440:,.1f} d"
+    """A duration in minutes as whole days, hours and minutes ("1 hour, 35 minutes")."""
+    from .. import durations
+    return durations.minutes(m)
 
 
 def fmt_hours(h):
-    if h is None or (isinstance(h, float) and not math.isfinite(h)):
-        return "—"
-    return f"{h:,.0f} h" if h < 96 else f"{h / 24:,.1f} d"
+    """A duration in hours as whole days, hours and minutes ("2 days, 3 hours")."""
+    from .. import durations
+    return durations.hours(h)
 
 
 def icon(name: str, label: str | None = None) -> html.Span:
@@ -105,7 +101,8 @@ def tile(label: str, value: str, sub: str = "", ok: bool = True, help_text: str 
     ic, ic_tone = auto_icon(label)
     children = [
         html.Div([html.Span(label), badge(ic, ic_tone)], className="tile__label"),
-        html.Div(value, className="tile__value"),
+        html.Div(value, className="tile__value" + (" tile__value--long" if isinstance(value, str) and len(value) > 11
+                                                   else "")),
         html.Div(compare, className="tile__compare") if compare else None,
         html.Div(sub, className="tile__sub"),
     ]

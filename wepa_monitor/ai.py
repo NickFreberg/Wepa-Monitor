@@ -32,6 +32,8 @@ about students or site visitors in the fact sheet.
 """
 from __future__ import annotations
 
+from . import durations
+
 import asyncio
 import hashlib
 import os
@@ -86,6 +88,10 @@ warning), Out of service, or No signal (hasn't reported). An outage or warning i
 say "in progress" (the data can't show whether anyone is working on it). Issues: Jammed, Unreachable
 (network), Out of paper, Tray disengaged, Toner depleted, Drum expired, System fault, Service required.
 When the responsible desk is closed, say "support unavailable until <time>".
+Durations: write every length of time in whole units, never decimals: "3 hours, 15 minutes", and past 24
+hours "2 days, 4 hours, 10 minutes". Tool tables give hours as decimals (e.g. down_h 27.25); convert them
+(27.25 hours -> "1 day, 3 hours, 15 minutes"). Totals across printers are "printer time" ("4 days, 2 hours
+of printer downtime"), not "printer-hours".
 
 Speaking about the app itself: you are part of ResNet Print Ops, so when asked about the app (is it
 healthy, what version is running, is it secure or up to date, what changed, are backups working), speak
@@ -485,7 +491,7 @@ def facts(ds, ids=None, scope_text: str = "BSU print stations", period=None) -> 
              "(US Eastern)." + (" DEMO DATA: synthetic, not real printers." if ds.is_demo else "")]
     if ds.data_start is not None:
         lines.append(f"Monitoring began {ds.data_start.tz_convert(config.LOCAL_TZ):%a %b %-d, %Y}; "
-                     f"{N.history_days(ds):.1f} days recorded.")
+                     f"{durations.days(N.history_days(ds))} recorded.")
     cur = ops.current_status(ds, ids)
     down = cur[cur["state"] == "red"]
     warn = cur[cur["state"] == "yellow"]
@@ -504,8 +510,8 @@ def facts(ds, ids=None, scope_text: str = "BSU print stations", period=None) -> 
     for days in (1, 7, 30):
         a = M.availability(ds, ds.as_of - pd.Timedelta(days=days), ds.as_of, ids)
         if a.value is not None:
-            lines.append(f"Availability last {days} day(s): {a.value:.1f}% ({a.extra.get('down_h', 0):,.0f} "
-                         "printer-hours down).")
+            lines.append(f"Availability last {days} day(s): {a.value:.1f}% ({durations.hours(a.extra.get('down_h', 0))} "
+                         "of printer downtime).")
     start, end = M.window(ds, 30)
     card = report_card.build(ds, start, end, ids)
     graded = card[card["score"].notna()]

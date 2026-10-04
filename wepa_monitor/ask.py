@@ -12,6 +12,8 @@ Weygand Hall, last week"), so a misunderstanding is obvious and easy to rephrase
 """
 from __future__ import annotations
 
+from . import durations
+
 import re
 from dataclasses import dataclass, field
 
@@ -417,7 +419,7 @@ def _forecast(ds, p, subj, q):
         return Answer("", [["No forecast is possible yet; parts need a few days of readings."]])
     first = eol.iloc[0]
     when_txt = "now (already at its replacement point)" if first["days"] == 0 else \
-        f"in about {first['days']:.1f} days"
+        f"in about {durations.days(first['days'])}"
     soon = eol[eol["days"] <= 7]
     para = ["Next to reach end of life: ", _link(ds, first["station_id"]), f"'s {first['label']}, {when_txt}. ",
             f"{plural(len(soon), 'part')} {'is' if len(soon) == 1 else 'are'} due within a week. Forecasts come from a "
@@ -506,7 +508,7 @@ def _support(ds, p, subj, q):
             seg.append(f" and waited a median {dur(r.median_wait_s)} for the desk to open")
         tot = r.staffed_h + r.after_h
         if tot > 0:
-            seg.append(f". Of {tot:,.0f} printer-hours down, {r.after_h / tot:.0%} fell outside desk hours")
+            seg.append(f". Of {durations.hours(tot)} of printer downtime, {r.after_h / tot:.0%} fell outside desk hours")
         if np.isfinite(r.median_desk_fix_s):
             seg.append(f"; once staff were in, the typical fix took {dur(r.median_desk_fix_s)} of desk time")
         paras.append(seg + ["."])

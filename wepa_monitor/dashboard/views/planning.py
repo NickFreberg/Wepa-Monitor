@@ -8,7 +8,7 @@ from dash import html
 
 from ... import advanced as A, courses, metrics as M
 from .. import charts
-from ..components import chart_card, data_table, fmt_num, headline, prose
+from ..components import chart_card, data_table, fmt_hours, fmt_minutes, fmt_num, headline, prose
 from .common import empty
 
 
@@ -73,9 +73,9 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
         lo, mid, hi = r["saved_h"]
         cards.append(html.Div(className="scenario", children=[
             html.Div(r["name"], className="scenario__name"),
-            html.Div([html.Span(f"{mid:,.0f}", className="scenario__value"), " printer-hours of downtime saved"],
+            html.Div([html.Span(fmt_hours(mid), className="scenario__value"), " of printer downtime saved"],
                      className="scenario__big"),
-            html.Div(f"likely {lo:,.0f}–{hi:,.0f} · about {r['saved_h_per_week']:,.0f} a week · "
+            html.Div(f"likely {fmt_hours(lo)} to {fmt_hours(hi)} · about {fmt_hours(r['saved_h_per_week'])} a week · "
                      f"{r['affected']} of {r['after_hours']} after-hours outages picked up sooner",
                      className="scenario__meta"),
         ]))
@@ -107,8 +107,8 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
             nerd="Walking times are shortest paths (Dijkstra) on the OpenStreetMap footpath network at 3 mph, "
                  "door to door between building centers.",
             table=data_table(cov, [("label", "Printer", None), ("nearest", "Nearest open printer", None),
-                                   ("walk_min", "Walk (min)", lambda v: fmt_num(v, 1)),
-                                   ("down_h", f"Down, {plabel} (h)", lambda v: fmt_num(v, 1))],
+                                   ("walk_min", "Walk", fmt_minutes),
+                                   ("down_h", f"Time down, {plabel}", fmt_hours)],
                              link_col=("label", "station_id"))))
         pl = _m(ds, "place", lambda d, i, s0, e0: A.placement(d, s0, e0, i), ids, start, end)
         if len(pl):
@@ -195,7 +195,7 @@ def stats_extras(ds: M.Dataset, theme: str, ids, start, end, plabel: str) -> lis
             "When a warning shows up, does an outage follow?", f"Warnings in the last {plabel}, and whether the same "
             "printer went out of service within 24 hours.",
             story=[("b", f"{w['share']:.0%}"), f" of warnings were followed by an outage within a day (likely "
-                   f"{lo:.0%}–{hi:.0%})" + (f", typically {w['median_lag_h']:.0f} hours later" if np.isfinite(
+                   f"{lo:.0%}–{hi:.0%})" + (f", typically {fmt_hours(w['median_lag_h'])} later" if np.isfinite(
                        w["median_lag_h"]) else "") + "."],
             body=data_table(w["by_cause"], [("cause", "Warning", None), ("warnings", "Times", None),
                                             ("led_to_outage", "Then out of service", None),

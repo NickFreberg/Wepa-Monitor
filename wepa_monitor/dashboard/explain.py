@@ -8,6 +8,8 @@ means physically.
 """
 from __future__ import annotations
 
+from .. import durations
+
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -100,7 +102,7 @@ def avail_daily(ds, point, ctx: Context) -> Explanation:
     if a.value is not None and avg.value is not None:
         d = a.value - avg.value
         tells = [f"That's {abs(d):.1f} points {'above' if d >= 0 else 'below'} the {ctx.period_label} average of "
-                 f"{avg.value:.1f}%, about ", ("b", f"{a.extra['down_h']:.0f} printer-hours"), " lost that day. "]
+                 f"{avg.value:.1f}%, about ", ("b", durations.hours(a.extra['down_h'])), " of printer time lost that day. "]
         h = ds.hourly[(ds.hourly["local_date"] == day)]
         if ids is not None:
             h = h[h["station_id"].isin(ids)]
@@ -141,11 +143,11 @@ def building_cov(ds, point, ctx: Context) -> Explanation:
     tells = [f"{building} has {N.plural(n, 'print station')}. "]
     if n > 1:
         tells += [f"All of them were up {r['all_up']:.1f}% of the time, so a second printer covered the gap for "
-                  f"about {(r['any_up'] - r['all_up']) / 100 * (ctx.end - ctx.start).total_seconds() / 3600:.0f} hours "
+                  f"about {durations.human((r['any_up'] - r['all_up']) / 100 * (ctx.end - ctx.start).total_seconds())} "
                   f"over the {ctx.period_label}."]
     else:
         tells += [f"With only one printer, every outage leaves the building with no printing; it was unavailable for "
-                  f"about {(100 - r['any_up']) / 100 * (ctx.end - ctx.start).total_seconds() / 3600:.0f} hours."]
+                  f"about {durations.human((100 - r['any_up']) / 100 * (ctx.end - ctx.start).total_seconds())}."]
     matters = ["Coverage is what students actually experience. Single-printer buildings with low coverage are the "
                "strongest case for a second printer or faster response."]
     return Explanation("Building coverage", title, tells, matters, [(f"Stations in {building}", f"/stations?q={building}")])
@@ -317,8 +319,8 @@ def hour_bars(ds, point, ctx: Context) -> Explanation:
 def km(ds, point, ctx: Context) -> Explanation:
     group = _cd(point, 0, "")
     hrs, still = float(point["x"]), float(point["y"])
-    title = f"After {hrs:.1f} hours, {still:.0f}% of outages that {group.lower().replace('started', 'started')} were still not fixed."
-    tells = [f"Read it as: {100 - still:.0f}% were fixed within {hrs:.1f} hours. The steeper the early drop, the faster "
+    title = f"After {durations.hours(hrs)}, {still:.0f}% of outages that {group.lower().replace('started', 'started')} were still not fixed."
+    tells = [f"Read it as: {100 - still:.0f}% were fixed within {durations.hours(hrs)}. The steeper the early drop, the faster "
              "the response."]
     matters = ["The gap between the two curves is the cost of outages starting when no support desk is staffed "
                "(ResNet: " + support.hours_text("ResNet") + "; IT Service Center: " +
@@ -402,9 +404,9 @@ def owner_hours(ds, point, ctx: Context) -> Explanation:
     r = summ.iloc[0]
     tot = r["staffed_h"] + r["after_h"]
     if part == "after":
-        title = f"{r['after_h']:,.0f} of {owner}'s {tot:,.0f} printer-hours down fell outside desk hours."
+        title = f"{durations.hours(r['after_h'])} of {owner}'s {durations.hours(tot)} of printer downtime fell outside desk hours."
     else:
-        title = f"{r['staffed_h']:,.0f} of {owner}'s {tot:,.0f} printer-hours down fell inside desk hours."
+        title = f"{durations.hours(r['staffed_h'])} of {owner}'s {durations.hours(tot)} of printer downtime fell inside desk hours."
     tells = [f"{owner} works from {t['base']}, staffed {support.hours_text(owner)}. ",
              ("b", f"{r['after_hours']} of {r['outages']}"), " outages began after hours"]
     if np.isfinite(r["median_wait_s"]):
@@ -441,7 +443,7 @@ def avail_hourly(ds, point, ctx: Context) -> Explanation:
     h12 = f"{(hour % 12) or 12} {'AM' if hour < 12 else 'PM'}"
     title = f"{daytype} in the {h12} hour, printers could print {float(point['y']):.1f}% of the time."
     others = [(str(_cd(q, 1, "")), float(q["y"])) for q in ctx.points if _cd(q, 1) not in (daytype, None)]
-    tells = [f"Across the {ctx.period_label}, that hour lost ", ("b", f"{lost:,.0f} printer-hours"), " in total. "]
+    tells = [f"Across the {ctx.period_label}, that hour lost ", ("b", durations.hours(lost)), " of printer time in total. "]
     if others:
         tells.append(" ".join(f"On {n.lower()} at the same hour: {v:.1f}%." for n, v in others) + " ")
     open_now = [o for o in support.TEAMS if daytype == "Weekdays" and
@@ -457,7 +459,7 @@ def drivers(ds, point, ctx: Context) -> Explanation:
     cause = point.get("y") or point.get("label")
     hours = float(point.get("x") or 0)
     n = _cd(point, 1, 0)
-    title = f"{cause} cost about {hours:,.0f} printer-hours in the {ctx.period_label}, across {n} outage(s)."
+    title = f"{cause} cost about {durations.hours(hours)} of printer time in the {ctx.period_label}, across {n} outage(s)."
     f = M.faults_in(ds, ctx.start, ctx.end, ctx.ids)
     f = f[f["label"] == cause]
     tells = []

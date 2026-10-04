@@ -5,6 +5,8 @@ same gating rules as the metrics; otherwise it is simply not shown.
 """
 from __future__ import annotations
 
+from . import durations
+
 from dataclasses import dataclass
 
 import numpy as np
@@ -72,9 +74,8 @@ def _hour(h: int) -> str:
 
 
 def _fmt_dur(minutes: float) -> str:
-    if minutes < 90:
-        return f"{minutes:.0f} min"
-    return f"{minutes / 60:.1f} h"
+    from . import durations
+    return durations.minutes(minutes)
 
 
 def observations(ds: M.Dataset, cur: Period, prev: Period | None, ids=None) -> list[str]:
@@ -87,7 +88,7 @@ def observations(ds: M.Dataset, cur: Period, prev: Period | None, ids=None) -> l
             if b.ok:
                 d = a.value - b.value
                 line += f", {'up' if d >= 0 else 'down'} {abs(d):.1f} pts from {prev.label.split(' (')[0]}"
-        out.append(line + f" ({a.extra['down_h']:,.0f} printer-hours down).")
+        out.append(line + f" ({durations.hours(a.extra['down_h'])} of printer downtime).")
 
         sc = M.station_scorecard(ds, cur.start, cur.end, ids)
         sc = sc[sc["observed_h"] >= 24]
@@ -150,7 +151,7 @@ def observations(ds: M.Dataset, cur: Period, prev: Period | None, ids=None) -> l
         sid = hrs.idxmax()
         if hrs.max() >= 24:
             label = ds.stations.set_index("station_id").loc[sid, "label"]
-            out.append(f"{label} had at least one empty paper tray for {hrs.max():,.0f} hours - "
+            out.append(f"{label} had at least one empty paper tray for {durations.hours(hrs.max())} - "
                        "a candidate for a larger refill or an extra round.")
 
     dq = M.data_quality(ds, cur.start, cur.end)

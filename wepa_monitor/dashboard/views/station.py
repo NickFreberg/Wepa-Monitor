@@ -1,6 +1,8 @@
 """Station drill-through: everything about one print station."""
 from __future__ import annotations
 
+from ... import durations
+
 import pandas as pd
 from dash import dcc, html
 
@@ -34,8 +36,7 @@ def render(ds: M.Dataset, theme: str, station_id: str, period):
     if len(next_part):
         p = next_part.iloc[0]
         part_txt = (f"{p['label']} is at end of life ({p['level']:.0f}%)" if p["days"] == 0 else
-                    f"Next end of life: {p['label']} in about {p['days']:.0f} day"
-                    f"{'s' if round(p['days']) != 1 else ''}")
+                    f"Next end of life: {p['label']} in about {durations.days(p['days'])}")
     a = M.availability(ds, start, end, ids)
     fleet = M.availability(ds, start, end)
     avail_txt = (f"Available {a.value:.1f}% of the time over the last {plabel} (all BSU stations: {fleet.value:.1f}%)"

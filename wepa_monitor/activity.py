@@ -40,12 +40,8 @@ def display_names(ds: Dataset) -> dict[str, str]:
 
 
 def _dur(seconds: float) -> str:
-    m = seconds / 60
-    if m < 90:
-        return f"{m:.0f} min"
-    if m < 48 * 60:
-        return f"{m / 60:.1f} h"
-    return f"{m / 1440:.1f} days"
+    from . import durations
+    return durations.human(seconds)
 
 
 def events(ds: Dataset, since: pd.Timestamp | None = None, ids=None) -> pd.DataFrame:

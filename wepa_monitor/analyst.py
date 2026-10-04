@@ -11,6 +11,8 @@ in the model's reply appears in what the model was actually shown (see ai.verify
 """
 from __future__ import annotations
 
+from . import durations
+
 import re
 from dataclasses import dataclass, field
 from typing import Callable
@@ -259,7 +261,7 @@ class Toolkit:
             f"Data as of: {_when(ds.as_of)} (US Eastern).",
             "DEMO DATA: synthetic, generated to behave like the real status page. It does not describe real BSU "
             "printers; say so in any answer." if ds.is_demo else "Live data from Wepa's public status page.",
-            f"Monitoring began: {_when(ds.data_start)}; {N.history_days(ds):.1f} days recorded. Anything before "
+            f"Monitoring began: {_when(ds.data_start)}; {durations.days(N.history_days(ds))} recorded. Anything before "
             "that is unknown, not zero.",
             f"Stations in scope: {len(st)} (" + ", ".join(f"{k}: {v}" for k, v in
                                                        st["station_type"].value_counts().items()) + "); sections: "

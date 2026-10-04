@@ -267,7 +267,7 @@ def render_detail(ds: M.Dataset, ref: str):
             when=lambda d: d["start"].map(_when),
             cause=[", ".join(rules.issue_status(c) + (f" ({x})" if x else "") for c, x in
                              N.outage_causes(ds, s, t)[:2]) or "No cause reported" for s, t in zip(inc["station_id"], inc["start"])],
-            lasted=lambda d: [("ongoing" if st_ == "open" else f"{x / 3600:.1f} h") for st_, x in zip(d["status"], d["duration_s"])])
+            lasted=lambda d: [("ongoing" if st_ == "open" else I.fmt_dur(x)) for st_, x in zip(d["status"], d["duration_s"])])
     linked_card = chart_card("Linked outages", f"{len(linked)} reference{'s' if len(linked) != 1 else ''}.",
                              body=data_table(inc, [("ref", "Reference", None), ("when", "Started", None),
                                                    ("cause", "Cause", None), ("lasted", "Lasted", None)],

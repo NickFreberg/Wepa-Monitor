@@ -998,3 +998,68 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .fb-form textarea, .fb-form input[type=text] { width: 100%; border: 1px solid var(--hairline); border-radius: 10px;
   padding: 10px 12px; font: inherit; background: var(--surface); color: var(--ink); box-sizing: border-box; }
 .fb-form textarea { min-height: 160px; resize: vertical; }
+
+/* --- layout that scales with the window: width and height ------------------------------------
+   Sidebar width follows the window (and becomes an icon rail on mid-size screens, a top strip on
+   phones). Its crimson column runs the full length of the page however long it is, and its contents
+   tighten or scroll when the window is short. The top bar's gutters match the content's, and its tools
+   line up with the content's right edge on very wide screens. */
+:root { --side-w: clamp(212px, 15.5vw, 272px); --gutter: clamp(16px, 2.1vw, 36px); --content-max: 1880px; }
+.shell { grid-template-columns: var(--side-w) minmax(0, 1fr);
+  background: linear-gradient(to right, var(--side-bg) var(--side-w), transparent var(--side-w)); }
+.sidebar { height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  gap: clamp(8px, 2vh, 18px); padding: clamp(10px, 2vh, 18px) clamp(10px, 1vw, 16px); }
+.nav__link { padding: clamp(5px, 1.05vh, 10px) 10px; }
+.nav__link span:not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.content { padding: 22px var(--gutter) 56px; max-width: var(--content-max); }
+.banner { margin-left: var(--gutter); margin-right: var(--gutter); }
+.topbar { padding: 14px var(--gutter);
+  padding-right: max(var(--gutter), calc(100% - var(--content-max) + var(--gutter))); }
+.topbar__heading { min-width: 0; flex: 1 1 260px; }
+.topbar__title, .topbar__sub { overflow-wrap: anywhere; }
+.topbar__tools { flex: 0 1 auto; justify-content: flex-end; }
+
+/* Short windows: less space around the navigation, then drop the extras. */
+@media (max-height: 760px) and (min-width: 901px) {
+  .brand__sub { display: none; }
+  .side-status { font-size: 11px; padding: 8px; }
+}
+@media (max-height: 620px) and (min-width: 901px) {
+  .side-status__line { display: none; }
+}
+
+/* Medium widths: hide the words in the top bar's buttons before anything wraps. */
+@media (max-width: 1360px) and (min-width: 901px) {
+  .topbar__label { display: none; }
+  #scope-label { display: inline; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* Tablet widths: the sidebar becomes an icon rail (names show on hover). */
+@media (max-width: 1180px) and (min-width: 901px) {
+  :root { --side-w: 72px; }
+  .sidebar { padding-inline: 10px; align-items: center; }
+  .brand { padding: 4px 0; justify-content: center; }
+  .brand > div, .brand__name, .brand__sub { display: none; }
+  .nav { width: 100%; }
+  .nav__link { justify-content: center; padding-inline: 0; }
+  .nav__link span:not(.icon) { display: none; }
+  .side-status { align-items: center; padding: 8px 4px; }
+  .side-status__line { display: none; }
+  .assist-btn__label { display: none; }
+  .assist-btn { padding: 0 7px; }
+}
+
+/* Phones and narrow windows: the sidebar is the strip along the top (rules above); no column paint. */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: minmax(0, 1fr); background: none; }
+  .sidebar { height: auto; overflow-y: visible; overflow-x: auto; }
+  .topbar { padding: 12px 16px; }
+  .content { padding-left: 16px; padding-right: 16px; }
+  .banner { margin-left: 16px; margin-right: 16px; }
+}
+@media print { .shell { background: none !important; } }
+/* Tiles: long values (durations like "5 days, 12 hours, 27 minutes") wrap at the commas, smaller. */
+.tile { min-width: 0; }
+.tile__value { white-space: normal; overflow-wrap: break-word; }
+.tile__value--long { font-size: clamp(17px, 1.35vw, 22px); line-height: 1.22; letter-spacing: -0.01em; }
+.tile__sub, .tile__label { overflow-wrap: break-word; }
