@@ -14,6 +14,6 @@ fpdf2>=2.8
 github-copilot-sdk>=1.0
 anthropic>=1.0
 scikit-learn>=1.5
-segno>=1.6
+segno>=1.6.6
 pillow>=10
 defusedxml>=0.7
