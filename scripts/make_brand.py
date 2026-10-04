@@ -609,6 +609,24 @@ def cup_svgs() -> tuple[str, str]:
     return a, b
 
 
+def cup_art_svg() -> str:
+    """The Cup stand-in in color (teal brush, purple squiggle): shown when no real cup image is installed."""
+    a, b = cup_svgs()
+    a = a.replace('stroke="#000"', 'stroke="#19b3bf"').replace("<defs>", "<defs>", 1)
+    b = b.replace('stroke="#000"', 'stroke="#4b2383"')
+    inner_a = a[a.index("<defs>"):a.rindex("</svg>")].replace('id="t"', 'id="a"').replace('href="#t"', 'href="#a"')
+    inner_b = b[b.index("<defs>"):b.rindex("</svg>")].replace('id="t"', 'id="b"').replace('href="#t"', 'href="#b"')
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">'
+            f'<rect width="600" height="600" fill="#ffffff"/>{inner_a}{inner_b}</svg>')
+
+
+def cup_glyphs_svg() -> str:
+    """BSU glyphs to float above the cup art: bears, Boyden, paw prints, printers, paper, pennants."""
+    size = 640
+    shapes = _scatter(["bear", "boyden", "paw", "printer", "paper", "pennant", "bear", "paw"], size, 23, 5)
+    return _seamless(f'<path d="{" ".join(shapes)}"/>', size, 2.2)
+
+
 def favicon() -> None:
     """Render the colored mark to PNG with Chromium, then pack an .ico (16-64 px)."""
     import io
@@ -639,9 +657,10 @@ def main() -> None:
     (ASSETS / "sandman.svg").write_text(snake_svg())
     (ASSETS / "sandman-mark.svg").write_text(snake_svg(mark=True))
     (ASSETS / "pattern-spirit.svg").write_text(spirit_wave_svg())
-    cup_a, cup_b = cup_svgs()
-    (ASSETS / "pattern-cup-a.svg").write_text(cup_a)
+    _, cup_b = cup_svgs()
     (ASSETS / "pattern-cup-b.svg").write_text(cup_b)
+    (ASSETS / "cup-art.svg").write_text(cup_art_svg())
+    (ASSETS / "pattern-cup-glyphs.svg").write_text(cup_glyphs_svg())
     (DOC_ASSETS / "boyden-cover.svg").write_text(boyden_svg(True, ("#ffffff", "#f3c25b", "#8fc1e8"), stroke=2.4))
     (DOC_ASSETS / "boyden-mark-color.svg").write_text(boyden_svg(False, (CRIMSON, GOLD, SLATE)))
     favicon()

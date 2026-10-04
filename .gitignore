@@ -11,3 +11,8 @@ update-pr.md
 *.m4a
 *.ogg
 *lyrics*.txt
+# The real cup-design image is installed on the server, never committed (see wepa_monitor/theme_art.py)
+cup.png
+cup.jpg
+cup.jpeg
+cup.webp

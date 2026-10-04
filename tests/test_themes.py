@@ -108,3 +108,19 @@ def test_every_theme_has_complete_chart_tokens():
         assert len(TOKENS[t]["series"]) == 8
         ink(t, "toner_k")
     assert is_dark("cosmic") and is_dark("dark") and not is_dark("cup") and not is_dark("gobears")
+
+
+def test_cup_art_is_the_installed_image_or_the_drawn_stand_in(tmp_path, monkeypatch):
+    from flask import Flask
+
+    from wepa_monitor import theme_art
+    app = Flask(__name__)
+    theme_art.install(app, tmp_path)
+    c = app.test_client()
+    r = c.get("/_theme/cup")
+    assert r.status_code == 200 and r.mimetype == "image/svg+xml" and b"<svg" in r.data
+    (tmp_path / "cup.jpg").write_bytes(b"\xff\xd8\xff fake jpeg")
+    r = c.get("/_theme/cup")
+    assert r.mimetype == "image/jpeg" and r.data.startswith(b"\xff\xd8")
+    monkeypatch.setenv("WEPA_CUP_IMAGE", str(tmp_path / "missing.png"))
+    assert c.get("/_theme/cup").mimetype == "image/svg+xml"

@@ -1160,11 +1160,17 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
   --side-bg: #2e1a50; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.78); --side-hover: rgba(63, 208, 212, 0.16);
   --side-active-bg: #3fd0d4; --side-active-ink: #1d1733; --side-border: #24133f; --brand: #5d2d8c;
   --shadow: 3px 3px 0 rgba(13, 138, 153, 0.16);
-  --pat-a: url("/assets/pattern-cup-a.svg"); --pat-b: url("/assets/pattern-cup-b.svg"); --pat-side: url("/assets/pattern-cup-b.svg");
+  --pat-side: url("/assets/pattern-cup-b.svg");
   --pat-size: 600px; --pat-pos: 0 0; --pat-repeat: repeat; --pat-side-size: 560px; --pat-side-pos: 40px 0; --pat-shift: 0px;
   --pattern-a: rgba(18, 163, 180, 0.22); --pattern-b: rgba(93, 45, 140, 0.2); --side-pattern: rgba(63, 208, 212, 0.256);
   --mark-1: #ffffff; --mark-2: #3fd0d4; --mark-3: #c9a6ff;
 }
+/* The cup art itself (the real image if the server has one, else the drawn stand-in; see theme_art.py), faded
+   to 16% so text keeps 4.5:1 over its darkest stroke, with a layer of BSU glyphs above it. */
+:root[data-theme="cup"] body::before { -webkit-mask: none; mask: none; background: url("/_theme/cup") 0 0 / 760px auto repeat;
+  opacity: .16; }
+:root[data-theme="cup"] body::after { -webkit-mask: url("/assets/pattern-cup-glyphs.svg") 90px 40px / 640px repeat;
+  mask: url("/assets/pattern-cup-glyphs.svg") 90px 40px / 640px repeat; background: rgba(93, 45, 140, 0.12); transform: none; }
 :root[data-theme="cup"] .card, :root[data-theme="cup"] .tile { border: 1.5px solid #d9d3e6; box-shadow: 4px 4px 0 rgba(93, 45, 140, 0.12); }
 :root[data-theme="cup"] .topbar { border-bottom: 3px solid #12a3b4; }
 :root[data-theme="cup"] .btn--primary { background: #5d2d8c; border-color: #5d2d8c; color: #ffffff; }

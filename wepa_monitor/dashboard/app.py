@@ -15,7 +15,7 @@ import pandas as pd
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 
-from .. import activity, config, export, football, geo, metrics as M, routing, sandman, security
+from .. import activity, config, export, football, geo, metrics as M, routing, sandman, security, theme_art
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
@@ -456,6 +456,7 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
 
     # Sandman: three or more words of the song in Ask the data (see wepa_monitor/sandman.py).
     sandman.install(app.server, data_dir)
+    theme_art.install(app.server, data_dir)
 
     @app.callback(Output("eggs", "data", allow_duplicate=True), Input("ask-go", "n_clicks"), Input("ask-q", "value"),
                   State("eggs", "data"), prevent_initial_call=True)

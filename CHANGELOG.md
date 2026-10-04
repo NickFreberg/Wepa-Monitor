@@ -8,6 +8,15 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.1] - 2026-10-04
+Cup gets the real thing.
+
+### Changed
+- The Cup appearance can now show the actual 90s paper-cup artwork as its background, faded so every text color keeps 4.5 to 1 contrast, with a layer of BSU glyphs above it: bears, Boyden Hall, paw prints, printers, paper and pennants. The artwork belongs to its owner, so it is not in this repository: the server shows cup.png, cup.jpg or cup.webp from its data folder (or the file named by WEPA_CUP_IMAGE) to signed-in users, and a drawn stand-in when there is none.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
 ## [1.4.0] - 2026-10-04
 The background becomes a wireframe landscape, every background is easier to see, and there's one more
 surprise for people who ask the right question.
