@@ -8,6 +8,23 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.2.0] - 2026-10-04
+Vulnerabilities are now ranked by real-world exploitation, the app checks itself against the OWASP Top 10,
+and anyone signed in can suggest a feature that goes straight to GitHub as an issue.
+
+### New
+- Threat intelligence for every vulnerability found: CISA's Known Exploited Vulnerabilities catalog and Vulnrichment assessments, the NIST National Vulnerability Database, Microsoft's Security Update Guide, FIRST EPSS, Exploit-DB and Metasploit. Each finding gets a priority (Act now, Soon or Routine) with the reasons in plain English and links to every source.
+- A Threat-intelligence sources table showing when each source was last read and whether it answered.
+- OWASP Top 10 (2025) checklist: for each of the ten risks, what the app does, the test or file that proves it, a live check of this copy, and the known gaps.
+- Suggest a feature: a form under your picture that files a GitHub issue with a REQ reference number, and a list of your requests showing whether each issue is open, closed or done. Names are left out of issues unless turned on; @mentions are neutralized.
+- New activity-feed events when a vulnerability becomes exploited and when a feature request is sent.
+
+### Changed
+- "Check for vulnerabilities now" runs in the background; the page updates when it finishes.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
 ## [1.1.0] - 2026-10-04
 The app now watches its own health and security: known vulnerabilities in its packages, software
 updates you can start from the app, backup collectors that cover outages and hand back cleanly, and a

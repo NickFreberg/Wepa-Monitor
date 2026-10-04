@@ -16,6 +16,7 @@
 #   SKIP_WAIT=1             don't wait for the restarted app to answer
 #   PEER_KEY=…              shared key for backup collectors (stored as a secret; see docs/SECURITY.md)
 #   GITHUB_UPDATE_TOKEN=…   lets the administrator start software updates from the app (stored as a secret)
+#   GITHUB_ISSUES_TOKEN=…   lets people's feature requests become GitHub issues (stored as a secret)
 #   REPLICAS=2              run two copies for availability (one collects, the other takes over at once)
 set -euo pipefail
 
@@ -160,6 +161,10 @@ else
   if [ -n "${GITHUB_UPDATE_TOKEN:-}" ]; then
     az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "github-token=$GITHUB_UPDATE_TOKEN" -o none
     EXTRA_ENV="$EXTRA_ENV WEPA_GITHUB_TOKEN=secretref:github-token"
+  fi
+  if [ -n "${GITHUB_ISSUES_TOKEN:-}" ]; then
+    az containerapp secret set -g "$RESOURCE_GROUP" -n "$APP_NAME" --secrets "github-issues-token=$GITHUB_ISSUES_TOKEN" -o none
+    EXTRA_ENV="$EXTRA_ENV WEPA_GITHUB_ISSUES_TOKEN=secretref:github-issues-token"
   fi
   if [ -n "${REPLICAS:-}" ]; then
     az containerapp update -g "$RESOURCE_GROUP" -n "$APP_NAME" --min-replicas "$REPLICAS" --max-replicas "$REPLICAS" -o none

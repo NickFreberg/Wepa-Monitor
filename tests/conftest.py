@@ -9,6 +9,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _no_breach_lookups(monkeypatch):
     monkeypatch.setenv("WEPA_BREACH_CHECK", "0")           # tests never call out to Have I Been Pwned
+    monkeypatch.setenv("WEPA_THREAT_INTEL", "0")           # ...or to the threat-intelligence sources
 
 
 def login(client, username, password, next_="/"):

@@ -105,8 +105,77 @@ office for a review.
 * **In the activity feed:** new and fixed findings appear there.
 * **In CI:** `pip-audit` checks the exact lock file on every push and daily, and Dependabot proposes
   weekly updates.
+* **How urgent each one is:** every CVE is looked up in the sources security teams use to prioritize.
+  The finding is then ranked **Act now**, **Soon** or **Routine**, with the reasons in plain English and
+  a link to each source:
+
+  | Source | What it adds | How it's read |
+  |---|---|---|
+  | CISA Known Exploited Vulnerabilities (KEV) | Confirmed exploitation in the wild, ransomware use, CISA's deadline | Whole catalog, daily |
+  | CISA Vulnrichment (SSVC) | Exploitation none / proof-of-concept / active; automatable | Per CVE |
+  | NIST National Vulnerability Database | Official CVSS score and vector, weakness (CWE) | Per CVE (`WEPA_NVD_API_KEY` speeds it up) |
+  | Microsoft Security Response Center | Whether Microsoft tracks it (Azure, Azure Linux, Windows) and reports it exploited | Per CVE |
+  | FIRST EPSS | Probability of exploitation in the next 30 days | Per CVE |
+  | Exploit-DB | Public exploit code | Whole archive index, weekly |
+  | Metasploit Framework | A ready-made attack module | Whole module index, weekly |
+
+  **Act now** means one of these is true:
+  * it's on CISA's KEV list;
+  * CISA or Microsoft reports active exploitation;
+  * Metasploit has a module for it.
+
+  **Soon** means one of these is true:
+  * Exploit-DB has public code for it;
+  * CISA's assessment says a proof of concept exists, or the attack can be automated;
+  * EPSS is 10% or more;
+  * it's rated high or critical.
+
+  Install tools are capped at Soon, because the running app doesn't use them.
+
+  These are look-ups of public catalogs only. Nothing is ever run against anything. The catalogs are
+  downloaded whole and searched here, so those sources don't learn which packages the app uses. The
+  per-CVE sources see only the CVE numbers. Each source's last read and any failure are shown on the
+  Software page. Turn the look-ups off with `WEPA_THREAT_INTEL=0`.
 * **Install tools:** pip and setuptools come with the Python image. They're listed but kept out of update
   packages, because they aren't used by the running app.
+
+## OWASP Top 10 (2025) checklist
+
+The Software page includes a checklist against OWASP's current list of the ten most critical web
+application risks: A01 Broken Access Control through A10 Mishandling of Exceptional Conditions. For each
+risk it lists:
+
+* what the app does about it;
+* the test or file that proves each control;
+* live checks of the running copy, such as sign-in being on, a signing key being set, the audit chain
+  being intact, and no exploited vulnerability in a package the app runs;
+* the gaps that remain.
+
+**Met** means every control is in place. **Partial** means a known gap is stated, such as no MFA for
+A07 or no email or paging alerts for A09. **Gap** means a live check failed on this copy. It is a
+self-assessment against OWASP's list, not an audit.
+
+## Feature requests to GitHub issues
+
+Anyone signed in can send a feature request or problem report from "Suggest a feature" (under their
+picture). How it works:
+
+* Each one gets a `REQ#########` number and is kept in the records.
+* It's opened as an issue in the repository, labelled `enhancement`, `bug` or `question` plus
+  `from the app`.
+* The person sees whether their issue is open, closed or done.
+
+Safeguards:
+
+* Issues are visible to anyone who can see the repository, so they carry the person's role, not their
+  name, unless `WEPA_FEEDBACK_NAMES=1`.
+* `@mentions` are neutralized and HTML is escaped.
+* Titles and details are length-limited, and each person can send 5 a day.
+* Every request goes to the audit log.
+* Without GitHub access, requests wait as "Waiting to send" and are sent later.
+
+To turn it on, create a fine-grained token for this repository only, with "Issues: read and write" and
+an expiry date. Deploy with `GITHUB_ISSUES_TOKEN=<token> ./deploy/azure-containerapps/deploy.sh`.
 
 ## Updates
 

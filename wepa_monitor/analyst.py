@@ -212,7 +212,8 @@ class Toolkit:
                  {"ref": {"type": "string", "description": "Optional: an INV reference"}}, self.investigations),
             Tool("self_check", "The app's check of itself: collector freshness, data quality, the investigation "
                  "audit trail, sign-in and security settings, known vulnerabilities in its packages (CVE numbers, "
-                 "fixes), the running version and what changed in it, update packages and backup collectors. Use "
+                 "fixes, exploitation per CISA KEV/NVD/Microsoft/EPSS/Exploit-DB/Metasploit), the OWASP Top 10 checklist, "
+                 "the running version and what changed in it, update packages and backup collectors. Use "
                  "for any question about the app itself.", {}, self.self_check),
             Tool("ask_dashboard", "The dashboard's own built-in answer to a plain-English question (a quick "
                  "cross-check, or for things like hall support contacts).",
@@ -681,8 +682,14 @@ class Toolkit:
             lines.append(f"Version {__version__} ({rel.date}) change summary: {rel.summary}")
         for f in vulns.findings(self.ds.data_dir)[:10]:
             lines.append(f"- Vulnerability {f.headline_id} ({', '.join(f.ids[1:3])}) in {f.package} {f.installed}, "
-                         f"{f.severity}: {f.summary} Fixed in: {f.fixed or 'no fix yet'}."
+                         f"{f.severity}, priority {f.priority or 'not ranked'}: {f.summary} Fixed in: "
+                         f"{f.fixed or 'no fix yet'}. Why this priority: {' '.join(f.reasons) or 'not ranked'}"
                          + (" (install tool, not used by the running app)" if f.tooling else ""))
+        from . import owasp
+        for it in owasp.checklist(self.ds.data_dir):
+            lines.append(f"- OWASP {it.code}:2025 {it.name}: {it.status}"
+                         + (f"; gaps: {' '.join(it.gaps)}" if it.gaps else "")
+                         + "".join(f"; live check failed: {w}" for ok, w in it.live if not ok))
         return "\n".join(lines)
 
     def ask_dashboard(self, question) -> str:

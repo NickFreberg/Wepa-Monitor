@@ -36,6 +36,7 @@ def user_menu() -> html.Details:
             dcc.Link([icon("users"), html.Span("My account")], href="/account", className="user-panel__link")
             if me["role"] != "admin" else None,
             dcc.Link([icon("building"), html.Span("Directory")], href="/directory", className="user-panel__link"),
+            dcc.Link([icon("send"), html.Span("Suggest a feature")], href="/feedback", className="user-panel__link"),
             html.A([icon("lock"), html.Span("Change password")], href="/account/password", className="user-panel__link")
             if signed_in and me["role"] != "admin" else None,
             html.A([icon("x"), html.Span("Sign out")], href="/logout", className="user-panel__link")

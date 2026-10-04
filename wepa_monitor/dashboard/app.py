@@ -19,7 +19,7 @@ from .. import activity, config, export, geo, metrics as M, routing, security
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
-from .views import account_view, assistant, investigations_view, software
+from .views import account_view, assistant, feedback_view, investigations_view, software
 from .views import (activity_log, analytics, executive, insights_view, outcomes, overview, rounds, station,
                     stations, system)
 from .views.common import PERIODS, area_key
@@ -45,6 +45,7 @@ PAGE_META = {
     "/investigation": ("Investigation", "One investigation: its record, decisions and audit trail."),
     "/software": ("Software", "The running version, known vulnerabilities, updates, backup collectors and a "
                               "self-check of the whole app."),
+    "/feedback": ("Suggest a feature", "Ideas and problem reports go straight to the app's GitHub repository."),
     "/changelog": ("Change log", "What changed in each version, in plain English, with sources."),
     "/release": ("Change log", "What changed in this version, in plain English, with sources."),
 }
@@ -493,6 +494,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return investigations_view.detail_layout((path or "").rstrip("/").rsplit("/", 1)[-1])
         if route == "/software":
             return software.layout()
+        if route == "/feedback":
+            return feedback_view.layout(params)
         if route == "/changelog":
             return software.changelog_layout()
         if route == "/release":
@@ -722,6 +725,22 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             raise PreventUpdate
         msg, tone = software.act(cache.get(), trig, pw)
         return html.Span(msg, className="inv-ok" if tone == "ok" else "inv-err"), ""
+
+    @app.callback(Output("fb-list", "children"), Input("url", "pathname"), Input("fb-msg", "children"))
+    def fb_list(path, _):
+        if _route(path) != "/feedback":
+            raise PreventUpdate
+        return feedback_view.render_list(data_dir)
+
+    @app.callback(Output("fb-msg", "children"), Output("fb-title", "value"), Output("fb-body", "value"),
+                  Input("fb-send", "n_clicks"), State("fb-kind", "value"), State("fb-title", "value"),
+                  State("fb-body", "value"), State("fb-page", "data"), prevent_initial_call=True)
+    def fb_send(n, kind, title, body, page):
+        if not n:
+            raise PreventUpdate
+        msg, tone, clear = feedback_view.act(data_dir, kind, title, body, page)
+        span = html.Span(msg, className="inv-ok" if tone == "ok" else "inv-err")
+        return (span, "", "") if clear else (span, no_update, no_update)
 
     @app.callback(Output("acct-body", "children"), Input("url", "pathname"))
     def acct_body(path):

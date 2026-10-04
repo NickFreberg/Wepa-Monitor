@@ -185,7 +185,11 @@ any chart, and every chart carries a one-line takeaway in plain words.
   backups, disk), every known vulnerability in its installed packages (CVE/GHSA numbers, severity, the
   fixing version, plain-English summary and sources, checked daily against OSV.dev), update packages the
   administrator can start (GitHub builds, tests and opens a pull request; the app never rewrites itself),
-  backup collectors, and the **Change log** (click any version in the activity feed). See
+  backup collectors, and the **Change log** (click any version in the activity feed). Each vulnerability
+  is ranked Act now / Soon / Routine from CISA KEV and Vulnrichment, NIST NVD, Microsoft MSRC, FIRST EPSS,
+  Exploit-DB and Metasploit, and an **OWASP Top 10 (2025)** checklist shows each control with its evidence.
+- **Suggest a feature** (under your picture): sends an idea or problem report to the app's GitHub
+  repository as an issue, with a REQ number and its open/closed status. See
   [docs/SECURITY.md](docs/SECURITY.md) for the threat model, how confidentiality, integrity and
   availability are protected, the attacker-style tests, backup-collector setup and known limits.
 
@@ -455,6 +459,9 @@ wepa_monitor/
   vulns.py         daily known-vulnerability check of installed packages (OSV.dev), with plain-English findings
   updates.py       version history, CHANGELOG.md parsing, update packages (GitHub workflow_dispatch)
   peer.py          backup collectors: signed handshake, failover, handback upload, self-update
+  threatintel.py   CISA KEV/Vulnrichment, NVD, Microsoft MSRC, EPSS, Exploit-DB, Metasploit look-ups and priority
+  owasp.py         OWASP Top 10 (2025) checklist with evidence and live checks
+  feedback.py      feature requests filed as GitHub issues (REQ numbers)
   selfcheck.py     the app's check of itself (Software page, CLI, and the assistant's self_check tool)
   sysevents.py     the app's own events (updates, vulnerabilities, backups) for the activity feed
   risk.py          outage-risk machine learning: features, walk-forward test vs a baseline, go-live gate

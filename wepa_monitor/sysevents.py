@@ -20,6 +20,8 @@ KINDS = {
     "update_prepared": ("Update package prepared", "info"),
     "vuln_found": ("Vulnerability found", "warning"),
     "vuln_resolved": ("Vulnerability fixed", "good"),
+    "vuln_escalated": ("Vulnerability now exploited", "critical"),
+    "feedback": ("Feature request", "info"),
     "backup_active": ("Backup collector took over", "warning"),
     "backup_handover": ("Main collector back", "good"),
     "backup_updated": ("Backup collector updated", "info"),

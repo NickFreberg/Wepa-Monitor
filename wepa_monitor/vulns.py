@@ -51,6 +51,13 @@ class Finding:
     required_by: list[str] = field(default_factory=list)
     links: list[dict] = field(default_factory=list)   # [{"label", "url"}]
     tooling: bool = False               # pip/setuptools/wheel: used to install packages, not by the running app
+    priority: str = ""                  # Act now / Soon / Routine (threatintel.assess)
+    reasons: list[str] = field(default_factory=list)
+    intel: dict = field(default_factory=dict)   # what KEV, NVD, MSRC, CISA, EPSS, Exploit-DB, Metasploit say
+
+    @property
+    def cve(self) -> str | None:
+        return next((i for i in self.ids if i.startswith("CVE-")), None)
 
     @property
     def key(self) -> str:
@@ -268,7 +275,29 @@ def findings(data_dir: Path) -> list[Finding]:
     return [Finding(**f) for f in load(data_dir).get("findings", [])]
 
 
-def refresh(data_dir: Path, force: bool = False, log=print, session=None) -> dict:
+def add_intel(data_dir: Path, found: list[Finding], session=None, log=print, force: bool = False) -> None:
+    """Rank each finding by what the threat-intelligence sources say (never raises)."""
+    from . import threatintel
+    try:
+        if os.environ.get("WEPA_THREAT_INTEL", "1") == "0":
+            raise RuntimeError("turned off (WEPA_THREAT_INTEL=0)")
+        intel = threatintel.enrich(data_dir, [f.cve for f in found if f.cve], session=session, log=log, force=force)
+    except Exception as exc:  # noqa: BLE001 - ranking is extra; findings stand without it
+        log(f"threat intelligence skipped: {type(exc).__name__}: {exc}")
+        intel = {}
+    for f in found:
+        f.intel = {**intel.get(f.cve, {}), "cve": f.cve} if f.cve else {}
+        nvd = f.intel.get("nvd") or {}
+        if f.severity == "Not rated" and nvd.get("severity") in SEVERITY_ORDER:
+            f.severity = nvd["severity"]
+        f.priority, f.reasons = threatintel.assess(f.intel, f.severity, f.tooling)
+        f.links = f.links + [lk for lk in threatintel.sources_used(f.intel) if lk["url"] not in
+                             {x["url"] for x in f.links}]
+    found.sort(key=lambda f: (threatintel.PRIORITY_ORDER.index(f.priority), SEVERITY_ORDER.index(f.severity),
+                              f.package))
+
+
+def refresh(data_dir: Path, force: bool = False, log=print, session=None, intel_session=None) -> dict:
     """Re-check if the last check is a day old (or force=True, at most every 10 minutes). Never raises."""
     from . import sysevents
     prev = load(data_dir)
@@ -285,17 +314,27 @@ def refresh(data_dir: Path, force: bool = False, log=print, session=None) -> dic
         _write(data_dir, out)
         log(f"vulnerability check failed: {out['error']}")
         return out
-    out = {"checked_at": time.time(), "source": "OSV.dev (PyPI advisory database, GitHub advisories)",
+    add_intel(data_dir, found, session=intel_session, log=log, force=force)
+    out = {"checked_at": time.time(), "source": "OSV.dev (PyPI advisory database, GitHub advisories), enriched "
+           "with CISA KEV and Vulnrichment, NIST NVD, Microsoft MSRC, FIRST EPSS, Exploit-DB and Metasploit",
            "packages": len(packages), "findings": [asdict(f) for f in found]}
     before = {f"{f['package']}:{f['ids'][0]}": f for f in prev.get("findings", [])}
     after = {f.key: f for f in found}
     if prev.get("checked_at"):
         for k in after.keys() - before.keys():
             f = after[k]
-            sysevents.add("vuln_found", f"{f.headline_id} in {f.package} {f.installed}",
-                          f"{f.severity}: {f.summary}" + (f" Fixed in {f.fixed}." if f.fixed else " No fix yet."),
+            sysevents.add("vuln_found", f"{f.headline_id} in {f.package} {f.installed}: {f.priority.lower() or 'review'}",
+                          f"{f.severity}: {f.summary}" + (f" Fixed in {f.fixed}." if f.fixed else " No fix yet.")
+                          + (f" {f.reasons[0]}" if f.reasons else ""),
                           href=f"/software#{f.headline_id}", data_dir=data_dir,
-                          severity="critical" if f.severity in ("Critical", "High") else "warning")
+                          severity="critical" if f.priority == "Act now" or f.severity in ("Critical", "High")
+                          else "warning")
+        for k in after.keys() & before.keys():
+            f, old = after[k], before[k]
+            if f.priority == "Act now" and old.get("priority") != "Act now":
+                sysevents.add("vuln_escalated", f"{f.headline_id} in {f.package} is now being exploited",
+                              " ".join(f.reasons[:2]), href=f"/software#{f.headline_id}", data_dir=data_dir,
+                              severity="critical")
         for k in before.keys() - after.keys():
             f = before[k]
             sysevents.add("vuln_resolved", f"{f['ids'][0]} no longer affects this app",
@@ -334,5 +373,9 @@ def sentence(data_dir: Path) -> str:
     n = counts(fs)
     parts = ", ".join(f"{v} {k.lower()}" for k, v in n.items() if v)
     fixable = sum(1 for f in fs if f.fixed)
+    urgent = sum(1 for f in fs if f.priority == "Act now")
     return (f"{len(fs)} known vulnerabilit{'y' if len(fs) == 1 else 'ies'} in installed packages ({parts}); "
-            f"{fixable} have a fixed version available (checked {when}).")
+            f"{fixable} have a fixed version available; "
+            + (f"{urgent} known to be exploited or with a ready-made attack module" if urgent
+               else "none on CISA's exploited list or with a Metasploit module")
+            + f" (checked {when}).")

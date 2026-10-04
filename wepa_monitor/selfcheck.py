@@ -142,7 +142,7 @@ def run(ds=None, data_dir: Path | None = None) -> list[Check]:
         add("Currency", "Known vulnerabilities", "info", "Not checked yet; the collector checks once a day.",
             "Use 'Check now' on the Software page.")
     else:
-        serious = [f for f in runtime if f.severity in ("Critical", "High")]
+        serious = [f for f in runtime if f.priority == "Act now" or f.severity in ("Critical", "High")]
         status = "fail" if serious else "warn" if runtime else "info" if fs else "ok"
         add("Currency", "Known vulnerabilities", status, vulns.sentence(data_dir),
             "Prepare an update package on the Software page." if any(f.fixed for f in fs) else
@@ -151,6 +151,14 @@ def run(ds=None, data_dir: Path | None = None) -> list[Check]:
         if age > 2 * vulns.MAX_AGE_S:
             add("Currency", "Vulnerability check", "warn", f"The last successful check was {_ago(age)} ago.",
                 c.get("error", "The collector runs it daily; check the live log."))
+    from . import owasp
+    items = owasp.checklist(data_dir)
+    n = owasp.summary(items)
+    gaps = [f"{i.code} {i.name}" for i in items if i.status == "Gap"]
+    add("Confidentiality", "OWASP Top 10 (2025)", "fail" if gaps else "info" if n["Partial"] else "ok",
+        f"{n['Met']} met, {n['Partial']} partial, {n['Gap']} with a failed live check"
+        + (f" ({'; '.join(gaps)})" if gaps else "") + ".",
+        "Open the checklist on the Software page." if gaps or n["Partial"] else "")
     pending = [p for p in updates.packages(data_dir) if p.get("state") in ("Prepared", "Requested")]
     if pending:
         p = pending[0]

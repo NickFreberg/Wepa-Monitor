@@ -6,17 +6,21 @@ packages here; starting one asks for the administrator password again.
 """
 from __future__ import annotations
 
+import threading
 import time
 
 import pandas as pd
 from dash import dcc, html
 
-from ... import __version__, accounts, auth, config, peer, selfcheck, updates, vulns
+from ... import __version__, accounts, auth, config, owasp, peer, selfcheck, threatintel, updates, vulns
 from ..components import chart_card, headline, icon, tile
 
 TZ = config.LOCAL_TZ
+_CHECK = threading.Lock()
 TONE = {"ok": "good", "warn": "warning", "fail": "critical", "info": "neutral"}
 WORD = {"ok": "OK", "warn": "Check", "fail": "Problem", "info": "Note"}
+PRIO_TONE = {"Act now": "critical", "Soon": "warning", "Routine": "neutral"}
+OWASP_TONE = {"Met": "good", "Partial": "warning", "Gap": "critical"}
 SEV_TONE = {"Critical": "critical", "High": "serious", "Moderate": "warning", "Low": "info", "Not rated": "neutral"}
 
 
@@ -62,6 +66,7 @@ def render(ds):
     cache = vulns.load(data_dir)
     runtime = [f for f in fs if not f.tooling]
     hist = updates.history(data_dir)
+    items = owasp.checklist(data_dir)
     out = [headline(tone, "The app's own check of itself", sentence)]
 
     out.append(html.Div(className="tiles", children=[
@@ -75,6 +80,12 @@ def render(ds):
              "warning" if runtime else None),
         tile("Last vulnerability check", _when(cache.get("checked_at")).split(",")[0] if cache.get("checked_at") else "—",
              f"{cache.get('packages', 0)} packages · OSV.dev" if cache.get("checked_at") else "daily, by the collector"),
+        tile("Exploited or weaponized", str(sum(1 for f in fs if f.priority == "Act now")),
+             "on CISA's exploited list, or with a Metasploit module" if cache.get("checked_at") else "not checked yet",
+             tone=("critical" if any(f.priority == "Act now" for f in fs) else "good") if cache.get("checked_at") else None),
+        tile("OWASP Top 10", "{Met} met".format(**owasp.summary(items)),
+             "{Partial} partial · {Gap} gaps (2025 list)".format(**owasp.summary(items)),
+             tone="critical" if owasp.summary(items)["Gap"] else "warning" if owasp.summary(items)["Partial"] else "good"),
         tile("Backup collectors", str(len(peer.peers(data_dir))),
              "standing by" if peer.key() else "not set up"),
     ]))
@@ -84,8 +95,17 @@ def render(ds):
                           body=_checks(checks)))
     out.append(html.Div(id="vulns", children=chart_card(
         "Known vulnerabilities", "Every installed package and version, looked up in OSV.dev (the PyPI advisory "
-        "database and GitHub security advisories). Only package names and versions are sent.", wide=True,
+        "database and GitHub security advisories), then ranked by what CISA, NIST, Microsoft, FIRST, Exploit-DB and "
+        "Metasploit say about each one. Only package names, versions and CVE numbers are sent.", wide=True,
         body=html.Div(_vulns(fs, cache)))))
+    out.append(chart_card("Threat-intelligence sources", "Where the ranking comes from, and when each source was "
+                          "last read. Catalogs are downloaded whole and searched here, so no source learns which "
+                          "packages the app uses (except the CVE numbers looked up one by one).", wide=True,
+                          body=_sources(data_dir)))
+    out.append(html.Div(id="owasp", children=chart_card(
+        "OWASP Top 10 (2025) checklist", "How the app answers each of OWASP's ten most critical web application "
+        "risks, with the evidence for every control and a live check of this copy. A self-assessment, not an "
+        "independent audit.", wide=True, body=_owasp(items))))
     out.append(chart_card("Update packages", "What fixes the open vulnerabilities, and every update requested "
                           "from here. The app never changes its own code: GitHub builds and tests the update and "
                           "opens a pull request; it's installed by the normal deploy once approved.", wide=True,
@@ -132,12 +152,16 @@ def _vulns(fs, cache):
                f"Installed because {', '.join(f.required_by[:3]) or 'another package'} needs it.")
         items.append(html.Details(className="vuln", id=f.headline_id, children=[
             html.Summary(className="vuln__head", children=[
+                html.Span(f.priority, className=f"inv-state inv-state--{PRIO_TONE[f.priority]}",
+                          title="How urgent, from the threat-intelligence sources") if f.priority else None,
                 html.Span(f.severity, className=f"inv-state inv-state--{SEV_TONE.get(f.severity, 'neutral')}"),
                 html.B(f"{f.package} {f.installed}"),
                 html.Span(f.headline_id, className="mono"),
                 html.Span(f"fixed in {f.fixed}" if f.fixed else "no fix yet", className="muted"),
             ]),
             html.P(f.summary),
+            html.Div([html.B("Why this priority: "), " ".join(f.reasons)], className="vuln__why") if f.reasons else None,
+            _intel(f) if f.intel else None,
             html.Dl([html.Dt("Why it's installed"), html.Dd(why),
                      html.Dt("What fixes it"), html.Dd(f"Upgrading to {f.package} {f.fixed} or later."
                                                        if f.fixed else "No fixed version has been published yet."),
@@ -150,6 +174,86 @@ def _vulns(fs, cache):
         ]))
     return [html.P(f"Checked {_when(cache['checked_at'])} · click one for the details and sources.",
                    className="inv-hint"), *note, html.Div(items, className="vuln-list")]
+
+
+def _yn(v) -> str:
+    return "Yes" if v else "No"
+
+
+def _intel(f):
+    i = f.intel
+    nvd, ms, vr, ep = i.get("nvd") or {}, i.get("msrc") or {}, i.get("vulnrichment") or {}, i.get("epss") or {}
+    kev = i.get("kev")
+    rows = [
+        ("CISA KEV", f"Exploited in the wild; added {kev['added']}, CISA's deadline for U.S. agencies {kev['due']}"
+         + ("; used in ransomware" if kev.get("ransomware") == "Known" else "") if kev else "Not listed"),
+        ("CISA Vulnrichment", (f"Exploitation: {vr.get('exploitation', '?')}; automatable: {vr.get('automatable', '?')}; "
+                               f"technical impact: {vr.get('technical_impact', '?')}") if vr.get("covered")
+         else "Not assessed" if i.get("vulnrichment") is not None else "Couldn't check"),
+        ("NIST NVD", (f"CVSS {nvd.get('version', '')} {nvd['score']} ({nvd.get('severity', '').lower()})"
+                      + (f"; weakness {', '.join(nvd['cwes'])}" if nvd.get("cwes") else "")
+                      if nvd.get("score") is not None else f"Record status: {nvd.get('status') or 'no score yet'}")
+         if nvd.get("found") else "Not in NVD yet" if i.get("nvd") is not None else "Couldn't check"),
+        ("Microsoft MSRC", (f"Tracked{' for Azure Linux' if ms.get('azure_linux') else ''}; exploited: "
+                            f"{ms.get('exploited') or 'not stated'}; publicly disclosed: {ms.get('disclosed') or '—'}")
+         if ms.get("tracked") else "Not tracked by Microsoft" if i.get("msrc") is not None else "Couldn't check"),
+        ("FIRST EPSS", f"{ep['score']:.2%} chance of exploitation in 30 days (higher than {ep['percentile']:.0%} of CVEs)"
+         if ep else "No score"),
+        ("Exploit-DB", "; ".join(f"EDB-{e['id']}: {e['title']}" for e in i.get("exploitdb", [])[:3]) or "No public exploit"),
+        ("Metasploit", "; ".join(m["module"] for m in i.get("metasploit", [])[:3]) or "No module"),
+    ]
+    return html.Dl([x for k, v in rows for x in (html.Dt(k), html.Dd(v))], className="inv-facts vuln__intel")
+
+
+def _sources(data_dir):
+    st = threatintel.status(data_dir)
+    rows = []
+    for key, name, what, url in threatintel.SOURCES:
+        s_ = st.get(key, {})
+        if s_.get("error") and s_.get("error_at", 0) >= s_.get("checked", 0):
+            state, tone = "Last try failed", "warning"
+        elif s_.get("checked"):
+            state, tone = "OK", "good"
+        else:
+            state, tone = "Not read yet", "neutral"
+        rows.append(html.Tr([
+            html.Td(html.A(name, href=url, target="_blank", rel="noopener noreferrer", className="link")),
+            html.Td(what), html.Td(html.Span(state, className=f"inv-state inv-state--{tone}"),
+                                   title=s_.get("error", "")),
+            html.Td(_when(s_.get("checked"))),
+            html.Td(f"{s_['entries']:,} CVEs" if s_.get("entries") is not None and key in ("kev", "exploitdb",
+                                                                                         "metasploit") else "—")]))
+    rows.insert(0, html.Tr([html.Td(html.A("OSV.dev", href="https://osv.dev/", target="_blank",
+                                           rel="noopener noreferrer", className="link")),
+                            html.Td("Which known vulnerabilities affect each installed package version"),
+                            html.Td(html.Span("OK" if vulns.load(data_dir).get("checked_at") else "Not read yet",
+                                              className="inv-state inv-state--" + ("good" if vulns.load(data_dir).get(
+                                                  "checked_at") else "neutral"))),
+                            html.Td(_when(vulns.load(data_dir).get("checked_at"))), html.Td("—")]))
+    return html.Div(html.Table([html.Thead(html.Tr([html.Th(h) for h in ("Source", "What it tells us", "Status",
+                                                                          "Last read", "Catalog size")])),
+                                html.Tbody(rows)], className="table"), className="table-wrap")
+
+
+def _owasp(items):
+    out = []
+    for it in items:
+        out.append(html.Details(className="vuln", id=f"owasp-{it.code}", children=[
+            html.Summary(className="vuln__head", children=[
+                html.Span(it.status, className=f"inv-state inv-state--{OWASP_TONE[it.status]}"),
+                html.B(f"{it.code}:2025 {it.name}"), html.Span(it.risk, className="muted")]),
+            html.H4("What the app does"),
+            html.Ul([html.Li([c, html.Div(ev, className="inv-hint mono")]) for c, ev in it.controls],
+                    className="changelog__list"),
+            html.Div([html.H4("Checked on this copy just now"),
+                      html.Ul([html.Li(("✓ " if ok else "✕ ") + what, className="inv-ok" if ok else "inv-err")
+                               for ok, what in it.live], className="owasp__live")]) if it.live else None,
+            html.Div([html.H4("Known gaps"), html.Ul([html.Li(g) for g in it.gaps], className="changelog__list")])
+            if it.gaps else None,
+            html.A(f"OWASP's description of {it.code}", href=it.url, target="_blank", rel="noopener noreferrer",
+                   className="link"),
+        ]))
+    return html.Div(out, className="vuln-list")
 
 
 def _packages(data_dir):
@@ -279,15 +383,23 @@ def act(ds, trigger: str, password: str | None):
     data_dir = ds.data_dir
     from ... import security
     if trigger == "sw-check":
-        before = vulns.load(data_dir).get("checked_at", 0)
-        res = vulns.refresh(data_dir, force=True, log=lambda m: security.log(m, "audit"))
-        if res.get("skipped"):
-            return res["skipped"], "err"
-        if res.get("checked_at", 0) == before and not res.get("error"):
+        if not vulns.enabled():
+            return "The vulnerability check is turned off (WEPA_VULN_CHECK=0).", "err"
+        c = vulns.load(data_dir)
+        if time.time() - c.get("checked_at", 0) < vulns.MIN_MANUAL_GAP_S and "error" not in c:
             return "Checked less than 10 minutes ago; showing that result.", "ok"
-        if res.get("error") and res.get("error_at", 0) > before:
-            return f"The check failed: {res['error']}", "err"
-        return vulns.sentence(data_dir), "ok"
+        if not _CHECK.acquire(blocking=False):
+            return "A check is already running; results appear here when it finishes.", "ok"
+
+        def run():
+            try:
+                vulns.refresh(data_dir, force=True, log=lambda m: security.log(m, "audit"))
+            finally:
+                _CHECK.release()
+        threading.Thread(target=run, name="vuln-check", daemon=True).start()
+        security.audit("vulnerability check started", me.get("username", ""))
+        return ("Checking OSV.dev, then CISA, NIST, Microsoft, FIRST, Exploit-DB and Metasploit. This takes up to "
+                "a few minutes; this page updates by itself."), "ok"
     if not is_admin():
         return "Only the administrator can prepare or start updates.", "err"
     if trigger == "sw-prepare":
