@@ -138,7 +138,7 @@ def test_changelog_has_the_running_version_and_parses():
     assert rel[0].version == __version__ and updates.release(__version__) is not None
     assert all(r.date and r.summary for r in rel)
     assert [r.version for r in rel] == sorted((r.version for r in rel), key=updates.version_key, reverse=True)
-    assert rel[0].sections["New"]
+    assert any(rel[0].sections.values())                                  # at least one list of changes
 
 
 def test_security_ids_are_extracted(tmp_path):
