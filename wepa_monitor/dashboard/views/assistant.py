@@ -20,7 +20,7 @@ from .common import scope_ids, scope_label
 LOGO = "/assets/assistant.svg"
 NAME = "Assistant"
 HISTORY_TURNS = 6           # earlier messages sent along so follow-ups like "and last week?" make sense
-MAX_MESSAGES = 40           # kept in the tab; older ones drop off
+MAX_MESSAGES = 40           # kept while the pane is open; older ones drop off
 
 
 def button():
@@ -49,7 +49,12 @@ def pane():
             html.P("AI-generated replies can be wrong. Check the numbers before acting on them.",
                    id="assist-disclaimer", className="assist__disclaimer"),
         ]),
-        dcc.Store(id="assist-chat", storage_type="session", data=[]),
+        # Every opening starts a new chat, and nothing is written to browser storage: the conversation lives in
+        # memory only. assist-session numbers the chat; replies carry it, so an answer that arrives after the
+        # pane was reopened is dropped instead of bringing the old conversation back.
+        dcc.Store(id="assist-chat", storage_type="memory", data=[]),
+        dcc.Store(id="assist-session", storage_type="memory", data=0),
+        dcc.Store(id="assist-reply", storage_type="memory"),
     ])
 
 

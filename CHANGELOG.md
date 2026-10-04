@@ -8,6 +8,18 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.7] - 2026-10-04
+Every chat with the Assistant starts fresh.
+
+### Changed
+- Opening the Assistant always starts a new chat. The previous conversation is deleted, not just hidden: it's held in memory only while the pane is open, never written to the browser's storage, and gone after a reload. An answer still on its way when you close the pane is thrown away, so it can't bring the old conversation back.
+
+### Fixed
+- A hidden button in Appearance could show anyway because a button style overrode the hidden setting. Hidden now always means hidden, across the app.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
 ## [1.4.6] - 2026-10-04
 Bristaco takes over.
 

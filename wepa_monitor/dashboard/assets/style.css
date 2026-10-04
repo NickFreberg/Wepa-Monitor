@@ -64,6 +64,8 @@
 }
 
 * { box-sizing: border-box; }
+/* The hidden attribute always wins, even over components that set their own display (buttons, flex rows). */
+[hidden] { display: none !important; }
 html, body { margin: 0; background: var(--page); color: var(--ink); font-family: var(--font); font-size: 14px;
   line-height: 1.45; -webkit-font-smoothing: antialiased; }
 body { overflow-x: hidden; }

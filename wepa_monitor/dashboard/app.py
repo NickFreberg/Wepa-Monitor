@@ -946,20 +946,24 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         return investigations_view.render_detail(ds, ref), msg
 
     # --- assistant pane ------------------------------------------------------------------------------
+    # Opening the assistant always starts a new chat: the old conversation is deleted, not just hidden.
     app.clientside_callback(
         """
-        function(open, close) {
+        function(open, close, session) {
+            var nu = window.dash_clientside.no_update;
             var id = (dash_clientside.callback_context.triggered[0] || {}).prop_id || '';
             var pane = document.getElementById('assist');
             var isOpen = pane && pane.classList.contains('is-open');
             if (id.indexOf('assist-open') === 0 && !isOpen) {
                 setTimeout(function () { var q = document.getElementById('assist-q'); if (q) { q.focus(); } }, 240);
-                return 'assist is-open';
+                return ['assist is-open', [], (session || 0) + 1, ''];
             }
-            return 'assist';
+            return ['assist', nu, nu, nu];
         }
         """,
-        Output("assist", "className"), Input("assist-open", "n_clicks"), Input("assist-close", "n_clicks"),
+        Output("assist", "className"), Output("assist-chat", "data", allow_duplicate=True),
+        Output("assist-session", "data", allow_duplicate=True), Output("assist-q", "value", allow_duplicate=True),
+        Input("assist-open", "n_clicks"), Input("assist-close", "n_clicks"), State("assist-session", "data"),
         prevent_initial_call=True,
     )
 
@@ -967,8 +971,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     @app.callback(Output("assist-chat", "data", allow_duplicate=True), Output("assist-q", "value"),
                   Input("assist-send", "n_clicks"), Input("assist-q", "value"),
                   Input({"type": "assist-ex", "q": ALL}, "n_clicks"), State("assist-chat", "data"),
-                  prevent_initial_call=True)
-    def assist_send(_, typed, __, chat):
+                  State("assist-session", "data"), prevent_initial_call=True)
+    def assist_send(_, typed, __, chat, session):
         trig = ctx.triggered_id
         if isinstance(trig, dict):
             if not (ctx.triggered and ctx.triggered[0]["value"]):
@@ -979,22 +983,45 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         chat = list(chat or [])
         if not question or (chat and chat[-1].get("role") == "pending"):
             raise PreventUpdate
-        chat = chat[-(assistant.MAX_MESSAGES - 2):] + [{"role": "user", "text": question[:400]}, {"role": "pending"}]
+        chat = chat[-(assistant.MAX_MESSAGES - 2):] + [{"role": "user", "text": question[:400]},
+                                                        {"role": "pending", "chat": session or 0}]
         return chat, ""
 
-    @app.callback(Output("assist-chat", "data", allow_duplicate=True), Input("assist-chat", "data"),
+    @app.callback(Output("assist-reply", "data"), Input("assist-chat", "data"),
                   State("scope-store", "data"), State("url", "pathname"), State("eggs", "data"),
                   prevent_initial_call=True)
     def assist_answer(chat, sc, path, eggs):
         if not chat or chat[-1].get("role") != "pending" or len(chat) < 2:
             raise PreventUpdate
         question = chat[-2].get("text", "")
-        return chat[:-1] + [assistant.reply(cache.get(), question, sc, path, chat[:-2], _voice(eggs))]
+        return {"chat": chat[-1].get("chat", 0),
+                "msg": assistant.reply(cache.get(), question, sc, path, chat[:-2], _voice(eggs))}
 
-    @app.callback(Output("assist-chat", "data", allow_duplicate=True), Input("assist-new", "n_clicks"),
-                  prevent_initial_call=True)
-    def assist_new(_):
-        return []
+    # The answer joins the conversation only if that conversation is still the current one.
+    app.clientside_callback(
+        """
+        function(reply, chat, session) {
+            var nu = window.dash_clientside.no_update;
+            if (!reply || !chat || !chat.length) { return nu; }
+            var last = chat[chat.length - 1];
+            if (last.role !== 'pending' || reply.chat !== (session || 0) || last.chat !== reply.chat) { return nu; }
+            return chat.slice(0, -1).concat([reply.msg]);
+        }
+        """,
+        Output("assist-chat", "data", allow_duplicate=True), Input("assist-reply", "data"),
+        State("assist-chat", "data"), State("assist-session", "data"), prevent_initial_call=True,
+    )
+
+    app.clientside_callback(
+        """
+        function(n, session) {
+            if (!n) { return [window.dash_clientside.no_update, window.dash_clientside.no_update]; }
+            return [[], (session || 0) + 1];
+        }
+        """,
+        Output("assist-chat", "data", allow_duplicate=True), Output("assist-session", "data", allow_duplicate=True),
+        Input("assist-new", "n_clicks"), State("assist-session", "data"), prevent_initial_call=True,
+    )
 
     @app.callback(Output("assist-log", "children"), Output("assist-by", "children"),
                   Output("assist-disclaimer", "children"), Input("assist-chat", "data"), Input("url", "pathname"))
