@@ -1,3 +1,3 @@
 """BSU Student Printing Ops: a monitor for Bridgewater State University's Wepa print stations."""
 
-__version__ = "1.4.3"
+__version__ = "1.4.4"

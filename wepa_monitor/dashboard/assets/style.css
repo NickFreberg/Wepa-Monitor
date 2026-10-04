@@ -1314,3 +1314,14 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 .sixseven--still.sixseven { animation: none !important; }
 @media print { .sixseven, .sixseven-ring { display: none; } }
 @media (max-width: 600px) { .sixseven { height: 190px; } .sixseven__hand b { font-size: 60px; top: -36px; } }
+/* The Sandman mini-player (YouTube): visible and at least 200 px tall, as YouTube's embed rules require. */
+.sandman-player { position: fixed; right: 16px; bottom: 16px; z-index: 86; width: min(356px, calc(100vw - 32px));
+  border-radius: 12px; overflow: hidden; background: #000; border: 1px solid #2a2a2a; box-shadow: 0 18px 50px rgba(0, 0, 0, .6); }
+.sandman-player__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px;
+  color: #c8c8c8; font: 700 11px/1.2 "Arial Narrow", "Roboto Condensed", Arial, sans-serif; text-transform: uppercase; letter-spacing: .14em; }
+.sandman-player__close { border: 1px solid #3a3a3a; background: #111; color: #e6e6e6; border-radius: 99px; padding: 5px 11px;
+  font: 650 12px/1 system-ui, sans-serif; letter-spacing: 0; text-transform: none; cursor: pointer; }
+.sandman-player__close:hover { border-color: #8e8e8e; }
+.sandman-player__close:focus-visible { outline: 2px solid #e6e6e6; outline-offset: 2px; }
+.sandman-player iframe { display: block; width: 100%; aspect-ratio: 16 / 9; min-height: 200px; border: 0; }
+@media print { .sandman-player { display: none; } }

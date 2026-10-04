@@ -10,6 +10,9 @@ What the repository holds (public, so no lyrics and no recording):
   only salted SHA-256 hashes of every three-word run in records/sandman.json. The text itself is never saved.
 - the audio: WEPA_SANDMAN_AUDIO=/path/to/file.mp3, or a file named sandman.mp3 / .m4a / .ogg in the data
   folder. Use a copy you're entitled to play (e.g. one you bought). It is served only to signed-in users.
+- otherwise, the official upload on YouTube in a small mini-player (YouTube's embed rules: the player stays
+  visible and at least 200 x 200 px, so it's never hidden or audio-only). It uses youtube-nocookie.com and
+  loads only when the egg fires. WEPA_SANDMAN_YOUTUBE=<video id> picks another video; =0 turns it off.
 """
 from __future__ import annotations
 
@@ -24,6 +27,7 @@ WINDOW = 3
 # Short, widely quoted lines, so the egg works without a lyrics file.
 PHRASES = ("exit light enter night", "take my hand", "off to never never land")
 AUDIO_NAMES = ("sandman.mp3", "sandman.m4a", "sandman.ogg")
+YOUTUBE_ID = "CD-E-LDc384"   # "Enter Sandman (Official Music Video)", Metallica's channel; the Topic upload blocks embedding
 BANNER = "Exit light. Enter night."
 
 VOICE = (
@@ -96,6 +100,11 @@ def audio_file(data_dir: Path | None) -> Path | None:
         if p and p.is_file():
             return p
     return None
+
+
+def youtube_id() -> str | None:
+    vid = os.environ.get("WEPA_SANDMAN_YOUTUBE", YOUTUBE_ID).strip()
+    return vid if re.fullmatch(r"[A-Za-z0-9_-]{11}", vid) else None
 
 
 def install(server, data_dir: Path) -> None:

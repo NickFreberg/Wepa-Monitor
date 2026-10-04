@@ -362,6 +362,7 @@ def _harden(app: Dash) -> None:
                 f"connect-src 'self' {MAP_HOSTS}",
                 "font-src 'self' data:",
                 "worker-src 'self' blob:", "child-src 'self' blob:",
+                "frame-src 'self' https://www.youtube-nocookie.com",   # the Sandman mini-player (sandman.py)
                 "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'self'",
             ])
         return csp["v"]
@@ -464,7 +465,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         if not question or not sandman.matches(question, data_dir):
             raise PreventUpdate
         audio = sandman.audio_file(data_dir) is not None
-        return {**(eggs or {}), "sandman": int(time.time() * 1000), "sandman_audio": audio}
+        return {**(eggs or {}), "sandman": int(time.time() * 1000), "sandman_audio": audio,
+                "sandman_video": None if audio else sandman.youtube_id()}
 
     app.clientside_callback(
         """
@@ -472,7 +474,7 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             if (!n) { return window.dash_clientside.no_update; }
             if (window.spoSandman) { window.spoSandman.stop(); }
             var out = Object.assign({}, eggs || {});
-            delete out.sandman; delete out.sandman_audio;
+            delete out.sandman; delete out.sandman_audio; delete out.sandman_video;
             return out;
         }
         """,

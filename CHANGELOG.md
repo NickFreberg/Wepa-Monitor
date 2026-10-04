@@ -8,6 +8,16 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.4] - 2026-10-04
+The hidden music finds its own way to play.
+
+### Changed
+- When the server has no music file for the hidden surprise in Ask the data, it now plays the official video from YouTube in a small corner player with a "Stop the music" button. YouTube requires embedded players to stay visible and at least 200 x 200 pixels, so it isn't hidden. It uses YouTube's privacy-enhanced domain (youtube-nocookie.com) and only loads when the surprise is triggered. The security policy allows frames from that one domain and nothing else. Operators: WEPA_SANDMAN_YOUTUBE picks another video, or =0 turns this off.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- YouTube embedded player requirements: https://developers.google.com/youtube/terms/required-minimum-functionality
+
 ## [1.4.3] - 2026-10-04
 A certain number is now impossible to ignore.
 

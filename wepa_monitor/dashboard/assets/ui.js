@@ -119,6 +119,8 @@
     }
     function stopButton(show) { var b = el("sandman-stop"); if (b) { b.hidden = !show; } }
     function stop() {
+      var player = el("sandman-player");
+      if (player) { player.remove(); }
       var a = el("sandman-audio");
       if (a) { a.pause(); try { a.currentTime = 0; } catch (err) { /* not loaded yet */ } }
       stopButton(false);
@@ -141,9 +143,30 @@
       later(function () { box.classList.add("is-leaving"); }, 10000);
       later(function () { box.hidden = true; box.classList.remove("is-leaving"); said.textContent = ""; }, 10800);
     }
-    function start(withAudio) {
+    // YouTube's embed rules: the player must stay visible and at least 200 x 200 px, so it's a small corner
+    // player with its own Close button rather than a hidden one.
+    function player(video) {
+      var box = document.createElement("div");
+      box.id = "sandman-player"; box.className = "sandman-player";
+      var head = document.createElement("div"); head.className = "sandman-player__head";
+      head.innerHTML = '<span>Now playing</span>';
+      var close = document.createElement("button");
+      close.type = "button"; close.className = "sandman-player__close"; close.textContent = "Stop the music";
+      close.addEventListener("click", stop);
+      head.appendChild(close);
+      var frame = document.createElement("iframe");
+      frame.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(video) +
+        "?autoplay=1&playsinline=1&rel=0&modestbranding=1";
+      frame.title = "Enter Sandman, on YouTube";
+      frame.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture");
+      frame.setAttribute("referrerpolicy", "strict-origin-when-cross-origin");
+      box.appendChild(head); box.appendChild(frame);
+      document.body.appendChild(box);
+    }
+    function start(withAudio, video) {
       timers.forEach(clearTimeout); timers = [];
       var a = el("sandman-audio"), delay = 600;
+      if (!withAudio && video) { stop(); player(video); delay = 2600; }
       if (withAudio && a) {
         a.src = "/_sandman/audio";
         var p = a.play();
@@ -165,7 +188,7 @@
         if (!at || at === started || String(at) === played || Date.now() - at > 20000) { return; }
         started = at;
         try { window.sessionStorage.setItem("spo-sandman-played", String(at)); } catch (err) { /* storage off */ }
-        start(!!eggs.sandman_audio);
+        start(!!eggs.sandman_audio, eggs.sandman_video);
       },
       stop: function () {
         stop(); timers.forEach(clearTimeout); timers = [];

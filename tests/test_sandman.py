@@ -57,3 +57,13 @@ def test_sandman_reply_and_voice_helper():
     from wepa_monitor.dashboard.views import insights_view
     assert A._voice({"sandman": 1}) == sandman.VOICE and A._voice({}) is None and A._voice(None) is None
     assert "Exit Sandman" in str(insights_view.render_sandman())
+
+
+def test_youtube_fallback_id(monkeypatch):
+    assert sandman.youtube_id() == "CD-E-LDc384"
+    monkeypatch.setenv("WEPA_SANDMAN_YOUTUBE", "0")
+    assert sandman.youtube_id() is None
+    monkeypatch.setenv("WEPA_SANDMAN_YOUTUBE", "dQw4w9WgXcQ")
+    assert sandman.youtube_id() == "dQw4w9WgXcQ"
+    monkeypatch.setenv("WEPA_SANDMAN_YOUTUBE", "<script>bad")
+    assert sandman.youtube_id() is None
