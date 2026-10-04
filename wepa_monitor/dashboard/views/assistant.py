@@ -90,7 +90,7 @@ def suggestions(ds: M.Dataset, path: str | None) -> list[str]:
 
 # --- answering ------------------------------------------------------------------------------------
 
-def reply(ds: M.Dataset, question: str, scope, path: str | None, history: list[dict]) -> dict:
+def reply(ds: M.Dataset, question: str, scope, path: str | None, history: list[dict], voice: str | None = None) -> dict:
     """One assistant message (a plain dict, so it can live in the browser's session store)."""
     ids = scope_ids(ds, scope)
     a = ask.answer(ds, question, ids)
@@ -120,7 +120,7 @@ def reply(ds: M.Dataset, question: str, scope, path: str | None, history: list[d
     try:
         r = ai.ask(prompt, ai.facts(ds, ids, label_), toolkit=analyst.Toolkit(ds, ids), effort="medium",
                    timeout=120, cache_key=f"assist|{question.strip().lower()}|{ids}|{convo_key}|"
-                                         f"{ds.as_of.floor('15min').isoformat()}")
+                                         f"{ds.as_of.floor('15min').isoformat()}", voice=voice)
     except ai.AIError:
         msg["note"] = "The AI model isn't available right now, so this is the built-in answer."
         return msg

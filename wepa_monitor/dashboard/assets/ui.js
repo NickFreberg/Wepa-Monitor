@@ -104,6 +104,76 @@
     });
   });
 
+  // Sandman (wepa_monitor/sandman.py): when the egg fires, play the server's copy of the song if it has one,
+  // and a second or two in, type "Exit light. Enter night." into a banner that leaves after about 10 seconds.
+  // Music that plays on its own needs a way to stop it (WCAG 1.4.2): the "Stop the music" button stays on
+  // screen while it plays, and Escape stops it too. Reduced motion shows the line without the typing.
+  window.spoSandman = (function () {
+    var LINE = "Exit light. Enter night.";
+    var started = 0, timers = [];
+    function el(id) { return document.getElementById(id); }
+    function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+    function calm() {
+      var d = document.documentElement.dataset;
+      return d.motion === "reduce" || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    }
+    function stopButton(show) { var b = el("sandman-stop"); if (b) { b.hidden = !show; } }
+    function stop() {
+      var a = el("sandman-audio");
+      if (a) { a.pause(); try { a.currentTime = 0; } catch (err) { /* not loaded yet */ } }
+      stopButton(false);
+    }
+    function banner() {
+      var box = el("sandman-banner");
+      if (!box) { return; }
+      var text = box.querySelector(".sandman-banner__text"), said = box.querySelector(".sr-only");
+      box.hidden = false; box.classList.remove("is-leaving");
+      text.textContent = ""; said.textContent = LINE;
+      if (calm()) { text.textContent = LINE; }
+      else {
+        box.classList.add("is-typing");
+        var at = 0;
+        LINE.split("").forEach(function (ch, i) {
+          at += (ch === " " && LINE[i - 1] === ".") ? 420 : 120;              // a beat after "Exit light."
+          later(function () { text.textContent += ch; if (i === LINE.length - 1) { box.classList.remove("is-typing"); } }, at);
+        });
+      }
+      later(function () { box.classList.add("is-leaving"); }, 10000);
+      later(function () { box.hidden = true; box.classList.remove("is-leaving"); said.textContent = ""; }, 10800);
+    }
+    function start(withAudio) {
+      timers.forEach(clearTimeout); timers = [];
+      var a = el("sandman-audio"), delay = 600;
+      if (withAudio && a) {
+        a.src = "/_sandman/audio";
+        var p = a.play();
+        if (p && p.then) { p.then(function () { stopButton(true); }).catch(function () { stopButton(false); }); }
+        delay = 1800;
+      }
+      later(banner, delay);
+    }
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { stop(); } });
+    document.addEventListener("click", function (e) {
+      if (e.target.closest && e.target.closest("#sandman-stop")) { stop(); }
+    });
+    document.addEventListener("ended", function (e) { if (e.target.id === "sandman-audio") { stopButton(false); } }, true);
+    return {
+      maybeStart: function (eggs) {
+        var at = eggs && eggs.sandman, played = null;
+        try { played = window.sessionStorage.getItem("spo-sandman-played"); } catch (err) { /* storage off */ }
+        // Fresh unlocks only: never again after a reload or for an unlock this tab has already played.
+        if (!at || at === started || String(at) === played || Date.now() - at > 20000) { return; }
+        started = at;
+        try { window.sessionStorage.setItem("spo-sandman-played", String(at)); } catch (err) { /* storage off */ }
+        start(!!eggs.sandman_audio);
+      },
+      stop: function () {
+        stop(); timers.forEach(clearTimeout); timers = [];
+        var box = el("sandman-banner"); if (box) { box.hidden = true; }
+      }
+    };
+  })();
+
   var stick = new WeakMap();
   // Live logs (System page) and the assistant's conversation stay scrolled to the newest line,
   // unless the reader has scrolled up to look at something.

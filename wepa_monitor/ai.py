@@ -168,14 +168,15 @@ def _allow() -> bool:
 
 
 def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float = 45.0, toolkit=None,
-        effort: str | None = None) -> Reply:
+        effort: str | None = None, voice: str | None = None) -> Reply:
     """One grounded completion. `toolkit` (an analyst.Toolkit) gives the model read-only tools over all
     the data; `tool(question) -> str` is the older single lookup. Every reply is fact-checked: figures
     that appear nowhere in the facts or the tool results get one rewrite, and any still unsupported are
-    reported on the Reply. Raises AIError when unavailable (callers fall back to rule-written text)."""
+    reported on the Reply. `voice` (e.g. sandman.VOICE) changes the tone only; the fact rules still apply.
+    Raises AIError when unavailable (callers fall back to rule-written text)."""
     if not enabled():
         raise AIError("AI is not configured")
-    key = hashlib.sha256((cache_key or prompt + facts).encode()).hexdigest()
+    key = hashlib.sha256(((cache_key or prompt + facts) + (voice or "")).encode()).hexdigest()
     hit = _cache.get(key)
     if hit and time.time() - hit[0] < CACHE_S:
         return hit[1]
@@ -184,7 +185,7 @@ def ask(prompt: str, facts: str, cache_key: str = "", tool=None, timeout: float 
     tk = toolkit if toolkit is not None else (_QueryKit(tool) if tool is not None else None)
     t0 = time.time()
     message = (f"FACTS (computed by the monitor; with the tool results, the only source of truth):\n{facts}\n\n"
-               f"TASK:\n{prompt}")
+               f"TASK:\n{prompt}" + (f"\n\n{voice}" if voice else ""))
     try:
         text = _complete(message, tk, timeout, effort)
         bad = unsupported(text, [facts, prompt] + (tk.outputs if tk else []))

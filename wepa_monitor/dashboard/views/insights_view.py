@@ -61,7 +61,7 @@ def render_story(ds: M.Dataset, key: str, scope):
     ]
 
 
-def render_answer(ds: M.Dataset, question: str, scope):
+def render_answer(ds: M.Dataset, question: str, scope, voice: str | None = None):
     if not (question or "").strip():
         return html.P("Ask anything about the print stations, or pick an example above.", className="empty")
     ids = scope_ids(ds, scope)
@@ -86,7 +86,8 @@ def render_answer(ds: M.Dataset, question: str, scope):
                        f"({a.understood}): {computed}\n\nAnswer them as an expert analyst. Use the tools to check and "
                        "go deeper where it helps (the built-in answer can misread a question).",
                        ai.facts(ds, ids, label_), toolkit=analyst.Toolkit(ds, ids), effort="medium", timeout=120,
-                       cache_key=f"ask|{question.strip().lower()}|{ids}|{ds.as_of.floor('15min').isoformat()}")
+                       cache_key=f"ask|{question.strip().lower()}|{ids}|{ds.as_of.floor('15min').isoformat()}",
+                       voice=voice)
             return [ai_card(r.text, r.provider, "Answer", r),
                     html.Details([html.Summary("The numbers behind it")] + rules_part, className="card__data ask__numbers"),
                     nxt]
@@ -94,6 +95,15 @@ def render_answer(ds: M.Dataset, question: str, scope):
             rules_part.insert(0, html.P("The AI assistant isn't available right now, so this answer uses the "
                                         "built-in rules.", className="footnote"))
     return rules_part + [nxt]
+
+
+def render_sandman():
+    """The reply when someone types a line of Enter Sandman into Ask the data."""
+    return [headline("info", "Yeah! You found the Sandman."),
+            prose([["The whole app just went black. Ask your next question and the assistant answers like it's "
+                    "on stage, with the same facts and figures as always."],
+                   ["Music too loud? Use ", ("b", "Stop the music"), " in the corner, or press Escape. To get your "
+                    "colors back, open Appearance and choose ", ("b", "Exit Sandman"), "."]])]
 
 
 def footnote() -> str:
@@ -126,7 +136,7 @@ def check_line(r) -> html.Div:
                     className="fact-check")
 
 
-def render_story_ai(ds: M.Dataset, key: str, scope):
+def render_story_ai(ds: M.Dataset, key: str, scope, voice: str | None = None):
     """An AI summary of the period's story: what it meant and what to do. Empty when AI is off or fails."""
     if ds.empty or not ai.enabled():
         return None
@@ -138,7 +148,7 @@ def render_story_ai(ds: M.Dataset, key: str, scope):
                    "things that mattered most for students, and one practical next step. Don't repeat every number. "
                    "Check the tools if something in the facts needs a reason or context.",
                    ai.facts(ds, ids, label_, p), cache_key=f"story|{key}|{scope}|{stamp}",
-                   toolkit=analyst.Toolkit(ds, ids), timeout=90)
+                   toolkit=analyst.Toolkit(ds, ids), timeout=90, voice=voice)
     except ai.AIError:
         return None
     return ai_card(r.text, r.provider, reply=r)

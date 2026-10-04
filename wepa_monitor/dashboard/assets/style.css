@@ -7,19 +7,19 @@
   --surface-2: #f1f0ec;
   --ink: #111110;
   --ink-2: #4f4e4a;
-  --muted: #5e5d58;
+  --muted: #585853;
   --hairline: #e4e3dd;
   --border: rgba(17, 17, 16, 0.09);
   --accent: #2a78d6;
   --accent-ink: #ffffff;
   --good: #0ca30c;  --good-text: #006300;
-  --warning: #fab219; --warning-text: #8a5a00;
+  --warning: #fab219; --warning-text: #734b00;
   --serious: #ec835a;
-  --critical: #d03b3b; --critical-text: #b42323;
-  --info: #2a78d6; --info-text: #1f5fae;
+  --critical: #d03b3b; --critical-text: #9f1f1f;
+  --info: #2a78d6; --info-text: #1c579f;
   --side-bg: #ffffff;
   --side-ink: #2b2a27;
-  --side-muted: #5e5d58;
+  --side-muted: #585853;
   --side-hover: #f1f0ec;
   --side-active-bg: #111110;
   --side-active-ink: #ffffff;
@@ -35,8 +35,8 @@
   :root:not([data-theme]) {
     color-scheme: dark;
     --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --ink: #ffffff; --ink-2: #c3c2b7;
-    --muted: #9c9a93; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
-    --accent: #3987e5; --good-text: #2bc22b; --warning-text: #fab219; --critical-text: #ef7a7a; --info-text: #7fb2f0;
+    --muted: #a2a099; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
+    --accent: #3987e5; --good-text: #2bc22b; --warning-text: #fab219; --critical-text: #ef7e7e; --info-text: #7fb2f0;
     --side-bg: #121211; --side-ink: #e8e7e1; --side-muted: #8f8d86; --side-hover: #1f1f1d;
     --side-active-bg: #ffffff; --side-active-ink: #111110; --side-border: #232321;
     --shadow: none;
@@ -45,8 +45,8 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --ink: #ffffff; --ink-2: #c3c2b7;
-  --muted: #9c9a93; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
-  --accent: #3987e5; --good-text: #2bc22b; --warning-text: #fab219; --critical-text: #ef7a7a; --info-text: #7fb2f0;
+  --muted: #a2a099; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
+  --accent: #3987e5; --good-text: #2bc22b; --warning-text: #fab219; --critical-text: #ef7e7e; --info-text: #7fb2f0;
   --side-bg: #121211; --side-ink: #e8e7e1; --side-muted: #8f8d86; --side-hover: #1f1f1d;
   --side-active-bg: #ffffff; --side-active-ink: #111110; --side-border: #232321;
   --shadow: none;
@@ -55,9 +55,9 @@
 :root[data-theme="crimson"] {
   color-scheme: light;
   --page: #f4f1ec; --surface: #fbfaf7; --surface-2: #efebe4; --ink: #1c1717; --ink-2: #4f4b48;
-  --muted: #5c5753; --hairline: #e2ded6; --border: rgba(28, 23, 23, 0.10);
+  --muted: #57524e; --hairline: #e2ded6; --border: rgba(28, 23, 23, 0.10);
   --accent: #89191f; --accent-ink: #ffffff; --info: #00558c; --info-text: #00558c;
-  --side-bg: #89191f; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.72);
+  --side-bg: #89191f; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.84);
   --side-hover: rgba(255, 255, 255, 0.10); --side-active-bg: #ffffff; --side-active-ink: #89191f;
   --side-border: #6f1419; --brand-mark-ring: #89191f;
   --shadow: 0 1px 2px rgba(60, 20, 20, 0.05), 0 4px 14px rgba(60, 20, 20, 0.05);
@@ -1068,25 +1068,25 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .brand > div { min-width: 0; }
 
 /* --- brand: the wireframe Boyden Hall mark, and the pattern behind every page -----------------------
-   pattern.svg (scripts/make_brand.py) is a seamless tile of a data mesh, chart glyphs, wireframe printers,
-   paper and a few low-poly bears. It is used as a mask and painted with theme tokens, twice, one layer
+   pattern.svg (scripts/make_brand.py) is a wireframe wave terrain, drawn once and sized to cover the window,
+   with printers, paper, charts, bears and Boyden Hall draped over its surface. It is used as a mask and painted with theme tokens, twice, one layer
    offset by 2 px in a second color: the "vibration" of the wireframe identity. Alphas are chosen so every
    text color keeps at least 5:1 contrast over the darkest point of the pattern (WCAG 2.2 AA asks 4.5:1).
    It is decorative only: pseudo-elements, never focusable, hidden for high contrast, forced colors and print. */
-:root { --pattern-a: rgba(137, 25, 31, .065); --pattern-b: rgba(168, 116, 5, .06); --side-pattern: rgba(137, 25, 31, .06);
+:root { --pattern-a: rgba(137, 25, 31, 0.13); --pattern-b: rgba(168, 116, 5, 0.12); --side-pattern: rgba(137, 25, 31, 0.096);
   --mark-1: #89191f; --mark-2: #c99a2e; --mark-3: #4f7396; }
-:root[data-theme="crimson"] { --pattern-a: rgba(137, 25, 31, .07); --pattern-b: rgba(168, 116, 5, .065);
-  --side-pattern: rgba(255, 255, 255, .085); --mark-1: #ffffff; --mark-2: #f3c25b; --mark-3: #f19aa0; }
-:root[data-theme="dark"] { --pattern-a: rgba(255, 255, 255, .055); --pattern-b: rgba(224, 99, 107, .07);
-  --side-pattern: rgba(255, 255, 255, .05); --mark-1: #f2ece6; --mark-2: #e0636b; --mark-3: #c99a2e; }
+:root[data-theme="crimson"] { --pattern-a: rgba(137, 25, 31, 0.14); --pattern-b: rgba(168, 116, 5, 0.13);
+  --side-pattern: rgba(255, 255, 255, 0.136); --mark-1: #ffffff; --mark-2: #f3c25b; --mark-3: #f19aa0; }
+:root[data-theme="dark"] { --pattern-a: rgba(255, 255, 255, 0.11); --pattern-b: rgba(224, 99, 107, 0.14);
+  --side-pattern: rgba(255, 255, 255, 0.08); --mark-1: #f2ece6; --mark-2: #e0636b; --mark-3: #c99a2e; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) { --pattern-a: rgba(255, 255, 255, .055);
-    --pattern-b: rgba(224, 99, 107, .07); --side-pattern: rgba(255, 255, 255, .05);
+  :root:not([data-theme]) { --pattern-a: rgba(255, 255, 255, 0.11);
+    --pattern-b: rgba(224, 99, 107, 0.14); --side-pattern: rgba(255, 255, 255, 0.08);
     --mark-1: #f2ece6; --mark-2: #e0636b; --mark-3: #c99a2e; }
 }
 body::before, body::after { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  -webkit-mask: var(--pat-a, url("/assets/pattern.svg")) 0 0 / var(--pat-size, 720px) repeat;
-  mask: var(--pat-a, url("/assets/pattern.svg")) 0 0 / var(--pat-size, 720px) repeat; }
+  -webkit-mask: var(--pat-a, url("/assets/pattern.svg")) var(--pat-pos, center bottom) / var(--pat-size, cover) var(--pat-repeat, no-repeat);
+  mask: var(--pat-a, url("/assets/pattern.svg")) var(--pat-pos, center bottom) / var(--pat-size, cover) var(--pat-repeat, no-repeat); }
 body::before { background: var(--pattern-a); }
 body::after { background: var(--pattern-b); transform: translate(var(--pat-shift, 2px), var(--pat-shift, 2px));
   -webkit-mask-image: var(--pat-b, var(--pat-a, url("/assets/pattern.svg")));
@@ -1094,8 +1094,8 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 .shell { position: relative; z-index: 1; background: none; }
 .sidebar { isolation: isolate; }
 .sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--side-pattern);
-  -webkit-mask: var(--pat-side, url("/assets/pattern.svg")) 40px 0 / 560px repeat;
-  mask: var(--pat-side, url("/assets/pattern.svg")) 40px 0 / 560px repeat; }
+  -webkit-mask: var(--pat-side, url("/assets/pattern.svg")) var(--pat-side-pos, 18% bottom) / var(--pat-side-size, auto 100%) var(--pat-repeat, no-repeat);
+  mask: var(--pat-side, url("/assets/pattern.svg")) var(--pat-side-pos, 18% bottom) / var(--pat-side-size, auto 100%) var(--pat-repeat, no-repeat); }
 :root[data-contrast="high"] body::before, :root[data-contrast="high"] body::after,
 :root[data-contrast="high"] .sidebar::before { display: none; }
 @media (prefers-contrast: more), (forced-colors: active) {
@@ -1120,15 +1120,15 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 /* Cosmic: black-light bowling at midnight. */
 :root[data-theme="cosmic"] {
   color-scheme: dark;
-  --page: #08061a; --surface: #120e2e; --surface-2: #1b1641; --ink: #ffffff; --ink-2: #dcd8f5; --muted: #c6c1ee;
+  --page: #08061a; --surface: #120e2e; --surface-2: #1b1641; --ink: #ffffff; --ink-2: #dcd8f5; --muted: #d6d3f3;
   --hairline: #2c2560; --border: rgba(46, 242, 255, 0.22); --accent: #2ef2ff; --accent-ink: #08061a;
   --good: #5cffb6; --good-text: #5cffb6; --warning: #ffd23f; --warning-text: #ffd23f; --serious: #ff8a5c;
-  --critical: #ff5c8a; --critical-text: #ffaec4; --info: #2ef2ff; --info-text: #8fe9ff;
-  --side-bg: #0b0823; --side-ink: #f3f0ff; --side-muted: #c6c1ee; --side-hover: rgba(46, 242, 255, 0.10);
+  --critical: #ff5c8a; --critical-text: #ffc7d6; --info: #2ef2ff; --info-text: #8fe9ff;
+  --side-bg: #0b0823; --side-ink: #f3f0ff; --side-muted: #d6d3f3; --side-hover: rgba(46, 242, 255, 0.10);
   --side-active-bg: #2ef2ff; --side-active-ink: #08061a; --side-border: #ff5ad9; --brand: #ff5ad9;
   --shadow: 0 0 0 1px rgba(255, 90, 217, 0.10), 0 0 22px rgba(46, 242, 255, 0.10);
-  --pat-a: url("/assets/pattern-cosmic.svg"); --pat-side: url("/assets/pattern-cosmic.svg"); --pat-size: 640px; --pat-shift: 3px;
-  --pattern-a: rgba(46, 242, 255, 0.12); --pattern-b: rgba(255, 90, 217, 0.11); --side-pattern: rgba(184, 255, 74, 0.10);
+  --pat-a: url("/assets/pattern-cosmic.svg"); --pat-side: url("/assets/pattern-cosmic.svg"); --pat-size: 640px; --pat-pos: 0 0; --pat-repeat: repeat; --pat-side-size: 560px; --pat-side-pos: 40px 0; --pat-shift: 3px;
+  --pattern-a: rgba(46, 242, 255, 0.24); --pattern-b: rgba(255, 90, 217, 0.22); --side-pattern: rgba(184, 255, 74, 0.16);
   --mark-1: #2ef2ff; --mark-2: #ff5ad9; --mark-3: #b8ff4a;
 }
 :root[data-theme="cosmic"] body { background: radial-gradient(ellipse at 20% 0%, #1d1052 0, transparent 55%),
@@ -1154,15 +1154,15 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 /* Cup: the 90s paper cup. White, a teal brush stroke, a purple squiggle. */
 :root[data-theme="cup"] {
   color-scheme: light;
-  --page: #fbfaf6; --surface: #ffffff; --surface-2: #f3f1f7; --ink: #1d1733; --ink-2: #3f3a55; --muted: #57526d;
-  --hairline: #e6e2ee; --border: rgba(29, 23, 51, 0.12); --accent: #075f69; --accent-ink: #ffffff;
-  --info: #0b7480; --info-text: #075f69; --warning-text: #714900; --critical-text: #a01c1c; --good-text: #005c00;
+  --page: #fbfaf6; --surface: #ffffff; --surface-2: #f3f1f7; --ink: #1d1733; --ink-2: #3f3a55; --muted: #4d4960;
+  --hairline: #e6e2ee; --border: rgba(29, 23, 51, 0.12); --accent: #06545d; --accent-ink: #ffffff;
+  --info: #0b7480; --info-text: #06545d; --warning-text: #6a4500; --critical-text: #971a1a; --good-text: #005900;
   --side-bg: #2e1a50; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.78); --side-hover: rgba(63, 208, 212, 0.16);
   --side-active-bg: #3fd0d4; --side-active-ink: #1d1733; --side-border: #24133f; --brand: #5d2d8c;
   --shadow: 3px 3px 0 rgba(13, 138, 153, 0.16);
   --pat-a: url("/assets/pattern-cup-a.svg"); --pat-b: url("/assets/pattern-cup-b.svg"); --pat-side: url("/assets/pattern-cup-b.svg");
-  --pat-size: 600px; --pat-shift: 0px;
-  --pattern-a: rgba(18, 163, 180, 0.11); --pattern-b: rgba(93, 45, 140, 0.10); --side-pattern: rgba(63, 208, 212, 0.16);
+  --pat-size: 600px; --pat-pos: 0 0; --pat-repeat: repeat; --pat-side-size: 560px; --pat-side-pos: 40px 0; --pat-shift: 0px;
+  --pattern-a: rgba(18, 163, 180, 0.22); --pattern-b: rgba(93, 45, 140, 0.2); --side-pattern: rgba(63, 208, 212, 0.256);
   --mark-1: #ffffff; --mark-2: #3fd0d4; --mark-3: #c9a6ff;
 }
 :root[data-theme="cup"] .card, :root[data-theme="cup"] .tile { border: 1.5px solid #d9d3e6; box-shadow: 4px 4px 0 rgba(93, 45, 140, 0.12); }
@@ -1176,13 +1176,13 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
   color-scheme: light;
   --page: #f6efe4; --surface: #fffcf6; --surface-2: #f1e7d6; --ink: #1c1717; --ink-2: #4b3f3a; --muted: #5a4c46;
   --hairline: #e6dccb; --border: rgba(110, 20, 25, 0.16); --accent: #89191f; --accent-ink: #ffffff;
-  --info: #00558c; --info-text: #00558c; --warning-text: #714900; --critical-text: #a01c1c; --good-text: #005c00;
-  --side-bg: #89191f; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.78);
+  --info: #00558c; --info-text: #005084; --warning-text: #6e4700; --critical-text: #971a1a; --good-text: #005c00;
+  --side-bg: #89191f; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.86);
   --side-hover: rgba(255, 255, 255, 0.12); --side-active-bg: #f3c25b; --side-active-ink: #3a0d10;
   --side-border: #f3c25b; --brand-mark-ring: #89191f;
   --shadow: 0 1px 2px rgba(60, 20, 20, 0.06), 0 4px 14px rgba(60, 20, 20, 0.06);
-  --pat-a: url("/assets/pattern-spirit.svg"); --pat-side: url("/assets/pattern-spirit.svg"); --pat-size: 640px;
-  --pattern-a: rgba(137, 25, 31, 0.085); --pattern-b: rgba(168, 116, 5, 0.08); --side-pattern: rgba(243, 194, 91, 0.16);
+  --pat-a: url("/assets/pattern-spirit.svg"); --pat-side: url("/assets/pattern-spirit.svg");
+  --pattern-a: rgba(137, 25, 31, 0.17); --pattern-b: rgba(168, 116, 5, 0.16); --side-pattern: rgba(243, 194, 91, 0.2);
   --mark-1: #ffffff; --mark-2: #f3c25b; --mark-3: #f19aa0;
 }
 :root[data-theme="gobears"] .sidebar { box-shadow: inset -5px 0 0 #f3c25b; }
@@ -1213,3 +1213,51 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 
 :root[data-theme="cosmic"][data-contrast="high"] .sidebar, :root[data-theme="cosmic"][data-contrast="high"] .card:hover { box-shadow: none; }
 @media (forced-colors: active) { .brand__mark { filter: none; } }
+
+/* Sandman: the black album. Grey on black, a wireframe rattlesnake in the corner, condensed capitals.
+   Triggered from Ask the data (wepa_monitor/sandman.py); overrides every other appearance while it's on.
+   Grey on black is the point, but every text color still keeps at least 4.5:1 over the snake. */
+:root[data-theme="sandman"] {
+  color-scheme: dark;
+  --page: #050505; --surface: #0c0c0c; --surface-2: #141414; --ink: #d6d6d6; --ink-2: #b0b0b0; --muted: #959595;
+  --hairline: #1c1c1c; --border: rgba(255, 255, 255, 0.07); --accent: #d0d0d0; --accent-ink: #050505;
+  --good-text: #4fc77a; --warning-text: #e0b04a; --critical-text: #f08a8a; --info-text: #8fb8de;
+  --side-bg: #000000; --side-ink: #c4c4c4; --side-muted: #8e8e8e; --side-hover: #141414;
+  --side-active-bg: #1d1d1d; --side-active-ink: #f0f0f0; --side-border: #161616; --brand: #9a9a9a;
+  --shadow: none;
+  --pat-a: url("/assets/sandman.svg"); --pat-b: url("/assets/sandman.svg"); --pat-pos: right 3% bottom 0;
+  --pat-size: auto 86%; --pat-repeat: no-repeat; --pat-shift: 2px;
+  --pattern-a: rgba(190, 190, 190, 0.14); --pattern-b: rgba(110, 110, 110, 0.10); --side-pattern: transparent;
+  --mark-1: #c8c8c8; --mark-2: #4a4a4a; --mark-3: #2a2a2a;
+}
+:root[data-theme="sandman"] .brand__mark i { -webkit-mask-image: url("/assets/sandman-mark.svg"); mask-image: url("/assets/sandman-mark.svg"); }
+:root[data-theme="sandman"] h1, :root[data-theme="sandman"] h2, :root[data-theme="sandman"] h3,
+:root[data-theme="sandman"] .brand__name, :root[data-theme="sandman"] .tile__label, :root[data-theme="sandman"] .nav__link {
+  font-family: "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif; text-transform: uppercase;
+  letter-spacing: .08em; }
+:root[data-theme="sandman"] .topbar__title { letter-spacing: .22em; font-weight: 800; }
+:root[data-theme="sandman"] .card, :root[data-theme="sandman"] .tile { border-color: #1d1d1d; box-shadow: none; }
+:root[data-theme="sandman"] .nav__link.is-active { box-shadow: inset 3px 0 0 #9a9a9a; }
+:root[data-theme="sandman"] .btn--primary { background: #d0d0d0; border-color: #d0d0d0; color: #050505; }
+:root[data-theme="sandman"] .badge-icon { --bt: #b8b8b8; }
+:root[data-theme="sandman"] .gameday-banner { display: none !important; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+  white-space: nowrap; border: 0; }
+.sandman-banner:not([hidden]) { position: fixed; top: 86px; left: calc(50% + var(--side-w, 236px) / 2); z-index: 70;
+  transform: translateX(-50%); width: min(760px, calc(100vw - var(--side-w, 236px) - 48px)); display: flex;
+  align-items: center; justify-content: center; min-height: 58px; padding: 12px 18px; border-radius: 12px;
+  background: #000; border: 1px solid #2a2a2a; box-shadow: 0 18px 50px rgba(0, 0, 0, .7);
+  color: #e6e6e6; font: 800 20px/1.2 "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
+  text-transform: uppercase; letter-spacing: .32em; transition: opacity .8s ease; }
+.sandman-banner.is-typing .sandman-banner__text::after { content: ""; display: inline-block; width: .55em; height: 1em;
+  margin-left: 4px; vertical-align: -0.12em; background: #e6e6e6; animation: sandman-caret .7s steps(1) infinite; }
+.sandman-banner.is-leaving { opacity: 0; }
+@keyframes sandman-caret { 50% { opacity: 0; } }
+.sandman-stop:not([hidden]) { position: fixed; right: 16px; bottom: 16px; z-index: 85; display: inline-flex; align-items: center;
+  gap: 8px; padding: 9px 14px; border-radius: 99px; border: 1px solid #3a3a3a; background: #0c0c0c; color: #e6e6e6;
+  font: inherit; font-weight: 650; cursor: pointer; }
+.sandman-stop:hover { border-color: #8e8e8e; }
+.sandman-stop:focus-visible { outline: 2px solid #e6e6e6; outline-offset: 2px; }
+@media (max-width: 900px) { .sandman-banner:not([hidden]) { top: 120px; left: 50%; width: calc(100vw - 24px); font-size: 15px;
+  letter-spacing: .2em; } }

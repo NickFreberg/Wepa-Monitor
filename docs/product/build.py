@@ -133,7 +133,7 @@ def pdf(html_path: Path) -> Path:
         pg.pdf(path=str(out), format="Letter", print_background=True, prefer_css_page_size=True,
                display_header_footer=True, header_template="<span></span>",
                footer_template="<div style='width:100%;font:8px Arial;color:#776d66;padding:0 0.6in;"
-                               "display:flex;justify-content:space-between'><span>BSU Student Printing Ops · SPO-DOC-001 · v1.3.0"
+                               "display:flex;justify-content:space-between'><span>BSU Student Printing Ops · SPO-DOC-001 · v1.4.0"
                                "</span><span class='pageNumber'></span></div>")
         br.close()
     tmp.unlink()

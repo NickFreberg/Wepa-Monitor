@@ -8,6 +8,22 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.0] - 2026-10-04
+The background becomes a wireframe landscape, every background is easier to see, and there's one more
+surprise for people who ask the right question.
+
+### Changed
+- The pattern behind the BSU, Light and Dark appearances, the sign-in page and the documentation is now a rolling wireframe terrain, like a 3D mesh, that fills the window. Printers, paper, charts, bears and Boyden Hall are drawn onto its surface in the same thin lines. Lines fade with distance, and a few vertices are marked as data points. Go Bears uses the same landscape with paw prints, footballs, goalposts and pennants.
+- Every background, including the hidden themes, is about twice as strong as before: easy to notice, still behind the data.
+- Secondary text and the status colors (warning, error, info) are a shade darker in light themes and a shade lighter in dark ones. All text keeps at least 4.5 to 1 contrast (WCAG 2.2 AA) even where it crosses a line of the background.
+
+### New
+- Another surprise, for the musically inclined, hidden in Ask the data. If it plays music, a "Stop the music" button stays on screen until it stops, and Escape stops it too. Operators: see wepa_monitor/sandman.py.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- WCAG 2.2 success criterion 1.4.2 Audio Control: https://www.w3.org/TR/WCAG22/#audio-control
+
 ## [1.3.0] - 2026-10-04
 Boyden Hall becomes a true 3D wireframe, and on football game days the app cheers for the Bears.
 

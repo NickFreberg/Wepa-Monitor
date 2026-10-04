@@ -8,7 +8,7 @@ direct labels).
 
 Three everyday themes: light, dark, and "crimson" (BSU). Three more take a slot's place when earned or when
 the calendar says so: "cosmic" (glow-in-the-dark, replaces dark), "cup" (the 90s paper cup, replaces light)
-and "gobears" (football game days, replaces BSU). Their chart series were checked the same way. The BSU theme takes its
+and "gobears" (football game days, replaces BSU). "sandman" (black on black) overrides them all while it's on. Their chart series were checked the same way. The BSU theme takes its
 colors from bridgew.edu's own stylesheets: crimson #89191F for chrome, with
 warm stone neutrals. Its chart series (crimson, gold, BSU blue, green) were
 re-validated as a set: every adjacent pair passes the color-vision checks.
@@ -68,8 +68,17 @@ TOKENS["cup"] = {
 # Go Bears (game days): the BSU palette, louder. Crimson and gold lead.
 TOKENS["gobears"] = {**TOKENS["crimson"], "page": "#f6efe4", "surface": "#fffcf6", "border": "#e6dccb",
                      "grid": "#ece3d3"}
-THEMES = ("light", "dark", "crimson", "cosmic", "cup", "gobears")
-DARK_THEMES = ("dark", "cosmic")
+# Sandman (the black album): grey on black. Series step through greys with a steel and a rust for contrast.
+TOKENS["sandman"] = {
+    "page": "#050505", "surface": "#0c0c0c", "ink": "#d0d0d0", "secondary": "#a8a8a8",
+    "muted": "#8e8e8e", "grid": "#1b1b1b", "axis": "#2c2c2c", "border": "#1e1e1e",
+    "series": ["#dcdcdc", "#7f9bb3", "#b08d6a", "#8a8a8a", "#a7b38a", "#c9a3c0", "#e0c27a", "#d98c8c"],
+    "ink_k": "#a8a79f", "ink_c": "#2a9bd0", "ink_m": "#d6528a", "ink_y": "#b98c12",
+    "seq": ["#161616", "#262626", "#3d3d3d", "#5c5c5c", "#828282", "#adadad", "#dcdcdc"],
+    "neutral_bar": "#3a3a3a",
+}
+THEMES = ("light", "dark", "crimson", "cosmic", "cup", "gobears", "sandman")
+DARK_THEMES = ("dark", "cosmic", "sandman")
 
 
 def is_dark(theme: str) -> bool:

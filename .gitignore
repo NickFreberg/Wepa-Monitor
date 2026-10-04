@@ -5,3 +5,9 @@ __pycache__/
 data/
 build.json
 update-pr.md
+
+# Sandman easter egg: the song and any lyrics file stay out of this public repository
+*.mp3
+*.m4a
+*.ogg
+*lyrics*.txt

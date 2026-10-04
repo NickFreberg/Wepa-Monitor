@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -304,6 +305,205 @@ def pattern_svg() -> str:
             f'<path d="{" ".join(glyphs)}" stroke-width="1.6"/></g></svg>')
 
 
+# --- the wave: a wireframe terrain with the brand's glyphs draped over it -------------------------------
+
+W_W, W_H = 1600, 1000             # the SVG; used with mask-size: cover, so it never repeats or shows a seam
+
+
+def _height(u: float, v: float) -> float:
+    """Rolling hills: a long swell, two ridges and a few soft peaks (units: grid cells)."""
+    h = 1.6 * math.sin(u * 0.16 + v * 0.07) + 1.1 * math.sin(u * 0.05 - v * 0.21 + 1.3)
+    for cu, cv, a, r in ((-14, 9, 3.4, 6.0), (10, 15, 4.6, 7.5), (24, 6, 2.6, 5.0), (-28, 22, 5.0, 9.0), (2, 4, 1.8, 4.0),
+                         (30, 34, 6.0, 10.0), (-6, 40, 5.5, 11.0)):
+        h += a * math.exp(-((u - cu) ** 2 + (v - cv) ** 2) / (2 * r * r))
+    return h
+
+
+def _project(u: float, v: float, h: float | None = None) -> tuple[float, float]:
+    """Pinhole camera above the terrain, looking toward the horizon."""
+    h = _height(u, v) if h is None else h
+    depth = v + 16.0
+    f = 1000.0
+    return W_W / 2 + u * f / depth, 110 + (12.5 - h) * f / depth
+
+
+def _drape(path: str, steps: int = 4) -> str:
+    """Re-project a 2D path drawn in grid units (u across, v into the distance) onto the terrain."""
+    out = []
+    for part in re.findall(r"M[^M]+", path):
+        closed = part.rstrip().endswith("Z")
+        pts = [(float(a), float(b)) for a, b in re.findall(r"(-?[\d.]+) (-?[\d.]+)", part)]
+        if closed:
+            pts.append(pts[0])
+        dense = [pts[0]]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            dense += [(x0 + (x1 - x0) * k / steps, y0 + (y1 - y0) * k / steps) for k in range(1, steps + 1)]
+        out.append(_poly([_project(u, v, _height(u, v) + 0.15) for u, v in dense], False))
+    return " ".join(out)
+
+
+def wave_svg(kinds: list[str] | None = None, spots: list[tuple] | None = None) -> str:
+    """The mesh (quads split by one diagonal, like a terrain render), faded with distance, plus glyphs on top."""
+    kinds = kinds or ["printer", "bars", "bear", "donut", "boyden", "spark", "paper", "printer", "scatter", "bear",
+                      "bars", "boyden"]
+    spots = spots or [(-10, 3), (0, 5), (10, 3.5), (-19, 10), (-6, 13), (7, 11), (19, 13), (-26, 20), (-12, 23),
+                      (2, 21), (15, 24), (28, 22)]
+    nu, nv = 60, 50
+    bands: dict[int, list[str]] = {}
+
+    def band(v):
+        return max(0, min(5, int(v / (nv / 6))))
+
+    def seen(*pts):
+        return any(-40 <= x <= W_W + 40 and -40 <= y <= W_H + 40 for x, y in pts)
+
+    def add(v, pts):
+        if seen(*pts):
+            bands.setdefault(band(v), []).append(_poly(pts, False))
+
+    for v in range(-7, nv + 1):
+        row = [q for q in (_project(u, v) for u in range(-nu, nu + 1)) if -80 <= q[0] <= W_W + 80]
+        add(v, row)
+    for u in range(-nu, nu + 1):
+        for v in range(-7, nv):
+            a, b = _project(u, v), _project(u, v + 1)
+            add(v, [a, b])
+            if u < nu:
+                add(v, [a, _project(u + 1, v + 1)])
+    alpha = {0: 1.0, 1: .8, 2: .6, 3: .42, 4: .28, 5: .16}
+    mesh = "".join(f'<path d="{" ".join(paths)}" opacity="{alpha[k]}"/>' for k, paths in sorted(bands.items()))
+    nodes = []
+    rnd = random.Random(42)
+    for _ in range(70):                                     # a few highlighted vertices: data points on the mesh
+        v = rnd.randint(0, 30)
+        u = rnd.randint(-int(0.8 * (v + 16)), int(0.8 * (v + 16)))
+        x, y = _project(u, v)
+        r = max(1.4, 4.4 - v * 0.1)
+        nodes.append(f"M{x - r:.1f} {y:.1f}a{r:.1f} {r:.1f} 0 1 0 {2 * r:.1f} 0a{r:.1f} {r:.1f} 0 1 0 {-2 * r:.1f} 0")
+    glyphs = []
+    for kind, (u, v) in zip(kinds, spots):
+        glyphs.append(_drape(" ".join(_shape(kind, u, v, 0.075, 180))))   # 180: the glyph's top faces away
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{W_W}" height="{W_H}" viewBox="0 0 {W_W} {W_H}">'
+            f'<g fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round">'
+            f'<g stroke-width="1.2">{mesh}</g><path d="{" ".join(nodes)}" stroke-width="1.6"/>'
+            f'<path d="{" ".join(glyphs)}" stroke-width="2.4"/></g></svg>')
+
+
+def spirit_wave_svg() -> str:
+    """Game day: the same wave, with paw prints, footballs, goalposts, pennants, megaphones and bears on it."""
+    return wave_svg(["football", "paw", "goalpost", "bear", "pennant", "paw", "megaphone", "football", "paw", "boyden",
+                     "goalpost", "bear"])
+
+
+# --- Sandman: a coiled rattlesnake, as a wireframe tube -------------------------------------------------
+
+def _snake_centerline() -> list[tuple[float, float, float, float]]:
+    """(x, y, z, radius) along the body: a three-loop coil, rising and tightening, then an S-curved neck.
+    x right, y up, z toward the viewer."""
+    pts = []
+    turns, n = 2.6, 150
+    for i in range(n + 1):
+        t = i / n
+        a = 2 * math.pi * turns * t + 0.6
+        ring = 78 - 40 * t
+        pts.append((ring * math.cos(a), 6 + 52 * t, ring * math.sin(a), 4 + 9 * min(1, t * 4) - 2.5 * t))
+    x0, y0, z0, _ = pts[-1]
+    for i in range(1, 61):                                 # the neck: rises, then turns level to strike left
+        t = i / 60
+        pts.append((x0 + 18 * math.sin(math.pi * t) - 70 * t * t, y0 + 120 * math.sin(math.pi / 2 * t),
+                    z0 + 20 * math.sin(math.pi * t), 8.5 - 2.5 * t))
+    return pts
+
+
+def _frame(pts):
+    """Parallel-transport frames along the centerline, so the tube never twists or flips."""
+    out, normal = [], None
+    for i, (x, y, z, r) in enumerate(pts):
+        a, b = pts[max(0, i - 1)], pts[min(len(pts) - 1, i + 1)]
+        t = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+        n = math.sqrt(sum(c * c for c in t)) or 1
+        t = [c / n for c in t]
+        if normal is None:
+            normal = [0.0, 1.0, 0.0]
+        d = sum(p * q for p, q in zip(normal, t))
+        normal = [p - d * q for p, q in zip(normal, t)]
+        m = math.sqrt(sum(c * c for c in normal)) or 1
+        normal = [c / m for c in normal]
+        bi = [t[1] * normal[2] - t[2] * normal[1], t[2] * normal[0] - t[0] * normal[2], t[0] * normal[1] - t[1] * normal[0]]
+        out.append(((x, y, z), r, tuple(normal), tuple(bi)))
+    return out
+
+
+def snake_paths(mark: bool = False) -> tuple[list[str], list[str], str]:
+    """(body, detail, viewBox): rings and long lines of a tube around the centerline, a wedge head with open
+    jaws and fangs, and a rattle on the tail."""
+    yaw, pitch = math.radians(-18), math.radians(24)
+    def proj(x, y, z):
+        xr = x * math.cos(yaw) + z * math.sin(yaw)
+        zr = -x * math.sin(yaw) + z * math.cos(yaw)
+        return (xr, -y * math.cos(pitch) + zr * math.sin(pitch))
+    frames = _frame(_snake_centerline())
+    k = 5 if mark else 8
+    step = 6 if mark else 3
+    rings, longs, all_rings = [], [[] for _ in range(k)], []
+    for i, ((x, y, z), r, nv, bv) in enumerate(frames):
+        ring = []
+        for j in range(k):
+            a = 2 * math.pi * j / k
+            px = x + r * (math.cos(a) * nv[0] + math.sin(a) * bv[0])
+            py = y + r * (math.cos(a) * nv[1] + math.sin(a) * bv[1])
+            pz = z + r * (math.cos(a) * nv[2] + math.sin(a) * bv[2])
+            q = proj(px, py, pz)
+            ring.append(q)
+            longs[j].append(q)
+        if i % step == 0:
+            rings.append(_poly(ring))
+            all_rings.append(ring)
+    body = [_poly(line, False) for line in longs]
+    detail = list(rings)
+    if not mark:                                           # diagonal ties: a diamondback lattice of scales
+        for r0, r1 in zip(all_rings, all_rings[1:]):
+            for j in range(k):
+                detail.append(_poly([r0[j], r1[(j + 1) % k]], False))
+                detail.append(_poly([r0[(j + 1) % k], r1[j]], False))
+    # Head: a wedge in screen space, pointing along the neck's last direction, jaws open.
+    (hx, hy), (px_, py_) = proj(*frames[-1][0]), proj(*frames[-6][0])
+    ang = math.atan2(hy - py_, hx - px_)
+    flip = -1 if math.cos(ang) < 0 else 1                  # keep the jaw opening downward on either side
+    f = _xf(hx, hy, 1.0, math.degrees(ang))
+    P = lambda pts, close=True: _poly([f(x, flip * y) for x, y in pts], close)  # noqa: E731
+    sc = 1.5
+    H = lambda pts, close=True: P([(x * sc, y * sc) for x, y in pts], close)  # noqa: E731
+    head = [H([(-2, -9), (14, -13), (30, -10), (44, -3), (20, 2), (2, 6)]),          # skull and upper jaw
+            H([(2, 6), (18, 12), (36, 25), (14, 15)]),                               # lower jaw, dropped open
+            H([(37, -2), (35, 9)], False), H([(29, 0), (28, 8)], False),             # fangs
+            H([(22, -8), (25, -10), (28, -8), (25, -6)]),                            # eye
+            H([(14, -13), (20, 2)], False), H([(30, -10), (20, 2)], False)]          # facets
+    # Rattle: shrinking segments off the tail.
+    (tx, ty), (ux, uy) = proj(*frames[0][0]), proj(*frames[3][0])
+    da = math.atan2(ty - uy, tx - ux)
+    rattle = []
+    for i in range(5):
+        cx, cy = tx + math.cos(da) * (6 + i * 7), ty + math.sin(da) * (6 + i * 7)
+        g = _xf(cx, cy, 1.0, math.degrees(da))
+        w = 6 - i * 0.8
+        rattle.append(_poly([g(-3, -w), g(3, -w * 0.8), g(3, w * 0.8), g(-3, w)]))
+    body += head + rattle
+    xs = [float(v) for d in body + detail for v in re.findall(r"(-?[\d.]+) -?[\d.]+", d)]
+    ys = [float(v) for d in body + detail for v in re.findall(r"-?[\d.]+ (-?[\d.]+)", d)]
+    pad = 12
+    vb = f"{min(xs) - pad:.0f} {min(ys) - pad:.0f} {max(xs) - min(xs) + 2 * pad:.0f} {max(ys) - min(ys) + 2 * pad:.0f}"
+    return body, detail, vb
+
+
+def snake_svg(mark: bool = False, color: str = "#000", stroke: float | None = None) -> str:
+    body, detail, vb = snake_paths(mark)
+    sw = stroke or (6 if mark else 0.7)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}"><g fill="none" stroke="{color}" '
+            f'stroke-linecap="round" stroke-linejoin="round"><path d="{" ".join(body)}" stroke-width="{sw}"/>'
+            f'<path d="{" ".join(detail)}" stroke-width="{sw * 0.55}" opacity=".7"/></g></svg>')
+
+
 # --- patterns for the special themes ---------------------------------------------------------------------
 
 def _seamless(body: str, size: int, stroke: float, extra: str = "") -> str:
@@ -434,9 +634,11 @@ def main() -> None:
     DOC_ASSETS.mkdir(parents=True, exist_ok=True)
     (ASSETS / "boyden.svg").write_text(boyden_svg(True))
     (ASSETS / "boyden-mark.svg").write_text(boyden_svg(False))
-    (ASSETS / "pattern.svg").write_text(pattern_svg())
+    (ASSETS / "pattern.svg").write_text(wave_svg())
     (ASSETS / "pattern-cosmic.svg").write_text(cosmic_svg())
-    (ASSETS / "pattern-spirit.svg").write_text(spirit_svg())
+    (ASSETS / "sandman.svg").write_text(snake_svg())
+    (ASSETS / "sandman-mark.svg").write_text(snake_svg(mark=True))
+    (ASSETS / "pattern-spirit.svg").write_text(spirit_wave_svg())
     cup_a, cup_b = cup_svgs()
     (ASSETS / "pattern-cup-a.svg").write_text(cup_a)
     (ASSETS / "pattern-cup-b.svg").write_text(cup_b)

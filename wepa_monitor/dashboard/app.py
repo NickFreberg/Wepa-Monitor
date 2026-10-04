@@ -15,7 +15,7 @@ import pandas as pd
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 
-from .. import activity, config, export, football, geo, metrics as M, routing, security
+from .. import activity, config, export, football, geo, metrics as M, routing, sandman, security
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
@@ -76,6 +76,11 @@ def theme_options(eggs: dict | None, gameday: bool) -> list[dict]:
                                  html.Span([html.B(name), html.Span(desc, className="themes__desc")],
                                            className="themes__text")]), "value": slot}
             for slot, (look, name, desc) in names.items()]
+
+
+def _voice(eggs: dict | None) -> str | None:
+    """The AI's voice: a metal frontman while the Sandman theme is on, otherwise the usual analyst."""
+    return sandman.VOICE if (eggs or {}).get("sandman") else None
 
 
 def attach_refs(ds: M.Dataset) -> None:
@@ -206,6 +211,7 @@ def _appearance_panel():
             html.P("Make it yours. Your choices are saved in this browser.", className="popover__hint"),
             dcc.RadioItems(id="theme-switch", value="crimson", persistence=True, persistence_type="local",
                            className="themes", labelClassName="themes__opt", options=theme_options({}, False)),
+            html.Button("Exit Sandman", id="sandman-exit", className="btn btn--sm btn--block", hidden=True),
             html.Button("Bring back the original themes", id="eggs-reset", className="btn btn--sm btn--block",
                         hidden=True),
             html.Div("Text size", className="popover__label"),
@@ -291,6 +297,13 @@ def _shell(ds: M.Dataset):
                 ]),
             ]),
             html.Div(id="gameday-banner", className="gameday-banner", hidden=True),
+            html.Div(id="sandman-banner", className="sandman-banner", hidden=True, children=[
+                html.Span(className="sandman-banner__text", **{"aria-hidden": "true"}),
+                html.Span(className="sr-only", role="status"),
+            ]),
+            html.Button([icon("x"), "Stop the music"], id="sandman-stop", className="sandman-stop", hidden=True,
+                        type="button"),
+            html.Audio(id="sandman-audio", preload="none", hidden=True),
             html.Div(id="banner"),
             html.Main(id="content", className="content", tabIndex="-1"),
         ]),
@@ -403,6 +416,14 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
                 t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
             }
             eggs = eggs || {};
+            if (eggs.sandman) {
+                document.documentElement.dataset.theme = 'sandman';
+                d = document.documentElement.dataset;
+                d.text = text || 'standard'; d.density = density || 'comfortable';
+                d.motion = motion || 'full'; d.contrast = contrast || 'standard';
+                if (window.spoSandman) { window.spoSandman.maybeStart(eggs); }
+                return 'sandman';
+            }
             if (t === 'dark' && eggs.cosmic) { t = 'cosmic'; }
             if (t === 'light' && eggs.cup) { t = 'cup'; }
             if (t === 'crimson' && gameday) { t = 'gobears'; }
@@ -427,15 +448,42 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         return True, [html.Span(className="gameday-banner__ball", **{"aria-hidden": "true"}),
                       html.Span(football.headline(game))], False
 
-    @app.callback(Output("theme-switch", "options"), Output("eggs-reset", "hidden"),
+    @app.callback(Output("theme-switch", "options"), Output("eggs-reset", "hidden"), Output("sandman-exit", "hidden"),
                   Input("eggs", "data"), Input("gameday", "data"))
     def special_themes(eggs, gameday):
-        return theme_options(eggs, bool(gameday)), not any((eggs or {}).values())
+        eggs = eggs or {}
+        return theme_options(eggs, bool(gameday)), not any(eggs.values()), not eggs.get("sandman")
+
+    # Sandman: three or more words of the song in Ask the data (see wepa_monitor/sandman.py).
+    sandman.install(app.server, data_dir)
+
+    @app.callback(Output("eggs", "data", allow_duplicate=True), Input("ask-go", "n_clicks"), Input("ask-q", "value"),
+                  State("eggs", "data"), prevent_initial_call=True)
+    def sandman_on(_, question, eggs):
+        if not question or not sandman.matches(question, data_dir):
+            raise PreventUpdate
+        audio = sandman.audio_file(data_dir) is not None
+        return {**(eggs or {}), "sandman": int(time.time() * 1000), "sandman_audio": audio}
+
+    app.clientside_callback(
+        """
+        function(n, eggs) {
+            if (!n) { return window.dash_clientside.no_update; }
+            if (window.spoSandman) { window.spoSandman.stop(); }
+            var out = Object.assign({}, eggs || {});
+            delete out.sandman; delete out.sandman_audio;
+            return out;
+        }
+        """,
+        Output("eggs", "data", allow_duplicate=True), Input("sandman-exit", "n_clicks"), State("eggs", "data"),
+        prevent_initial_call=True,
+    )
 
     app.clientside_callback(
         """
         function(n) {
             if (!n) { return window.dash_clientside.no_update; }
+            if (window.spoSandman) { window.spoSandman.stop(); }
             return {};
         }
         """,
@@ -653,9 +701,9 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     def story_body(key, sc, _):
         return insights_view.render_story(cache.get(), key, sc)
 
-    @app.callback(Output("story-ai", "children"), Input("story-period", "value"), scope)
-    def story_ai(key, sc):
-        return insights_view.render_story_ai(cache.get(), key, sc)
+    @app.callback(Output("story-ai", "children"), Input("story-period", "value"), scope, State("eggs", "data"))
+    def story_ai(key, sc, eggs):
+        return insights_view.render_story_ai(cache.get(), key, sc, _voice(eggs))
 
     @app.callback(Output("ask-q", "value"), Input({"type": "ask-ex", "q": ALL}, "n_clicks"), prevent_initial_call=True)
     def ask_example(clicks):
@@ -664,9 +712,12 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         return ctx.triggered_id["q"]
 
     # The question box is debounced: it answers on Enter, on the Ask button, or when a chip fills it in.
-    @app.callback(Output("ask-body", "children"), Input("ask-go", "n_clicks"), Input("ask-q", "value"), scope)
-    def ask_body(_, question, sc):
-        return insights_view.render_answer(cache.get(), question, sc)
+    @app.callback(Output("ask-body", "children"), Input("ask-go", "n_clicks"), Input("ask-q", "value"), scope,
+                  State("eggs", "data"))
+    def ask_body(_, question, sc, eggs):
+        if question and sandman.matches(question, data_dir):
+            return insights_view.render_sandman()
+        return insights_view.render_answer(cache.get(), question, sc, _voice(eggs))
 
     # --- explain any clicked chart point ---------------------------------------------------------------
     @app.callback(Output("xdrawer-body", "children"), Output("xdrawer", "className"),
@@ -929,12 +980,13 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         return chat, ""
 
     @app.callback(Output("assist-chat", "data", allow_duplicate=True), Input("assist-chat", "data"),
-                  State("scope-store", "data"), State("url", "pathname"), prevent_initial_call=True)
-    def assist_answer(chat, sc, path):
+                  State("scope-store", "data"), State("url", "pathname"), State("eggs", "data"),
+                  prevent_initial_call=True)
+    def assist_answer(chat, sc, path, eggs):
         if not chat or chat[-1].get("role") != "pending" or len(chat) < 2:
             raise PreventUpdate
         question = chat[-2].get("text", "")
-        return chat[:-1] + [assistant.reply(cache.get(), question, sc, path, chat[:-2])]
+        return chat[:-1] + [assistant.reply(cache.get(), question, sc, path, chat[:-2], _voice(eggs))]
 
     @app.callback(Output("assist-chat", "data", allow_duplicate=True), Input("assist-new", "n_clicks"),
                   prevent_initial_call=True)

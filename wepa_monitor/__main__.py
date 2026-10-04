@@ -42,6 +42,8 @@ def main(argv: list[str] | None = None) -> int:
     from . import cli_users, peer
     cli_users.add_parser(sub)
     peer.add_parser(sub)
+    sl = sub.add_parser("sandman-learn", help=argparse.SUPPRESS)
+    sl.add_argument("lyrics", type=Path)
     sc = sub.add_parser("selfcheck", help="check every part of the app: collector, data, records, security, versions")
     sc.add_argument("--vulns", action="store_true", help="also look up installed packages in OSV.dev now")
     sub.add_parser("network", help="rebuild the campus walking/driving network from OpenStreetMap")
@@ -132,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "backup":
         return peer.run_cli(args)
+
+    if args.cmd == "sandman-learn":
+        from . import sandman
+        n = sandman.learn(args.data_dir or config.LIVE_DATA_DIR, args.lyrics.read_text(encoding="utf-8"))
+        print(f"Stored {n} three-word hashes (no lyrics). You can delete {args.lyrics} now.")
+        return 0
 
     if args.cmd == "selfcheck":
         from . import metrics, selfcheck, vulns
