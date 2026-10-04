@@ -8,6 +8,22 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.2.3] - 2026-10-04
+A new look: Boyden Hall, drawn as a wireframe, is the app's logo, and a quiet pattern of data, charts,
+printers and a few bears sits behind every page.
+
+### Changed
+- The logo is Boyden Hall drawn in thin lines, with offset crimson, gold and blue copies that echo the lines in data charts. It replaces the BSU bear, which is a university trademark. The browser tab icon matches.
+- A geometric background (a network mesh with small printers, paper, bar charts, sparklines, donuts, scatter plots, bears and Boyden Hall) sits behind the cards on every page, the sign-in page and the documentation cover. Its colors follow the chosen theme.
+- The background is hidden in high-contrast mode, when the system asks for more contrast, in Windows forced colors and in print.
+
+### Fixed
+- Secondary (muted) text now meets a contrast of at least 5 to 1 in every theme, even over the darkest part of the pattern. In the light theme it was 3.5 to 1 before, below the WCAG AA minimum of 4.5 to 1.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- WCAG 2.2 success criteria 1.4.3 Contrast (Minimum) and 1.4.11 Non-text Contrast: https://www.w3.org/TR/WCAG22/
+
 ## [1.2.2] - 2026-10-04
 ResNet Print Ops is now BSU Student Printing Ops, a name that covers every station it watches, from the
 residence halls to the labs, the library and the satellite campus. East Campus Commons now counts as a

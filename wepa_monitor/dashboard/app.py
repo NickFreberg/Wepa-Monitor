@@ -242,7 +242,8 @@ def _shell(ds: M.Dataset):
         html.A("Skip to content", href="#content", className="skip"),
         html.Aside(className="sidebar", children=[
             dcc.Link(className="brand", href="/", title="Overview", children=[
-                html.Img(src="/assets/bsu-bear.png", alt="Bridgewater State Bears", className="brand__logo"),
+                html.Span([html.I(), html.I(), html.I()], className="brand__mark", role="img",
+                          **{"aria-label": "Boyden Hall, drawn as a wireframe"}),
                 html.Div([html.Div("BSU Student Printing Ops", className="brand__name"),
                           html.Div("Bridgewater State University", className="brand__sub")]),
             ]),

@@ -7,7 +7,7 @@
   --surface-2: #f1f0ec;
   --ink: #111110;
   --ink-2: #4f4e4a;
-  --muted: #85837d;
+  --muted: #5e5d58;
   --hairline: #e4e3dd;
   --border: rgba(17, 17, 16, 0.09);
   --accent: #2a78d6;
@@ -19,7 +19,7 @@
   --info: #2a78d6; --info-text: #1f5fae;
   --side-bg: #ffffff;
   --side-ink: #2b2a27;
-  --side-muted: #85837d;
+  --side-muted: #5e5d58;
   --side-hover: #f1f0ec;
   --side-active-bg: #111110;
   --side-active-ink: #ffffff;
@@ -35,7 +35,7 @@
   :root:not([data-theme="light"]):not([data-theme="crimson"]) {
     color-scheme: dark;
     --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --ink: #ffffff; --ink-2: #c3c2b7;
-    --muted: #8f8d86; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
+    --muted: #9c9a93; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
     --accent: #3987e5; --good-text: #2bc22b; --warning-text: #fab219; --critical-text: #ef7a7a; --info-text: #7fb2f0;
     --side-bg: #121211; --side-ink: #e8e7e1; --side-muted: #8f8d86; --side-hover: #1f1f1d;
     --side-active-bg: #ffffff; --side-active-ink: #111110; --side-border: #232321;
@@ -45,7 +45,7 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321; --ink: #ffffff; --ink-2: #c3c2b7;
-  --muted: #8f8d86; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
+  --muted: #9c9a93; --hairline: #2c2c2a; --border: rgba(255, 255, 255, 0.08);
   --accent: #3987e5; --good-text: #2bc22b; --warning-text: #fab219; --critical-text: #ef7a7a; --info-text: #7fb2f0;
   --side-bg: #121211; --side-ink: #e8e7e1; --side-muted: #8f8d86; --side-hover: #1f1f1d;
   --side-active-bg: #ffffff; --side-active-ink: #111110; --side-border: #232321;
@@ -54,8 +54,8 @@
 /* BSU: crimson #89191F chrome on warm stone neutrals, taken from bridgew.edu's stylesheets. */
 :root[data-theme="crimson"] {
   color-scheme: light;
-  --page: #f4f1ec; --surface: #fbfaf7; --surface-2: #efebe4; --ink: #1c1717; --ink-2: #595959;
-  --muted: #7d7873; --hairline: #e2ded6; --border: rgba(28, 23, 23, 0.10);
+  --page: #f4f1ec; --surface: #fbfaf7; --surface-2: #efebe4; --ink: #1c1717; --ink-2: #4f4b48;
+  --muted: #5c5753; --hairline: #e2ded6; --border: rgba(28, 23, 23, 0.10);
   --accent: #89191f; --accent-ink: #ffffff; --info: #00558c; --info-text: #00558c;
   --side-bg: #89191f; --side-ink: #ffffff; --side-muted: rgba(255, 255, 255, 0.72);
   --side-hover: rgba(255, 255, 255, 0.10); --side-active-bg: #ffffff; --side-active-ink: #89191f;
@@ -1066,3 +1066,43 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 /* The product name wraps onto two lines in the sidebar rather than being cut off. */
 .brand__name { white-space: normal; line-height: 1.2; overflow-wrap: anywhere; }
 .brand > div { min-width: 0; }
+
+/* --- brand: the wireframe Boyden Hall mark, and the pattern behind every page -----------------------
+   pattern.svg (scripts/make_brand.py) is a seamless tile of a data mesh, chart glyphs, wireframe printers,
+   paper and a few low-poly bears. It is used as a mask and painted with theme tokens, twice, one layer
+   offset by 2 px in a second color: the "vibration" of the wireframe identity. Alphas are chosen so every
+   text color keeps at least 5:1 contrast over the darkest point of the pattern (WCAG 2.2 AA asks 4.5:1).
+   It is decorative only: pseudo-elements, never focusable, hidden for high contrast, forced colors and print. */
+:root { --pattern-a: rgba(137, 25, 31, .065); --pattern-b: rgba(168, 116, 5, .06); --side-pattern: rgba(137, 25, 31, .06);
+  --mark-1: #89191f; --mark-2: #c99a2e; --mark-3: #4f7396; }
+:root[data-theme="crimson"] { --pattern-a: rgba(137, 25, 31, .07); --pattern-b: rgba(168, 116, 5, .065);
+  --side-pattern: rgba(255, 255, 255, .085); --mark-1: #ffffff; --mark-2: #f3c25b; --mark-3: #f19aa0; }
+:root[data-theme="dark"] { --pattern-a: rgba(255, 255, 255, .055); --pattern-b: rgba(224, 99, 107, .07);
+  --side-pattern: rgba(255, 255, 255, .05); --mark-1: #f2ece6; --mark-2: #e0636b; --mark-3: #c99a2e; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="crimson"]) { --pattern-a: rgba(255, 255, 255, .055);
+    --pattern-b: rgba(224, 99, 107, .07); --side-pattern: rgba(255, 255, 255, .05);
+    --mark-1: #f2ece6; --mark-2: #e0636b; --mark-3: #c99a2e; }
+}
+body::before, body::after { content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  -webkit-mask: url("/assets/pattern.svg") 0 0 / 720px 720px repeat; mask: url("/assets/pattern.svg") 0 0 / 720px 720px repeat; }
+body::before { background: var(--pattern-a); }
+body::after { background: var(--pattern-b); transform: translate(2px, 2px); }
+.shell { position: relative; z-index: 1; background: none; }
+.sidebar { isolation: isolate; }
+.sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--side-pattern);
+  -webkit-mask: url("/assets/pattern.svg") 40px 0 / 560px 560px repeat; mask: url("/assets/pattern.svg") 40px 0 / 560px 560px repeat; }
+:root[data-contrast="high"] body::before, :root[data-contrast="high"] body::after,
+:root[data-contrast="high"] .sidebar::before { display: none; }
+@media (prefers-contrast: more), (forced-colors: active) {
+  body::before, body::after, .sidebar::before { display: none; }
+}
+@media print { body::before, body::after, .sidebar::before { display: none; } }
+
+.brand__mark { position: relative; width: 40px; height: 46px; flex: none; }
+.brand__mark i { position: absolute; inset: 0; background: var(--mark-1);
+  -webkit-mask: url("/assets/boyden-mark.svg") center / contain no-repeat; mask: url("/assets/boyden-mark.svg") center / contain no-repeat; }
+.brand__mark i:nth-child(1) { background: var(--mark-3); transform: translate(-1.5px, 1px); opacity: .8; }
+.brand__mark i:nth-child(2) { background: var(--mark-2); transform: translate(1.5px, -1px); opacity: .9; }
+@media (max-width: 1180px) and (min-width: 901px) { .brand__mark { width: 36px; height: 42px; } }
+@media (max-width: 900px) { .brand__mark { width: 30px; height: 34px; } }

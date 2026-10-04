@@ -94,6 +94,12 @@ def shot(name: str) -> str:
 def build() -> Path:
     html = "".join(p.read_text(encoding="utf-8") for p in sorted((HERE / "src").glob("*.html")))
     html = html.replace("{{SVG_DESKS}}", desk_hours_svg()).replace("{{SVG_DQ}}", data_quality_svg())
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import make_brand
+    pattern = base64.b64encode(make_brand.pattern_svg().encode()).decode()
+    html = (html.replace("{{PATTERN_URI}}", "data:image/svg+xml;base64," + pattern)
+            .replace("{{BOYDEN_COVER}}", make_brand.boyden_svg(True, ("#ffffff", "#f3c25b", "#8fc1e8"), stroke=2.2))
+            .replace("{{MARK_COVER}}", make_brand.boyden_svg(False, ("#ffffff", "#f3c25b", "#f19aa0"))))
     for name in SHOTS:
         html = html.replace("{{IMG_" + name + "}}", shot(name))
     assert "{{" not in html, "unfilled placeholder"
@@ -127,7 +133,7 @@ def pdf(html_path: Path) -> Path:
         pg.pdf(path=str(out), format="Letter", print_background=True, prefer_css_page_size=True,
                display_header_footer=True, header_template="<span></span>",
                footer_template="<div style='width:100%;font:8px Arial;color:#776d66;padding:0 0.6in;"
-                               "display:flex;justify-content:space-between'><span>BSU Student Printing Ops · SPO-DOC-001 · v1.2.2"
+                               "display:flex;justify-content:space-between'><span>BSU Student Printing Ops · SPO-DOC-001 · v1.2.3"
                                "</span><span class='pageNumber'></span></div>")
         br.close()
     tmp.unlink()
