@@ -8,6 +8,15 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.5] - 2026-10-04
+A certain number now gets a bear.
+
+### Changed
+- The reaction to a certain number is now a bear in BSU colors, crimson tee and black shorts, standing over the page with no panel behind it. Its arms rock up and down out of sync, weighing a number on each paw. The bear is drawn for this app. The university's own mascot artwork isn't in this repository, but a transparent mascot.png placed in the server's data folder takes the bear's place. The same limits as before apply: under five seconds, no flashing, Escape dismisses it, and it holds still for reduced motion.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
 ## [1.4.4] - 2026-10-04
 The hidden music finds its own way to play.
 

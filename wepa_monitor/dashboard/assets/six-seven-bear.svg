@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 360">
+  <!-- A cartoon BSU-colors bear doing the "6 7" hands. Drawn for this app; not the university's mascot artwork.
+       ui.js inlines it so the arms (#ss-left, #ss-right) can be animated by style.css. -->
+  <g stroke="#2a1a10" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <!-- legs and sneakers -->
+    <path d="M122 280 L118 322 L150 322 L152 280 Z" fill="#6b4226"/>
+    <path d="M168 280 L170 322 L202 322 L198 280 Z" fill="#6b4226"/>
+    <path d="M108 318 q12 -10 44 -4 q6 8 0 16 l-46 0 q-6 -6 2 -12 Z" fill="#f2f2f2"/>
+    <path d="M168 314 q32 -6 44 4 q8 6 2 12 l-46 0 q-6 -8 0 -16 Z" fill="#f2f2f2"/>
+    <!-- shorts -->
+    <path d="M110 238 L210 238 L214 292 L166 292 L160 270 L154 292 L106 292 Z" fill="#161616"/>
+    <!-- shirt (BSU crimson) -->
+    <path d="M104 170 q56 -18 112 0 l14 22 l-18 10 l-4 -8 l2 52 l-100 0 l2 -52 l-4 8 l-18 -10 Z" fill="#a3262d"/>
+    <path d="M136 168 q24 14 48 0" fill="none" stroke="#7a1a20"/>
+    <!-- head -->
+    <circle cx="112" cy="50" r="22" fill="#6b4226"/>
+    <circle cx="208" cy="50" r="22" fill="#6b4226"/>
+    <circle cx="112" cy="50" r="10" fill="#c98b5b" stroke-width="3"/>
+    <circle cx="208" cy="50" r="10" fill="#c98b5b" stroke-width="3"/>
+    <ellipse cx="160" cy="104" rx="66" ry="62" fill="#7a4b2a"/>
+    <ellipse cx="160" cy="128" rx="38" ry="28" fill="#d9a066"/>
+    <ellipse cx="136" cy="90" rx="11" ry="13" fill="#ffffff" stroke-width="3"/>
+    <ellipse cx="184" cy="90" rx="11" ry="13" fill="#ffffff" stroke-width="3"/>
+    <circle cx="138" cy="93" r="5" fill="#1a1a1a" stroke="none"/>
+    <circle cx="182" cy="93" r="5" fill="#1a1a1a" stroke="none"/>
+    <path d="M124 74 q12 -8 22 -2 M174 72 q10 -6 22 2" fill="none" stroke-width="4"/>
+    <ellipse cx="160" cy="114" rx="13" ry="9" fill="#1a1a1a"/>
+    <path d="M134 130 q26 26 52 0 q-26 8 -52 0 Z" fill="#ffffff"/>
+    <path d="M142 133 l3 6 l3 -5 l3 6 l3 -6 l3 6 l3 -6 l3 6 l3 -5 l3 6 l3 -6" fill="none" stroke-width="2"/>
+  </g>
+  <!-- arms: each rotates about its shoulder; the number rides on the palm -->
+  <g id="ss-left">
+    <g stroke="#2a1a10" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M108 184 q-40 4 -66 18" fill="none" stroke="#2a1a10" stroke-width="30"/>
+      <path d="M108 184 q-40 4 -66 18" fill="none" stroke="#7a4b2a" stroke-width="22"/>
+      <path d="M122 168 q-24 0 -38 10 q-2 14 6 26 q16 -8 34 -10 Z" fill="#a3262d"/>
+      <ellipse cx="34" cy="196" rx="28" ry="13" fill="#7a4b2a"/>
+      <ellipse cx="34" cy="192" rx="17" ry="6" fill="#c98b5b" stroke-width="2.5"/>
+      <path d="M10 198 q-6 -4 -4 -10 M16 190 q-4 -6 0 -10" fill="none" stroke-width="3"/>
+    </g>
+    <text class="ss-num" x="36" y="172">6</text>
+  </g>
+  <g id="ss-right">
+    <g stroke="#2a1a10" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M212 184 q40 4 66 18" fill="none" stroke="#2a1a10" stroke-width="30"/>
+      <path d="M212 184 q40 4 66 18" fill="none" stroke="#7a4b2a" stroke-width="22"/>
+      <path d="M198 168 q24 0 38 10 q2 14 -6 26 q-16 -8 -34 -10 Z" fill="#a3262d"/>
+      <ellipse cx="286" cy="196" rx="28" ry="13" fill="#7a4b2a"/>
+      <ellipse cx="286" cy="192" rx="17" ry="6" fill="#c98b5b" stroke-width="2.5"/>
+      <path d="M310 198 q6 -4 4 -10 M304 190 q4 -6 0 -10" fill="none" stroke-width="3"/>
+    </g>
+    <text class="ss-num" x="284" y="172">7</text>
+  </g>
+  <style>
+    .ss-num { font: 900 64px/1 "Arial Rounded MT Bold", "Nunito", "Trebuchet MS", Arial, sans-serif; fill: #1638f0;
+      stroke: #ffffff; stroke-width: 8px; paint-order: stroke fill; text-anchor: middle; }
+  </style>
+</svg>

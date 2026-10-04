@@ -124,3 +124,17 @@ def test_cup_art_is_the_installed_image_or_the_drawn_stand_in(tmp_path, monkeypa
     assert r.mimetype == "image/jpeg" and r.data.startswith(b"\xff\xd8")
     monkeypatch.setenv("WEPA_CUP_IMAGE", str(tmp_path / "missing.png"))
     assert c.get("/_theme/cup").mimetype == "image/svg+xml"
+
+
+def test_mascot_route_only_answers_with_an_installed_image(tmp_path):
+    from flask import Flask
+
+    from wepa_monitor import theme_art
+    app = Flask(__name__)
+    theme_art.install(app, tmp_path)
+    c = app.test_client()
+    assert c.get("/_theme/mascot").status_code == 404
+    assert c.head("/_theme/mascot").status_code == 404
+    (tmp_path / "mascot.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    r = c.head("/_theme/mascot")
+    assert r.status_code == 200 and r.mimetype == "image/png"

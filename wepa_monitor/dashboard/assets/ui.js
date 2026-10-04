@@ -197,30 +197,53 @@
     };
   })();
 
-  // 6 7. Whenever the number 67 shows up anywhere (text, chart labels, tooltips, what someone types), two hands
-  // bob "6... 7..." in a pink panel, the page shakes a little, and a ring wobbles around the 67. Only 67 as a
+  // 6 7. Whenever the number 67 shows up anywhere (text, chart labels, tooltips, what someone types), a bear in
+  // BSU colors pops up and weighs "6... 7..." on its paws, the page shakes a little, and a ring wobbles around
+  // the 67. The bear is drawn for this app; a mascot image installed on the server (/_theme/mascot) takes its
+  // place. Only 67 as a
   // number of its own: not 167, 670, 0.67, 67.5 or 1,067. Each show lasts under 5 seconds (WCAG 2.2.2), nothing
   // flashes (2.3.1), Escape dismisses it, and reduced motion gets a still version. It's decorative: aria-hidden.
   var SIXSEVEN = /(^|[^\d.,#])67(?![\d]|[.,]\d)/;
-  var seen67 = new WeakMap(), showing67 = null, scan67Timer = null;
+  var seen67 = new WeakMap(), showing67 = null, scan67Timer = null, art67 = null;
+  // What to show: the server's mascot image if it has one, else the drawn bear (inlined so its arms can move).
+  function loadArt67() {
+    if (!art67) {
+      art67 = fetch("/_theme/mascot", { method: "HEAD", credentials: "same-origin" })
+        .then(function (r) {
+          var type = r.headers.get("Content-Type") || "";
+          return r.ok && type.indexOf("image/") === 0 ? { mascot: true } : Promise.reject();
+        })
+        .catch(function () {
+          return fetch("/assets/six-seven-bear.svg").then(function (r) { return r.text(); })
+            .then(function (svg) { return { svg: svg }; });
+        });
+    }
+    return art67;
+  }
   function calm67() {
     return document.documentElement.dataset.motion === "reduce" ||
       (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
   function hide67() {
     if (!showing67) { return; }
-    clearTimeout(showing67.timer);
+    if (showing67.timer) { clearTimeout(showing67.timer); }
     showing67.els.forEach(function (el) { el.remove(); });
     showing67 = null;
   }
   function show67(rect) {
     if (showing67) { return; }
-    var still = calm67(), els = [];
+    showing67 = { els: [], timer: null };
+    loadArt67().then(function (art) { if (showing67 && !showing67.timer) { draw67(rect, art); } });
+  }
+  function draw67(rect, art) {
+    var still = calm67(), els = showing67.els;
     var panel = document.createElement("div");
-    panel.className = "sixseven" + (still ? " sixseven--still" : "");
+    panel.className = "sixseven" + (still ? " sixseven--still" : "") + (art.mascot ? " sixseven--mascot" : "");
     panel.setAttribute("aria-hidden", "true");
-    panel.innerHTML = '<div class="sixseven__hand sixseven__hand--six"><img src="/assets/six-seven-hand.svg" alt=""><b>6</b></div>' +
-      '<div class="sixseven__hand sixseven__hand--seven"><img src="/assets/six-seven-hand.svg" alt=""><b>7</b></div>';
+    panel.innerHTML = art.mascot
+      ? '<img class="sixseven__mascot" src="/_theme/mascot" alt=""><b class="sixseven__num sixseven__num--six">6</b>' +
+        '<b class="sixseven__num sixseven__num--seven">7</b>'
+      : art.svg;
     document.body.appendChild(panel); els.push(panel);
     if (rect && rect.width) {
       var ring = document.createElement("div");
@@ -235,7 +258,7 @@
       shell.classList.remove("is-sixseven"); void shell.offsetWidth; shell.classList.add("is-sixseven");
       setTimeout(function () { shell.classList.remove("is-sixseven"); }, 600);
     }
-    showing67 = { els: els, timer: setTimeout(hide67, 4600) };
+    showing67.timer = setTimeout(hide67, 4600);
   }
   function rangeRect(node, index) {
     try {
