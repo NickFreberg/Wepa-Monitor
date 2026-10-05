@@ -1346,3 +1346,32 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 .review-lock__bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
 .review-lock__fill { height: 100%; border-radius: 99px; background: var(--accent); }
 .site__verdict--info { color: var(--info-text); }
+
+/* ---------- inventory ---------- */
+.inv-form--wide { max-width: 980px; }
+.inv-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 14px; }
+.inv-line { display: grid; grid-template-columns: minmax(150px, 1.3fr) 110px minmax(160px, 1.4fr) minmax(140px, 1.6fr);
+  gap: 8px; align-items: center; }
+.inv-line--head { font-size: 12px; font-weight: 650; color: var(--muted); }
+.inv-line input { height: 36px; border-radius: 10px; border: 1px solid var(--hairline); padding: 0 10px; font: inherit;
+  background: var(--surface); color: var(--ink); min-width: 0; }
+.inv-counts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 14px; }
+.inv-count { display: grid; gap: 2px; font-size: 13.5px; font-weight: 600; }
+.inv-count input { height: 40px; border-radius: 10px; border: 1px solid var(--hairline); padding: 0 10px; font: inherit;
+  background: var(--surface); color: var(--ink); }
+.inv-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.inv-receipts { display: grid; gap: 12px; }
+.inv-receipt { border: 1px solid var(--hairline); border-radius: 12px; padding: 12px 14px; display: grid; gap: 6px; }
+.inv-receipt .inv-buttons input { height: 40px; border-radius: 10px; border: 1px solid var(--hairline); padding: 0 10px;
+  font: inherit; background: var(--surface); color: var(--ink); flex: 1 1 200px; }
+.inv-lines { margin: 0; padding-left: 18px; font-size: 14px; }
+.inv-check label { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; }
+.card h3 { margin: 0 0 10px; font-size: 16px; }
+@media (max-width: 640px) {
+  .inv-line { grid-template-columns: 1fr 96px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
+  .inv-line--head { display: none; }
+  .inv-line > :nth-child(3), .inv-line > :nth-child(4) { grid-column: 1 / -1; }
+  .inv-form input, .inv-count input, .inv-line input { height: 44px; font-size: 16px; }
+}
+.inv-tot:not(.inv-tot--last) td:not(:first-child), .inv-tot:not(.inv-tot--last) th:not(:first-child),
+.inv-tot--last td:last-child, .inv-tot--last th:last-child { text-align: right; font-variant-numeric: tabular-nums; }

@@ -8,6 +8,30 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.6.0] - 2026-10-05
+Inventory: consumables and paper at every level, where every unit went, deliveries read from invoices, and the Wepa kiosk key log.
+
+### New
+- Inventory page (Inventory in the menu). It tracks toner, drums, belts, fusers and paper at three levels: central storage, each building's telecom and paper closets, and under each kiosk. Paper is counted in reams to two decimals, so a part-used ream can be entered (a half ream is 0.50).
+- Automatic deductions. When the monitor sees a part replaced, one unit is taken from the kiosk's own stock, or else a closet in the same building, or else central storage. A refilled tray takes one tray's worth of paper (1.10 reams by default; the administrator can set each kiosk's tray). Counts correct the estimates. Deductions start when inventory tracking starts, never for earlier events.
+- Trail: every delivery, move, installation, refill, count and write-off, with who did it and when. It can be filtered by item or location.
+- Receive: upload an invoice, packing slip or photo of a receipt (PDF, PNG, JPEG or WebP, up to 5 MB). The AI model reads it when one is configured; otherwise a PDF's text is read by rule. Lines can also be typed. Either way, nothing reaches stock until a second person checks and approves it. Invoices are kept and open only for signed-in staff.
+- Count: enter what's physically there. If parts are missing, or more than half a ream of paper, an Inventory investigation (STK) opens automatically to find out whether it was damaged, stolen or used without being recorded, and who is accountable. Write-offs for damaged, stolen or returned stock need a reason.
+- Paper checks: every place paper is kept, when it was last counted, and whether this week's count is done, due Friday (refill day) or overdue (more than 10 days).
+- Locations: the administrator defines central storage, telecom closets and hall paper closets. A location can be edited when a closet moves, and retired once it's empty; its history stays with it.
+- Keys: who holds a Wepa kiosk key (regular or master). It records name, BSU email, position, resident student, residence hall, key number, date given, date returned, and keys lost. A lost key opens a Kiosk key investigation (KEY) that requires a counseling conversation with management. The log is visible to staff and the administrator only, and is never given to the AI assistant or included in exports.
+- The assistant now knows BSU's published Wepa policy: academic use only, prices, semester credit, refunds and who to call (reference/bsu_wepa_kb.txt). It also knows the inventory totals.
+
+### Changed
+- Investigations can now have no printer (inventory and key incidents), with the new categories STK (Inventory) and KEY (Kiosk key).
+- The inventory record and the key log are hash-chained, like investigations. An edit to the file anywhere breaks the chain, and the page says where.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- BSU IT Knowledge Base, WEPA Acceptable Use Policy: https://bridgew.teamdynamix.com/TDClient/1926/Portal/KB/Article/88456/WEPA-Acceptable-Use-Policy
+- BSU IT Knowledge Base home: https://bridgew.teamdynamix.com/TDClient/1926/Portal/90734/IT-Home
+- Claude API, PDF and image input: https://docs.claude.com/en/docs/build-with-claude/pdf-support
+
 ## [1.5.1] - 2026-10-05
 Burnell Hall is under renovation, not unused.
 

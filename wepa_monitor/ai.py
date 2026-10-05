@@ -36,6 +36,7 @@ from . import durations
 
 import asyncio
 import hashlib
+import json
 import os
 import re
 import threading
@@ -333,6 +334,38 @@ def _anthropic(message: str, timeout: float, tk=None, effort: str | None = None)
     raise AIError("Claude kept looking things up without answering")
 
 
+def read_document(data: bytes, mime: str, prompt: str, timeout: float = 120.0) -> dict:
+    """Read a PDF or a photo (an invoice, a receipt) with the Anthropic model and return the JSON it replies
+    with. Used by inventory.read_invoice; people check the result before anything is saved."""
+    import base64
+    import anthropic
+    if provider() != "anthropic" or not enabled():
+        raise AIError("Reading documents needs the Anthropic model")
+    if not _allow():
+        raise AIError("AI hourly limit reached")
+    b64 = base64.standard_b64encode(data).decode("ascii")
+    if mime == "application/pdf":
+        block = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}}
+    elif mime in ("image/png", "image/jpeg", "image/webp", "image/gif"):
+        block = {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
+    else:
+        raise AIError("Only PDFs and PNG, JPEG, WebP or GIF photos can be read")
+    client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("WEPA_AI_API_KEY"),
+                                 timeout=timeout, max_retries=1)
+    r = client.beta.messages.create(
+        model=os.environ.get("WEPA_AI_MODEL", ANTHROPIC_DEFAULT_MODEL), max_tokens=4000,
+        messages=[{"role": "user", "content": [block, {"type": "text", "text": prompt}]}],
+        output_config={"effort": "low"}, betas=["server-side-fallback-2026-07-01"], fallbacks="default")
+    if r.stop_reason == "refusal":
+        raise AIError("The model declined to read the document")
+    text = "".join(b.text for b in r.content if b.type == "text").strip()
+    m = re.search(r"\{.*\}", text, re.S)
+    if not m:
+        raise AIError("The model's reply had no JSON")
+    _log("AI read an uploaded document", "ai")
+    return json.loads(m.group(0))
+
+
 # --- OpenAI-compatible -------------------------------------------------------------------------
 
 def _openai(message: str, timeout: float, tk=None) -> str:
@@ -527,7 +560,30 @@ def facts(ds, ids=None, scope_text: str = "BSU print stations", period=None) -> 
     if len(use):
         lines.append("Busiest printers (30 days): " + "; ".join(
             f"{r.description} {r.relative:.1f}x typical" for r in use.head(3).itertuples()))
+    lines += kb_facts()
+    try:
+        from . import inventory
+        st = inventory.state(ds.data_dir, ds.stations)
+        if st["started"] is not None:
+            t = inventory.totals(st).set_index("item")
+            parts = t.drop(index=inventory.PAPER)
+            lines.append(f"Inventory on hand: {t.at['paper', 'total']:.2f} reams of paper "
+                         f"({t.at['paper', 'central']:.2f} central, {t.at['paper', 'closets']:.2f} in closets, "
+                         f"{t.at['paper', 'kiosks']:.2f} under kiosks); parts: " + ", ".join(
+                             f"{r.item_label} {int(r.total)}" for r in parts.itertuples() if r.total) + ".")
+    except Exception:  # noqa: BLE001 - the fact sheet never fails over inventory
+        pass
     return "\n".join(lines)
+
+
+def kb_facts() -> list[str]:
+    """BSU's published Wepa policy and help facts (reference/bsu_wepa_kb.txt), for questions about cost,
+    acceptable use, credit, refunds and who to call. Never anything about individual people."""
+    path = config.REFERENCE_DIR / "bsu_wepa_kb.txt"
+    if not path.exists():
+        return []
+    return ["BSU policy (IT knowledge base): " + ln.strip() for ln in path.read_text().splitlines()
+            if ln.strip() and not ln.startswith("#")]
 
 
 # --- safe display -----------------------------------------------------------------------------------

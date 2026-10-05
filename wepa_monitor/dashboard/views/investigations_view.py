@@ -111,6 +111,8 @@ def render_list(ds: M.Dataset, show: str, q: str):
         return [chips, empty("Nothing matches.", big=False), integrity]
     impacts = {}
     for sid in t["station_id"].dropna().unique():
+        if not sid:
+            continue
         try:
             impacts[sid] = I.impact(ds, sid)["level"]
         except Exception:  # noqa: BLE001

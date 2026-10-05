@@ -1,0 +1,13 @@
+# BSU's public IT knowledge base on Wepa printing, summarized for the assistant's fact sheet.
+# One fact per line. Lines starting with # are comments. Re-check against the sources each semester.
+# Sources: BSU IT Knowledge Base (bridgew.teamdynamix.com/TDClient/1926/Portal), WEPA Acceptable Use Policy
+# (KB article 88456) and the WEPA printing articles linked from it.
+Acceptable use: Wepa printing at BSU is for academic work only. Personal printing, student-organization printing and printing for a job are not allowed, nor is printing copyrighted material such as textbooks. Accounts must not be shared. ResNet may suspend printing privileges for misuse.
+Prices: black and white 8 cents a page (13 cents a two-sided sheet); color 25 cents a page (40 cents a two-sided sheet).
+Print credit: residents get $50 and commuters $25 each semester; it does not carry over and is activated at a kiosk.
+Charging: students are charged only when they release a job and it prints; jammed pages are not charged. Refunds go through Wepa (1-800-675-7639, help@wepanow.com).
+Paper: BSU's kiosks use Tree Free (sugarcane bagasse) paper; recycling bins are next to the kiosks.
+Hardware: the kiosks' printers are OKI color laser printers that use toner and image drums; replace a toner together with its drum when the drum is under 5%.
+Files: very large jobs (over about 2 GB) fail to collate.
+Accounts: a Wepa print code is 3 letters and 3 numbers; students without their Connect Card can sign in with that code.
+Help: ResNet, 508.531.7999, ResNet@bridgew.edu; report problems as a ticket under "ResNet / WEPA PRINTING".

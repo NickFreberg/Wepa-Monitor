@@ -23,7 +23,7 @@ from .. import (activity, config, export, football, geo, metrics as M, roundsmap
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
-from .views import account_view, assistant, feedback_view, investigations_view, software
+from .views import account_view, assistant, feedback_view, inventory_view, investigations_view, software
 from .views import (activity_log, analytics, executive, insights_view, outcomes, overview, rounds, station,
                     stations, system)
 from .views.common import PERIODS, area_key
@@ -31,7 +31,7 @@ from .views.common import PERIODS, area_key
 NAV = [("/", "Overview", "home"), ("/insights", "Insights", "sparkle"), ("/rounds", "Rounds", "route"),
        ("/stations", "Stations", "grid"), ("/analytics", "Analytics", "chart"),
        ("/executive", "Executive", "briefcase"), ("/outcomes", "IT Outcomes", "award"),
-       ("/investigations", "Investigations", "search"),
+       ("/investigations", "Investigations", "search"), ("/inventory", "Inventory", "boxes"),
        ("/system", "System", "pulse"), ("/software", "Software", "shield")]
 PAGE_META = {
     "/": ("Overview", "What needs attention right now."),
@@ -44,6 +44,8 @@ PAGE_META = {
     "/system": ("System", "Is the monitor healthy? Data quality, the live log, and who's using the site."),
     "/activity": ("Activity", "Everything that happened, newest first."),
     "/investigations": ("Investigations", "Root-cause work on recurring printer problems, with a permanent audit trail."),
+    "/inventory": ("Inventory", "Consumables and paper at every level, where each unit went, deliveries, counts "
+                                "and kiosk keys."),
     "/account": ("My account", "Your picture, contact phone and password."),
     "/directory": ("Directory", "Everyone with an account, managed centrally by the administrator."),
     "/investigation": ("Investigation", "One investigation: its record, decisions and audit trail."),
@@ -106,6 +108,12 @@ def attach_refs(ds: M.Dataset) -> None:
     except Exception as exc:  # noqa: BLE001 - numbering must never stop the dashboard loading
         print(f"reference numbers not assigned: {type(exc).__name__}: {exc}", flush=True)
         ds.sev_inc = ds.sev_inc.assign(ref="")
+    try:
+        from .. import inventory
+        if ds.data_dir.name == "live" or os.environ.get("WEPA_INVENTORY_SYNC") == "1":
+            inventory.sync(ds)
+    except Exception as exc:  # noqa: BLE001 - inventory must never stop the dashboard loading
+        print(f"inventory not updated: {type(exc).__name__}: {exc}", flush=True)
 
 
 class DataCache:
@@ -620,6 +628,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return system.layout()
         if route == "/investigations":
             return investigations_view.layout(ds, params)
+        if route == "/inventory":
+            return inventory_view.layout(ds, params)
         if route == "/account":
             return account_view.layout(params)
         if route == "/directory":
@@ -973,6 +983,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         except INV.InvestigationError as exc:
             return no_update, html.Span(str(exc), className="inv-err")
         return investigations_view.render_detail(ds, ref), msg
+
+    inventory_view.register(app, cache)
 
     # --- assistant pane ------------------------------------------------------------------------------
     # Opening the assistant always starts a new chat: the old conversation is deleted, not just hidden.
