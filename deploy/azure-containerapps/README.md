@@ -88,7 +88,17 @@ never changed. Running it again replaces the earlier import.
 ## Staff accounts
 
 People sign in on the app's sign-in page with their own accounts. The administrator (`bsuresnet`,
-from `WEPA_BASIC_AUTH`) creates them from your own computer, with the app running:
+from `WEPA_BASIC_AUTH`) creates them in one command from Azure Cloud Shell or a Mac. The script sets
+up Python the first time (and again only when the requirements change), finds the app's address and
+runs the command:
+
+```bash
+cd ~/wepa-monitor && git pull
+./deploy/azure-containerapps/users.sh add jsmith --name "Jordan Smith" --email jsmith@bridgew.edu
+./deploy/azure-containerapps/users.sh list
+```
+
+Or by hand, with the requirements installed:
 
 ```bash
 export WEPA_URL=https://$(az containerapp show -g rg-resnet-print-ops -n resnet-print-ops --query properties.configuration.ingress.fqdn -o tsv)
