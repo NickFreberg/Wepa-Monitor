@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from dash import dcc, html
 
-from ... import metrics as M, nearby, ops, reference, routing, support
+import pandas as pd
+
+from ... import accounts, auth, metrics as M, nearby, ops, reference, roundsmap, routing, support
 from .. import charts
 from ..components import chart_card, headline, segmented, station_link
 from .common import empty
@@ -36,15 +38,36 @@ def layout(team: str = "ResNet"):
                                 persistence="local")], className="field"),
             html.Div([html.Label("Finish", className="field__label"),
                       segmented("rd-return", [{"label": "Back at start", "value": "loop"},
-                                              {"label": "At the last stop", "value": "open"}], "loop",
+                                              {"label": "At the last stop", "value": "open"}]
+                                + [{"label": f"At {roundsmap.place_name(p)}", "value": "end:" + roundsmap.place_name(p)}
+                                   for p in roundsmap.points("end")], "loop",
                                 persistence="local")], className="field"),
         ]),
+        html.A("Edit the Rounds map: starts, doors, van spots, paths", href="/rounds/map", className="rounds-edit",
+               hidden=not can_edit_map()),
     ]), dcc.Loading(html.Div(id="rd-body"), type="dot", delay_show=300)]
+
+
+def can_edit_map() -> bool:
+    return not auth.enabled() or accounts.current().get("role") == "admin"
+
+
+def places() -> pd.DataFrame:
+    """The campus buildings plus the starts and ends drawn on the Rounds map, as rows Rounds can route to."""
+    b = reference.load_buildings()
+    drawn = [{"building": roundsmap.place_name(p), "short_name": roundsmap.place_name(p), "lat": p["lat"],
+              "lon": p["lon"], "campus": "Main"} for p in roundsmap.points("start") + roundsmap.points("end")]
+    if not drawn:
+        return b
+    extra = pd.DataFrame(drawn)
+    extra = extra[~extra["building"].isin(b["building"])].drop_duplicates("building")
+    return pd.concat([b, extra], ignore_index=True)
 
 
 def start_options(team: str) -> list[dict]:
     named = routing.TEAM_STARTS.get(team, [])
     opts = [{"label": n, "value": routing.STARTS[n]} for n in named]
+    opts += [{"label": roundsmap.place_name(p), "value": roundsmap.place_name(p)} for p in roundsmap.points("start")]
     taken = {o["value"] for o in opts}
     b = reference.load_buildings()
     b = b[(b["campus"] == "Main") & ~b["building"].isin(taken)].sort_values("building")
@@ -68,17 +91,18 @@ def render(ds: M.Dataset, theme: str, team: str, start: str, mode: str, include,
     ids = ds.ids(owner=team)
     q = ops.work_queue(ds, ids)
     q = q[q["kind"].isin(include or [])]
-    b = reference.load_buildings()
+    b = places()
     if not start or start not in set(b["building"]):
         start = routing.STARTS[routing.TEAM_STARTS[team][0]]
     if q.empty:
         return [headline("good", f"Nothing on {team}'s list right now",
                          "No printer matches what you chose to visit. Widen 'Visit' to include parts due soon.")]
-    p = routing.plan(q, b, start, mode, round_trip=finish == "loop", urgent_first=order == "urgent")
+    end = finish[4:] if (finish or "").startswith("end:") else None
+    p = routing.plan(q, b, start, mode, round_trip=finish == "loop", urgent_first=order == "urgent", end=end)
     if p is None or not p.order:
         return [headline("info", "Nothing to route", "The only items are off the main campus.")]
     alt = routing.plan(q, b, start, "van" if mode == "walk" else "walk", round_trip=finish == "loop",
-                       urgent_first=order == "urgent")
+                       urgent_first=order == "urgent", end=end)
     total = p.travel_s + p.service_s
     hint = ""
     if alt and alt.travel_s + 60 < p.travel_s:
@@ -108,7 +132,7 @@ def render(ds: M.Dataset, theme: str, team: str, start: str, mode: str, include,
     if p.back:
         steps.append(html.Li(className="route__stop route__stop--home", children=[
             html.Span("↩", className="route__num"),
-            html.Div(html.Div([html.B(f"Back to {p.start}"),
+            html.Div(html.Div([html.B(f"On to {p.end}" if p.end else f"Back to {p.start}"),
                                html.Span(f" · {_fmt_m(sum(l.meters for l in p.back))} · "
                                          f"{_fmt_s(sum(l.seconds for l in p.back))}", className="route__how")]),
                      className="route__body")]))
@@ -125,9 +149,13 @@ def render(ds: M.Dataset, theme: str, team: str, start: str, mode: str, include,
             "optimized for total time" + (", down printers first" if order == "urgent" else "") + ".")
     if mode == "van":
         park = routing.parking_spots(b[b["building"].isin([s.building for s in p.order])])
-        mine = (park["park_source"] == "your parking list").sum()
-        note += (f" Parking: {mine} of {len(park)} stops use your parking list; the rest use the nearest lot on "
-                 "OpenStreetMap (reference/parking.csv).")
+        drawn = int((park["park_source"] == "your Rounds map").sum())
+        mine = int((park["park_source"] == "your parking list").sum())
+        note += (f" Parking: {drawn} of {len(park)} stops use a van spot on your Rounds map, {mine} your parking "
+                 "list (reference/parking.csv); the rest the nearest lot on OpenStreetMap.")
+    doors = sum(1 for s in p.order if roundsmap.door_for(s.building))
+    if doors:
+        note += f" {doors} stop{'s use' if doors != 1 else ' uses'} a door from your Rounds map."
     if p.skipped:
         note += f" Not routed (off the main campus): {', '.join(p.skipped)}."
     return [hl, html.Div(className="grid grid--2-1", children=[

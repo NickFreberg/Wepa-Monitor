@@ -18,7 +18,8 @@ import pandas as pd
 from dash import ALL, Dash, Input, Output, State, ctx, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 
-from .. import activity, config, export, football, geo, metrics as M, routing, sandman, security, theme_art
+from .. import (activity, config, export, football, geo, metrics as M, roundsmap, routing, sandman, security,
+               theme_art)
 from .charts import SECTION_ORDER
 from . import explain as X
 from .components import icon, prose, segmented
@@ -396,7 +397,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     if preload:
         cache.get()   # load and process the data now, so the first page view is instant
     app = Dash(__name__, title="BSU Student Printing Ops", suppress_callback_exceptions=True,
-               update_title=None, assets_folder=str(Path(__file__).parent / "assets"))
+               update_title=None, assets_folder=str(Path(__file__).parent / "assets"),
+               assets_path_ignore=["vendor"])   # vendored libraries load only on the pages that use them
     app.layout = lambda: _shell(cache.get())
     app.server.config["WEPA_CACHE"] = cache
     security.install(app.server, data_dir)
@@ -482,6 +484,8 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
 
     # Sandman: three or more words of the song in Ask the data (see wepa_monitor/sandman.py).
     sandman.install(app.server, data_dir)
+    roundsmap.configure(data_dir)
+    roundsmap.install(app.server)
     theme_art.install(app.server, data_dir)
 
     @app.callback(Output("eggs", "data", allow_duplicate=True), Input("ask-go", "n_clicks"), Input("ask-q", "value"),

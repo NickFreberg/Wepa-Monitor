@@ -27,3 +27,23 @@ def test_walk_words_never_round_across_the_threshold():
     assert A.walk_words(1.6) == "under 2 minutes"
     assert A.walk_words(2.2) == "a 2-minute walk"
     assert A.walk_words(4.0) == "a 4-minute walk"
+
+
+def test_printer_review_waits_for_a_full_year(monkeypatch):
+    from wepa_monitor import config, metrics as M
+    ds = M.load(config.DEMO_DATA_DIR)
+    monkeypatch.delenv("WEPA_PRINTER_REVIEW", raising=False)
+    st = A.review_status(ds)
+    assert not st["ready"] and 0 < st["days"] < A.REVIEW_DAYS
+    assert A.printer_review(ds) is None
+    monkeypatch.setenv("WEPA_PRINTER_REVIEW", "1")
+    r = A.printer_review(ds)
+    assert r is not None and len(r["singles"]) and len(r["groups"])
+    assert set(r["singles"]["verdict"]) <= {"Keep", "Review"}
+    assert set(r["groups"]["verdict"]) <= {"Keep both", "One may be enough"}
+    assert (r["groups"]["printers"] >= 2).all()
+    # a lightly used printer next to another one is flagged; one far from any other is kept
+    s = r["singles"]
+    flagged = s[(s["relative"] <= A.LIGHT_USE) & (s["walk_min"] < A.REMOVE_WALK_MIN)]
+    assert (flagged["verdict"] == "Review").all()
+    assert (s[s["relative"] > A.LIGHT_USE]["verdict"] == "Keep").all()

@@ -1339,3 +1339,9 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 .site__verdict--neutral { color: var(--muted); }
 .site__facts { margin-top: 4px; color: var(--ink-2); font-size: 13px; }
 .site__why { margin-top: 2px; color: var(--muted); font-size: 13px; }
+
+/* Rounds: link to the map editor (administrator). */
+.rounds-edit { display: inline-flex; align-items: center; min-height: 40px; margin-top: 10px; font-weight: 650; }
+.review-lock__text { margin: 0 0 10px; color: var(--ink-2); }
+.review-lock__bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.review-lock__fill { height: 100%; border-radius: 99px; background: var(--accent); }

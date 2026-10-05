@@ -1,0 +1,52 @@
+/* Rounds map editor: a full-screen map with a toolbar along the bottom, sized for thumbs. */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #1c1717; background: #f4f1ec; }
+body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+.rm-top { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: #89191f; color: #fff;
+  padding-top: max(8px, env(safe-area-inset-top)); }
+.rm-top h1 { margin: 0; font-size: 17px; white-space: nowrap; }
+.rm-back { color: #fff; text-decoration: none; font-weight: 650; padding: 8px 4px; white-space: nowrap; }
+.rm-status { margin-left: auto; min-width: 0; font-size: 12px; opacity: .92; text-align: right; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.rm-top .rm-btn { flex: none; }
+.rm-map { flex: 1; min-height: 0; }
+.rm-hint { position: absolute; left: 50%; top: calc(66px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 500;
+  width: min(560px, calc(100vw - 132px)); padding: 8px 12px; border-radius: 10px; background: rgba(28, 23, 23, .86);
+  color: #fff; font-size: 13.5px; text-align: center; pointer-events: none; }
+.rm-hint:empty { display: none; }
+.rm-tools { display: flex; gap: 4px; overflow-x: auto; padding: 6px 8px; padding-bottom: max(6px, env(safe-area-inset-bottom));
+  background: #fffdf9; border-top: 1px solid #e2ded6; scrollbar-width: none; }
+.rm-tools button { flex: 1 1 0; min-width: 48px; min-height: 52px; padding: 4px 2px; text-align: center; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; border: 1px solid transparent; border-radius: 12px; background: none; color: #4f4b48;
+  font: 600 11.5px/1.1 inherit; cursor: pointer; }
+.rm-tools button.is-on { background: #89191f; color: #fff; }
+.rm-tools button:focus-visible, .rm-btn:focus-visible { outline: 3px solid #1f5fae; outline-offset: 2px; }
+.rm-btn { min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #cfcbc2; background: #fff; color: #1c1717;
+  font: 650 14px/1 inherit; cursor: pointer; }
+.rm-btn--primary { background: #1f5fae; border-color: #1f5fae; color: #fff; }
+.rm-top .rm-btn--primary { background: #fff; color: #89191f; border-color: #fff; }
+.rm-btn--primary:disabled { opacity: .5; cursor: default; }
+.rm-btn--danger { color: #9f1f1f; border-color: #e3b7b7; }
+.rm-line { position: absolute; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 600;
+  display: flex; gap: 8px; padding: 8px; border-radius: 14px; background: #fffdf9; box-shadow: 0 6px 24px rgba(0, 0, 0, .25); }
+.rm-sheet { position: absolute; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom)); z-index: 700; margin: 0 auto;
+  width: min(520px, 100vw); padding: 14px; border-radius: 16px 16px 0 0; background: #fffdf9; box-shadow: 0 -8px 30px rgba(0, 0, 0, .2); }
+.rm-sheet__head { margin-bottom: 8px; font-size: 15px; }
+.rm-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; font-weight: 600; color: #4f4b48; }
+.rm-field input, .rm-field select { min-height: 44px; padding: 8px 10px; border: 1px solid #cfcbc2; border-radius: 10px;
+  font: 16px inherit; color: #1c1717; background: #fff; }
+.rm-sheet__actions { display: flex; justify-content: space-between; gap: 10px; }
+.rm-pin span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #fff;
+  border: 3px solid; box-shadow: 0 2px 8px rgba(0, 0, 0, .3); }
+.rm-pin { background: none; border: 0; }
+.rm-drawing .leaflet-container { cursor: crosshair; }
+@media (prefers-color-scheme: dark) {
+  html, body { background: #17120f; color: #f2ece6; }
+  .rm-tools, .rm-line, .rm-sheet { background: #211b18; border-color: #3a312c; }
+  .rm-tools button { color: #d4cbc4; }
+  .rm-btn { background: #2a2320; color: #f2ece6; border-color: #4a403a; }
+  .rm-field { color: #d4cbc4; }
+  .rm-field input, .rm-field select { background: #2a2320; color: #f2ece6; border-color: #4a403a; }
+}

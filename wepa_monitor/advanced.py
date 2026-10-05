@@ -116,23 +116,21 @@ def placement(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
 
 
 def _verdict(meetings: int, walk: float, near: str, backup: float) -> tuple[str, str]:
-    walk_txt = walk_words(walk)
+    """(verdict, reason). The reason is the judgment only: the numbers are shown next to it."""
     if not np.isfinite(walk):
-        return "Hard to justify", "It isn't on the campus walking map, so the walk can't be measured."
+        return "Hard to justify", "Not on the campus walking map yet, so the walk can't be measured."
     if walk < NEAR_MIN and backup < BACKUP_MIN_WEEK:
-        return "Hard to justify", f"{near} already has a printer {walk_txt} away."
+        return "Hard to justify", "Already covered: a printer is close by."
     if meetings == 0 and backup < BACKUP_MIN_WEEK:
-        return "Hard to justify", "No classes meet here this term, so few students pass through."
+        return "Hard to justify", "Little foot traffic without classes."
     strong = meetings >= BUSY_MEETINGS and walk >= NEAR_MIN
     if strong and backup >= BACKUP_MIN_WEEK:
-        return "Strongest case", (f"{meetings} class meetings a week, {walk_txt} from {near}, and it would have "
-                                  "cut real walks while printers were down.")
+        return "Strongest case", "Busy, a real walk away, and it would have covered outages."
     if strong:
-        return "Strongest case", (f"The busiest building without a printer, though {near} is only {walk_txt} "
-                                  "away: worth a pilot before buying a kiosk.")
+        return "Strongest case", "Busy enough to matter, but the nearest printer isn't far: pilot it before buying a kiosk."
     if backup >= BACKUP_MIN_WEEK:
-        return "Worth a look", "Few classes, but it would have cut real walks while nearby printers were down."
-    return "Worth a look", f"{meetings} class meetings a week; the nearest printer ({near}) is {walk_txt} away."
+        return "Worth a look", "Mostly as a backup for when nearby printers go down."
+    return "Worth a look", "Some traffic and a real walk: watch usage at the nearest printer before deciding."
 
 
 def walk_words(minutes: float) -> str:
@@ -144,6 +142,98 @@ def walk_words(minutes: float) -> str:
     if minutes < NEAR_MIN:
         return f"under {math.ceil(minutes)} minutes"
     return f"a {int(minutes)}-minute walk"
+
+
+# --- do we really need this printer (or two)? -------------------------------------------------------------------
+
+REVIEW_DAYS = 365          # a full academic year: fall, spring and summer swing usage too much to judge on less
+LIGHT_USE = 0.5            # a printer used at half the median printer's rate or less is lightly used
+REMOVE_WALK_MIN = 3.0      # ...and if the next printer is within this walk, it's worth a review
+PAIR_LIGHT_SHARE = 0.2     # the lighter printer of a pair does under a fifth of the building's printing
+PAIR_OVERLAP = 0.1         # both printers busy in under a tenth of the hours anyone printed there
+PAIR_BACKUP_H = 48         # hours a year the second printer kept the building printing while one was down
+
+
+def review_status(ds: M.Dataset) -> dict:
+    """Whether there's a full year of data yet: {"ready", "days", "ready_on"}. WEPA_PRINTER_REVIEW=1 forces it
+    on (for a demo)."""
+    start = ds.data_start if ds.data_start is not None else (ds.hourly["hour"].min() if len(ds.hourly) else ds.as_of)
+    days = max(0, int((ds.as_of - start).total_seconds() // 86400))
+    forced = os.environ.get("WEPA_PRINTER_REVIEW", "") == "1"
+    ready_on = (pd.Timestamp(start).tz_convert(TZ) + pd.Timedelta(days=REVIEW_DAYS)).date()
+    return {"ready": forced or days >= REVIEW_DAYS, "days": days, "ready_on": ready_on, "forced": forced}
+
+
+def printer_review(ds: M.Dataset, ids=None) -> dict | None:
+    """Do we really need a printer here, or two here? Over the last year:
+
+    * one printer in a building: how heavily it's used (vs the median printer) and the walk to the next
+      printer its users can go to (residents can use any printer anyone can walk into);
+    * two or more: the lighter printer's share of the building's printing, how often both were busy in the
+      same hour, and the hours the others kept the building printing while one was down.
+
+    None until a full year of data exists (review_status)."""
+    if not review_status(ds)["ready"] or ds.empty:
+        return None
+    end = ds.as_of
+    start = max(end - pd.Timedelta(days=REVIEW_DAYS), ds.data_start or end - pd.Timedelta(days=REVIEW_DAYS))
+    use = M.usage_by_station(ds, start, end, ids)
+    use = use[use["station_id"].isin(ds.stations[ds.stations.get("campus", "Main") == "Main"]["station_id"])] \
+        if "campus" in ds.stations else use
+    cur = ops.current_status(ds)
+    public = cur[cur["access"] == "public"][["station_id", "building"]]
+    u = M.usage_in(ds, start, end, ids)
+    u = u[(u["component"] == "toner_k") & (u["used"] > 0)].assign(hour=lambda d: d["scrape_ts"].dt.floor("h"))
+    printing = u.groupby(["station_id", "hour"]).size().reset_index()[["station_id", "hour"]]
+    bh = ds.bhourly[(ds.bhourly["hour"] >= start) & (ds.bhourly["hour"] < end)] if len(ds.bhourly) else ds.bhourly
+
+    singles, groups = [], []
+    for building, g in use.groupby("building"):
+        if len(g) == 1:
+            r = g.iloc[0]
+            others = public[(public["building"] != building)]["building"].unique()
+            walks = sorted((nearby.walk_seconds(building, b) / 60, b) for b in others)
+            walks = [w for w in walks if np.isfinite(w[0])]
+            walk, near = walks[0] if walks else (np.nan, "")
+            rel = float(r["relative"]) if pd.notna(r["relative"]) else np.nan
+            light = np.isfinite(rel) and rel <= LIGHT_USE
+            close = np.isfinite(walk) and walk < REMOVE_WALK_MIN
+            if light and close:
+                verdict, why = "Review", "Lightly used, and students have another printer close by."
+            elif light:
+                verdict, why = "Keep", "Lightly used, but the next printer is a real walk away."
+            else:
+                verdict, why = "Keep", "Used enough to earn its place."
+            singles.append({"building": building, "station_id": r["station_id"], "label": r["label"],
+                            "relative": rel, "nearest": near, "walk_min": walk, "verdict": verdict, "why": why})
+        else:
+            ids_b = g["station_id"].tolist()
+            per = g.set_index("station_id")["usage_per_day"].fillna(0.0)
+            total = float(per.sum())
+            lighter = per.idxmin()
+            share = float(per.min() / total) if total > 0 else np.nan
+            p = printing[printing["station_id"].isin(ids_b)].groupby("hour")["station_id"].nunique()
+            overlap = float((p >= 2).sum() / len(p)) if len(p) else np.nan
+            b = bh[bh["building"] == building] if len(bh) else bh
+            backup_h = float((b["any_up_min"] - b["all_up_min"]).clip(lower=0).sum() / 60) if len(b) else 0.0
+            backup_y = backup_h * 365 / max((end - start).days, 1)
+            quiet = np.isfinite(share) and share < PAIR_LIGHT_SHARE and np.isfinite(overlap) and overlap < PAIR_OVERLAP
+            if quiet and backup_y < PAIR_BACKUP_H:
+                verdict, why = "One may be enough", "The lighter one does little printing and is rarely needed at the same time."
+            elif quiet:
+                verdict, why = "Keep both", "Rarely busy together, but the second keeps the building printing during outages."
+            else:
+                verdict, why = "Keep both", "Both carry real printing."
+            groups.append({"building": building, "printers": len(ids_b), "lighter": g.set_index("station_id").loc[lighter, "label"],
+                           "lighter_share": share, "both_busy": overlap, "backup_h_year": backup_y,
+                           "verdict": verdict, "why": why})
+    s_df = pd.DataFrame(singles)
+    g_df = pd.DataFrame(groups)
+    if len(s_df):
+        s_df = s_df.sort_values(["verdict", "relative"], ascending=[False, True]).reset_index(drop=True)
+    if len(g_df):
+        g_df = g_df.sort_values(["verdict", "lighter_share"], ascending=[False, True]).reset_index(drop=True)
+    return {"start": start, "end": end, "singles": s_df, "groups": g_df}
 
 
 def routing_ok() -> bool:

@@ -210,9 +210,55 @@ def _network(stamp: float) -> dict | None:
     return json.loads(NETWORK_PATH.read_text()) if NETWORK_PATH.exists() else None
 
 
+VAN_PATH_SPEED = 4.5          # m/s on a lane the administrator drew (campus service-road speed)
+JOIN_MAX_M = 150              # a drawn path's ends join the nearest network node within this distance
+
+
+def _with_drawn(net: dict, mode: str) -> dict:
+    """The network plus the paths drawn on the Rounds map (roundsmap.py) for this mode: each drawn line becomes
+    new nodes and edges, and its two ends join the nearest existing node of the same mode."""
+    from . import roundsmap
+    drawn = roundsmap.paths("walk" if mode == "walk" else "van")
+    if not drawn:
+        return net
+    nodes = [list(n) for n in net["nodes"]]
+    walk, drive = list(net["walk"]), list(net["drive"])
+    base = {a for e in (walk if mode == "walk" else drive) for a in e[:2]}
+    base_idx = np.array(sorted(base)) if base else np.array([], dtype=int)
+    base_xy = np.array(net["nodes"], dtype=float)[base_idx] if len(base_idx) else np.zeros((0, 2))
+
+    def join(lat, lon):
+        if not len(base_idx):
+            return None
+        d = (base_xy[:, 0] - lat) ** 2 + ((base_xy[:, 1] - lon) * math.cos(math.radians(lat))) ** 2
+        j = int(base_idx[int(np.argmin(d))])
+        m = _meters((lat, lon), tuple(net["nodes"][j]))
+        return (j, m) if m <= JOIN_MAX_M else None
+
+    def add(a, b, m):
+        if mode == "walk":
+            walk.append([a, b, m])
+        else:
+            drive.append([a, b, m, m / VAN_PATH_SPEED])
+            drive.append([b, a, m, m / VAN_PATH_SPEED])
+
+    for q in drawn:
+        ids = []
+        for lat, lon in q["coords"]:
+            nodes.append([lat, lon])
+            ids.append(len(nodes) - 1)
+        for a, b in zip(ids, ids[1:]):
+            add(a, b, _meters(tuple(nodes[a]), tuple(nodes[b])))
+        for end in (ids[0], ids[-1]):
+            hit = join(*nodes[end])
+            if hit:
+                add(end, hit[0], max(hit[1], 0.5))
+    return {**net, "nodes": nodes, "walk": walk, "drive": drive}
+
+
 @lru_cache(maxsize=4)
-def _graph_cached(stamp: float, mode: str) -> Graph:
-    return _graph(_network(stamp), mode)
+def _graph_cached(stamp: float, mode: str, drawn_stamp: float = 0.0) -> Graph:
+    return _graph(_with_drawn(_network(stamp), mode), mode)
 
 
 def network() -> dict | None:
@@ -220,20 +266,27 @@ def network() -> dict | None:
 
 
 def graph(mode: str) -> Graph:
-    return _graph_cached(NETWORK_PATH.stat().st_mtime, mode)
+    from . import roundsmap
+    return _graph_cached(NETWORK_PATH.stat().st_mtime, mode, roundsmap.stamp())
 
 
 # --- parking -------------------------------------------------------------------------------------------------------
 
 def parking_spots(buildings: pd.DataFrame) -> pd.DataFrame:
-    """Where the van parks for each building: reference/parking.csv when filled in, else the
-    nearest OSM parking lot that isn't marked no-access (by walking distance from the lot)."""
+    """Where the van parks for each building: a van spot on the Rounds map first, then reference/parking.csv
+    when filled in, else the nearest OSM parking lot that isn't marked no-access."""
+    from . import roundsmap
     out = buildings[["building", "lat", "lon"]].copy()
     out["park_lat"], out["park_lon"], out["park_source"] = np.nan, np.nan, ""
+    for i, r in out.iterrows():
+        spot = roundsmap.parking_for(r["building"])
+        if spot:
+            out.loc[i, ["park_lat", "park_lon"]] = spot
+            out.loc[i, "park_source"] = "your Rounds map"
     if PARKING_PATH.exists():
         user = pd.read_csv(PARKING_PATH)
         user = user.dropna(subset=["lat", "lon"]).drop_duplicates("building", keep="first").set_index("building")
-        hit = out["building"].isin(user.index)
+        hit = out["building"].isin(user.index) & out["park_lat"].isna()
         out.loc[hit, "park_lat"] = out.loc[hit, "building"].map(user["lat"])
         out.loc[hit, "park_lon"] = out.loc[hit, "building"].map(user["lon"])
         out.loc[hit, "park_source"] = "your parking list"
@@ -278,6 +331,7 @@ class Plan:
     legs: list[list[Leg]]                   # per stop, the legs to reach it (drive + walk in van mode)
     back: list[Leg] = field(default_factory=list)
     skipped: list[str] = field(default_factory=list)
+    end: str | None = None                  # a one-way round's finishing place (None: back at start or last stop)
 
     @property
     def travel_s(self) -> float:
@@ -363,9 +417,12 @@ def _two_opt(cost, start, seq, back):
 
 
 def plan(queue: pd.DataFrame, buildings: pd.DataFrame, start_building: str, mode: str = "walk",
-         round_trip: bool = True, urgent_first: bool = True) -> Plan | None:
+         round_trip: bool = True, urgent_first: bool = True, end: str | None = None) -> Plan | None:
     """Plan a round from start_building through every building in `queue` (ops.work_queue rows).
-    mode: 'walk' (on foot) or 'van' (drive to each building's parking spot, walk in and out)."""
+    mode: 'walk' (on foot) or 'van' (drive to each building's parking spot, walk in and out).
+    end: a place in `buildings` to finish at instead (a one-way round). Buildings with a door on the Rounds
+    map are routed to that door."""
+    from . import roundsmap
     if network() is None:
         return None
     b = buildings.set_index("building")
@@ -375,16 +432,23 @@ def plan(queue: pd.DataFrame, buildings: pd.DataFrame, start_building: str, mode
     stops = []
     for name, rows in on_campus.groupby("building", sort=False):
         items = rows.to_dict("records")
-        stops.append(Stop(name, float(b.loc[name, "lat"]), float(b.loc[name, "lon"]), items,
-                          0 if (rows["kind"] == "red").any() else 1,
+        lat, lon = roundsmap.door_for(name) or (float(b.loc[name, "lat"]), float(b.loc[name, "lon"]))
+        stops.append(Stop(name, lat, lon, items, 0 if (rows["kind"] == "red").any() else 1,
                           sum(SERVICE_MIN.get(k, 6) for k in rows["kind"])))
     start = b.loc[start_building]
-    points = [(float(start["lat"]), float(start["lon"]))] + [(s.lat, s.lon) for s in stops]
+    start_pt = roundsmap.door_for(start_building) or (float(start["lat"]), float(start["lon"]))
+    points = [start_pt] + [(s.lat, s.lon) for s in stops]
+    finish = None
+    if end and end in b.index and end != start_building:
+        finish = len(points)
+        points.append(roundsmap.door_for(end) or (float(b.loc[end, "lat"]), float(b.loc[end, "lon"])))
+        round_trip = True                 # the "way back" now leads to the end point
     walk_nodes = [walk.nearest(*p) for p in points]
 
     if mode == "van":
         drive = graph("drive")
-        park = parking_spots(pd.DataFrame({"building": [start_building] + [s.building for s in stops],
+        park = parking_spots(pd.DataFrame({"building": [start_building] + [s.building for s in stops]
+                                           + ([end] if finish else []),
                                            "lat": [p[0] for p in points], "lon": [p[1] for p in points]}))
         park_pts = list(zip(park["park_lat"], park["park_lon"]))
         drive_nodes = [drive.nearest(*p) for p in park_pts]
@@ -401,7 +465,11 @@ def plan(queue: pd.DataFrame, buildings: pd.DataFrame, start_building: str, mode
         runs = [dijkstra(walk, n) for n in walk_nodes]
         cost = np.array([[runs[i][0][walk_nodes[j]] for j in range(len(points))] for i in range(len(points))])
 
-    seq = _order(cost, [s.priority for s in stops], round_trip, urgent_first)
+    n_stop = len(stops) + 1
+    order_cost = cost[:n_stop, :n_stop].copy()
+    if finish:
+        order_cost[:, 0] = cost[:n_stop, finish]      # "returning to the start" means walking to the end point
+    seq = _order(order_cost, [s.priority for s in stops], round_trip, urgent_first)
     g_used = graph("drive") if mode == "van" else walk
 
     def legs_between(i: int, j: int, label: str) -> list[Leg]:
@@ -425,8 +493,10 @@ def plan(queue: pd.DataFrame, buildings: pd.DataFrame, start_building: str, mode
         order.append(st)
         legs.append(legs_between(here, idx, st.building) if walk_nodes[here] != walk_nodes[idx] else [])
         here = idx
-    back = legs_between(here, 0, start_building) if round_trip and order and walk_nodes[here] != walk_nodes[0] else []
-    return Plan(start_building, mode, order, legs, back, skipped)
+    home, home_name = (finish, end) if finish else (0, start_building)
+    back = (legs_between(here, home, home_name) if round_trip and order and walk_nodes[here] != walk_nodes[home]
+            else [])
+    return Plan(start_building, mode, order, legs, back, skipped, end=end if finish else None)
 
 
 def _leg(g: Graph, nodes: list[int], to: str, mode: str, seconds: float) -> Leg:

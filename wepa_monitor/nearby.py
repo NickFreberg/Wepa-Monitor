@@ -36,12 +36,14 @@ def fmt_walk(seconds: float) -> str:
 
 
 @lru_cache(maxsize=2)
-def _matrix(stamp: float) -> tuple[list[str], np.ndarray]:
-    """All-pairs walking time (seconds) between main-campus buildings: one Dijkstra per building."""
+def _matrix(stamp: float, drawn_stamp: float = 0.0) -> tuple[list[str], np.ndarray]:
+    """All-pairs walking time (seconds) between main-campus buildings: one Dijkstra per building. Uses the doors
+    and walking paths drawn on the Rounds map, when there are any."""
+    from . import roundsmap
     b = reference.load_buildings()
     b = b[(b["campus"] == "Main") & b["lat"].notna()].reset_index(drop=True)
     g = routing.graph("walk")
-    nodes = [g.nearest(float(r.lat), float(r.lon)) for r in b.itertuples()]
+    nodes = [g.nearest(*(roundsmap.door_for(r.building) or (float(r.lat), float(r.lon)))) for r in b.itertuples()]
     out = np.full((len(b), len(b)), np.inf)
     for i, n in enumerate(nodes):
         dist, _ = routing.dijkstra(g, n)
@@ -55,7 +57,8 @@ def walk_seconds(a: str, b: str) -> float:
         return 0.0
     if routing.network() is None:
         return np.inf
-    names, m = _matrix(routing.NETWORK_PATH.stat().st_mtime)
+    from . import roundsmap
+    names, m = _matrix(routing.NETWORK_PATH.stat().st_mtime, roundsmap.stamp())
     if a not in names or b not in names:
         return np.inf
     return float(m[names.index(a), names.index(b)])

@@ -143,6 +143,61 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
                      f"reaches {A.BACKUP_MIN_WEEK} minutes a week; {A.BUSY_MEETINGS}+ meetings with a longer walk "
                      "makes the strongest case.", wide=True))
 
+    # --- do we really need a printer (or two) here? ---------------------------------------------------------------
+    rs = A.review_status(ds)
+    review_title = "Do we really need a printer here, or two here?"
+    review_sub = ("Every printer weighed on a full year of use: how busy it is, how far its users would walk without "
+                  "it, and for buildings with more than one, whether they're ever needed at the same time.")
+    if not rs["ready"]:
+        blocks.append(chart_card(
+            review_title, review_sub,
+            body=html.Div([
+                html.P([html.B("Opens after a full academic year of data. "),
+                        f"{rs['days']:,} of {A.REVIEW_DAYS} days are recorded so far; this opens on "
+                        f"{rs['ready_on']:%B} {rs['ready_on'].day}, {rs['ready_on'].year}."], className="review-lock__text"),
+                html.Div(html.Div(className="review-lock__fill",
+                                  style={"width": f"{min(100, rs['days'] / A.REVIEW_DAYS * 100):.0f}%"}),
+                         className="review-lock__bar", role="progressbar",
+                         **{"aria-valuenow": rs["days"], "aria-valuemin": 0, "aria-valuemax": A.REVIEW_DAYS,
+                            "aria-label": "Days of data recorded"}),
+            ], className="review-lock"),
+            explain="Printing swings with the calendar: busy at midterms and finals, quiet over breaks and summer. "
+                    "Judging a printer on a few months would favor whichever season happened to be recorded, so this "
+                    "waits for a whole year.", wide=True))
+    else:
+        rv = _m(ds, "review", lambda d, i, s0, e0: A.printer_review(d, i), ids, start, end)
+        if rv is not None:
+            sg, gr = rv["singles"], rv["groups"]
+            flag_s = sg[sg["verdict"] == "Review"] if len(sg) else sg
+            flag_g = gr[gr["verdict"] == "One may be enough"] if len(gr) else gr
+            n = len(flag_s) + len(flag_g)
+            story = ([f"{n} printer{'s are' if n != 1 else ' is'} worth a second look; every other printer earns "
+                      "its place."] if n else ["Every printer earns its place: none is both lightly used and close "
+                                               "to another, and every pair carries real printing."])
+            items = [_review_single(r) for r in flag_s.itertuples()] + [_review_group(r) for r in flag_g.itertuples()]
+            rest = ([_review_single(r) for r in sg[sg["verdict"] != "Review"].itertuples()] if len(sg) else []) + \
+                   ([_review_group(r) for r in gr[gr["verdict"] != "One may be enough"].itertuples()] if len(gr) else [])
+            body = [html.Ul(items, className="sites")] if items else []
+            if rest:
+                body.append(html.Details([html.Summary(f"All other printers ({len(rest)})"),
+                                          html.Ul(rest, className="sites")], className="card__data"))
+            blocks.append(chart_card(
+                review_title, review_sub + (" (Forced on for a demo: less than a year of data.)" if rs["forced"]
+                                            and rs["days"] < A.REVIEW_DAYS else ""),
+                story=story, body=html.Div(body),
+                explain="A printer is worth a review only when it's lightly used and students have another printer "
+                        "close by. A second printer in a building is worth a review only when it does little of the "
+                        "building's printing, the two are rarely busy at the same time, and it seldom had to keep the "
+                        "building printing while the other was down. Removing a printer is a judgment call; this "
+                        "shows the evidence.",
+                nerd=f"Window: the last {A.REVIEW_DAYS} days. Use is black-toner burn per observed day (Wepa doesn't "
+                     f"publish page counts), relative to the median printer; 'lightly used' is {A.LIGHT_USE:g}x the "
+                     f"median or less, 'close by' under {A.REMOVE_WALK_MIN:g} minutes' walk. Pairs: the lighter "
+                     f"printer under {A.PAIR_LIGHT_SHARE:.0%} of the building's use, busy together in under "
+                     f"{A.PAIR_OVERLAP:.0%} of printing hours (an hour counts as printing when black toner dropped, so "
+                     f"this undercounts light printing), and under {A.PAIR_BACKUP_H} hours a year of keeping the "
+                     "building printing while the other was down.", wide=True))
+
     # --- classes vs printing --------------------------------------------------------------------------------
     cvp = _m(ds, "cvp", lambda d, i, s0, e0: courses.class_vs_printing(d, s0, e0, i), ids, start, end)
     if cvp is not None:
@@ -276,3 +331,27 @@ def _sites(pl, plabel: str) -> html.Div:
             html.Div(r.why, className="site__why"),
         ]))
     return html.Ul(items, className="sites")
+
+
+def _review_single(r) -> html.Li:
+    tone = "warning" if r.verdict == "Review" else "neutral"
+    use = f"{r.relative:.1f}x the median printer's use" if np.isfinite(r.relative) else "use not measured yet"
+    near = f"next printer: {r.nearest}, {_walk(r.walk_min)}" if r.nearest else "no other printer on the walking map"
+    return html.Li(className="site", children=[
+        html.Div([html.B(r.building), html.Span(r.label, className="site__map"),
+                  html.Span(r.verdict, className=f"site__verdict site__verdict--{tone}")], className="site__head"),
+        html.Div(f"{use} · {near}", className="site__facts"),
+        html.Div(r.why, className="site__why")])
+
+
+def _review_group(r) -> html.Li:
+    tone = "warning" if r.verdict == "One may be enough" else "neutral"
+    facts = [f"{r.printers} printers", f"the lighter one ({r.lighter}) does {r.lighter_share:.0%} of the printing"
+             if np.isfinite(r.lighter_share) else "use not measured yet",
+             f"busy together in {r.both_busy:.0%} of printing hours" if np.isfinite(r.both_busy) else "",
+             f"kept the building printing {r.backup_h_year:,.0f} hours a year while one was down"]
+    return html.Li(className="site", children=[
+        html.Div([html.B(r.building),
+                  html.Span(r.verdict, className=f"site__verdict site__verdict--{tone}")], className="site__head"),
+        html.Div(" · ".join(f for f in facts if f), className="site__facts"),
+        html.Div(r.why, className="site__why")])

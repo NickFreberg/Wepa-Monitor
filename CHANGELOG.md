@@ -8,6 +8,27 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.5.0] - 2026-10-05
+Draw the campus for Rounds, and a year-end look at whether every printer earns its place.
+
+### New
+- Rounds map editor, for the administrator, at Rounds › "Edit the Rounds map", built for a phone. Tap a tool, then tap the map:
+  - Start and End: where rounds can begin and finish. They appear in Rounds under "Starting from" and "Finish".
+  - Door: the entrance to use for a building. Rounds routes to the door instead of the building's middle.
+  - Van spot: where the transit van parks for a building. It takes priority over the parking list and OpenStreetMap lots.
+  - Walk path and Van route: tap where the line starts, tap along the way, and tap a pin to finish. Each tap snaps to a nearby start, door, van spot, end or line end. Drawn paths join the walking and driving networks, so Rounds and every walking time in the app use them.
+  - Switch to aerial view to find doors. Drag a pin to move it; tap a pin or line to name or delete it.
+  - Only the administrator can save. Saves are checked (campus bounds, sizes, kinds) and the previous version is kept as a backup.
+- "Do we really need a printer here, or two here?" on the Planning tab. It opens after a full academic year of data and shows a progress bar until then. For a building with one printer, it flags a printer that's lightly used while students have another printer close by. For a building with two or more, it flags a second printer that does little of the building's printing, is rarely busy at the same time as the other, and seldom had to keep the building printing during an outage.
+
+### Changed
+- The reasons in "Where one more printer would help most" now state the judgment only ("Already covered: a printer is close by"), without repeating the numbers beside them.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- Leaflet 1.9.4 (BSD 2-Clause), served from the app: https://leafletjs.com
+- Map tiles: OpenStreetMap (https://www.openstreetmap.org/copyright) and Esri World Imagery
+
 ## [1.4.9] - 2026-10-05
 "Where one more printer would help most" now weighs the real candidates.
 
