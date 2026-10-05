@@ -63,8 +63,13 @@ BACKUP_MIN_WEEK = 60    # walking saved per week, while nearby printers were dow
 def candidate_sites() -> pd.DataFrame:
     """The buildings students use that have no print station (reference/printer_candidates.csv)."""
     if not CANDIDATES.exists():
-        return pd.DataFrame(columns=["building", "schedule_name", "map_no", "address"])
-    return pd.read_csv(CANDIDATES, dtype=str).fillna("")
+        return pd.DataFrame(columns=["building", "schedule_name", "map_no", "address", "status", "until", "until_text",
+                                     "note"])
+    df = pd.read_csv(CANDIDATES, dtype=str).fillna("")
+    for c in ("status", "until", "until_text", "note"):
+        if c not in df:
+            df[c] = ""
+    return df
 
 
 def placement(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
@@ -105,14 +110,37 @@ def placement(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
             helped = sorted(cov.loc[gain > 0, "building"].unique())
         n = int(meetings.get(s.schedule_name or s.building, 0))
         verdict, why = _verdict(n, walk, near, saved)
+        status = renovation_status(s, n, ds.as_of)
+        if status:
+            verdict, why = status
         rows.append({"building": s.building, "map_no": s.map_no, "address": s.address, "meetings_week": n,
                      "nearest": near, "walk_min": walk, "backup_saved": saved,
                      "helps": ", ".join(helped[:4]) + ("…" if len(helped) > 4 else ""),
-                     "verdict": verdict, "why": why})
-    order = {"Strongest case": 0, "Worth a look": 1, "Hard to justify": 2}
+                     "verdict": verdict, "why": why, "status": s.status, "until_text": s.until_text,
+                     "note": s.note})
+    order = {"Strongest case": 0, "Plan for the reopening": 1, "Worth a look": 2, "Hard to justify": 3}
     out = pd.DataFrame(rows)
     out = out.assign(_o=out["verdict"].map(order), _d=-(out["meetings_week"] * out["walk_min"].fillna(0)))
     return out.sort_values(["_o", "_d"]).drop(columns=["_o", "_d"]).reset_index(drop=True)
+
+
+def renovation_status(site, meetings: int, now: pd.Timestamp) -> tuple[str, str] | None:
+    """A building closed for renovation isn't judged on this term's (empty) schedule: it's a site to plan for when
+    it reopens. Once the expected reopening has passed, the normal rules take over as soon as classes appear."""
+    if getattr(site, "status", "") != "renovation":
+        return None
+    when = getattr(site, "until_text", "") or "its reopening"
+    try:
+        due = pd.Timestamp(site.until).tz_localize(TZ) if site.until else None
+    except (ValueError, TypeError):
+        due = None
+    if due is not None and now > due:
+        if meetings:
+            return None
+        return ("Plan for the reopening", f"Expected to reopen by {when}, but no classes are on the schedule yet: "
+                                          "check the reopening date.")
+    return ("Plan for the reopening", "It reopens as the home of the College of Education and Health Sciences, "
+                                      "with education programs moving in from across campus.")
 
 
 def _verdict(meetings: int, walk: float, near: str, backup: float) -> tuple[str, str]:

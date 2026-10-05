@@ -8,6 +8,19 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.5.1] - 2026-10-05
+Burnell Hall is under renovation, not unused.
+
+### Changed
+- "Where one more printer would help most" no longer dismisses Burnell Hall for having no classes. It's closed for a major renovation into the home of the College of Education and Health Sciences, bringing education programs from across campus together. Its new verdict is "Plan for the reopening", with substantial completion expected in spring 2027.
+- A candidate building can now carry a renovation status and expected reopening (reference/printer_candidates.csv). Once that date passes, the card asks to check the date if no classes are scheduled yet, and goes back to the normal rules as soon as classes are.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- Mass.gov (DCAMM), Bridgewater State University – Burnell Hall Renovation: about 67,000 sq ft, Commodore Builders, estimated $50.9M, substantial completion expected spring 2027: https://www.mass.gov/info-details/bridgewater-state-university-burnell-hall-renovation
+- Massachusetts FY2025 capital budget, B542 Burnell Hall Renovation ($49.8M over FY2025–FY2029): https://budget.digital.mass.gov/capital/fy25/beneficiary-agency/education/bridgewater-state-university/b542
+- Bridgewater State University press release, June 14, 2021 ($25M state and $14.1M university funding): https://www.bridgew.edu/about-us/news-events/Press-Release-06-14-2021-Burnell-Hall-Renovation
+
 ## [1.5.0] - 2026-10-05
 Draw the campus for Rounds, and a year-end look at whether every printer earns its place.
 

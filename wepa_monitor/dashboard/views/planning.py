@@ -126,6 +126,9 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
                 weak = rest[rest["verdict"] == "Hard to justify"]["building"].tolist()
                 if weak:
                     story += [" " + _join(weak) + (" are" if len(weak) > 1 else " is") + " hard to justify."]
+                plan = rest[rest["verdict"] == "Plan for the reopening"]
+                for r in plan.itertuples():
+                    story += [" ", ("b", r.building), f" reopens from renovation in {r.until_text}: plan for it."]
             blocks.append(chart_card(
                 "Where one more printer would help most", "The buildings students use that have no print station, "
                 "weighed on everyday class traffic and on backup value when nearby printers go down.",
@@ -316,10 +319,13 @@ def _walk(minutes: float) -> str:
 
 def _sites(pl, plabel: str) -> html.Div:
     """One short block per candidate building: name and verdict, the facts, and the reason."""
-    tone = {"Strongest case": "good", "Worth a look": "warning", "Hard to justify": "neutral"}
+    tone = {"Strongest case": "good", "Plan for the reopening": "info", "Worth a look": "warning",
+            "Hard to justify": "neutral"}
     items = []
     for r in pl.itertuples():
-        facts = [f"{r.meetings_week:,} class meetings a week" if r.meetings_week else "no classes this term",
+        no_classes = (f"closed for renovation until {r.until_text}" if r.status == "renovation" and r.until_text
+                      else "no classes this term")
+        facts = [f"{r.meetings_week:,} class meetings a week" if r.meetings_week else no_classes,
                  f"nearest printer {r.nearest}, {_walk(r.walk_min)}"]
         facts.append(f"would have saved {r.backup_saved:,.0f} min a week of walking while printers were down "
                      f"({plabel})" if r.backup_saved >= 0.5 else f"no walking saved while printers were down ({plabel})")

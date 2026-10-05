@@ -1,5 +1,5 @@
-building,schedule_name,map_no,address
-Hart Hall,Hart Hall,28,90 Burrill Ave.
-Burnell Hall,Burnell Hall,29,66 Hooper St.
-Art Center,Art Building,6,40 School St.
-Kelly Gymnasium,Kelly Gymnasium,17,34 Park Ave.
+building,schedule_name,map_no,address,status,until,until_text,note
+Hart Hall,Hart Hall,28,90 Burrill Ave.,,,,
+Burnell Hall,Burnell Hall,29,66 Hooper St.,renovation,2027-05-31,spring 2027,"Closed for renovation into the home of the College of Education and Health Sciences, bringing education programs from across campus under one roof (about 67,000 sq ft; DCAMM project, Commodore Builders)."
+Art Center,Art Building,6,40 School St.,,,,
+Kelly Gymnasium,Kelly Gymnasium,17,34 Park Ave.,,,,

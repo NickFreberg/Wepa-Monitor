@@ -47,3 +47,16 @@ def test_printer_review_waits_for_a_full_year(monkeypatch):
     flagged = s[(s["relative"] <= A.LIGHT_USE) & (s["walk_min"] < A.REMOVE_WALK_MIN)]
     assert (flagged["verdict"] == "Review").all()
     assert (s[s["relative"] > A.LIGHT_USE]["verdict"] == "Keep").all()
+
+
+def test_a_building_under_renovation_is_planned_for_not_dismissed():
+    import pandas as pd
+    site = pd.Series({"status": "renovation", "until": "2027-05-31", "until_text": "spring 2027"})
+    before = pd.Timestamp("2026-10-05", tz="America/New_York")
+    after = pd.Timestamp("2027-09-15", tz="America/New_York")
+    assert A.renovation_status(site, 0, before)[0] == "Plan for the reopening"
+    assert "check the reopening date" in A.renovation_status(site, 0, after)[1]      # overdue, still no classes
+    assert A.renovation_status(site, 120, after) is None                             # back in use: normal rules
+    assert A.renovation_status(pd.Series({"status": ""}), 0, before) is None
+    burnell = A.candidate_sites().set_index("building").loc["Burnell Hall"]
+    assert burnell["status"] == "renovation" and burnell["until_text"] == "spring 2027"

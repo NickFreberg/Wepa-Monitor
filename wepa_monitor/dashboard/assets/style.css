@@ -1345,3 +1345,4 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 .review-lock__text { margin: 0 0 10px; color: var(--ink-2); }
 .review-lock__bar { height: 10px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
 .review-lock__fill { height: 100%; border-radius: 99px; background: var(--accent); }
+.site__verdict--info { color: var(--info-text); }
