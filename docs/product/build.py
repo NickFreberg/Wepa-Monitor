@@ -17,12 +17,12 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from wepa_monitor import config  # noqa: E402
+from wepa_monitor import __version__, config  # noqa: E402
 
 OUT = HERE / "BSU-Student-Printing-Ops-Documentation.html"
 MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"
 SHOTS = {"overview": "overview-bsu.png", "station": "station-detail.png", "investigation": "investigation.png",
-         "assistant": "assistant.png"}
+         "assistant": "assistant.png", "inventory": "inventory.png", "outcomes": "outcomes.png"}
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 CRIMSON, GOLD, BOTH, NONE, INK, MUTED = "#8b1e24", "#d6a84a", "#5a2b1a", "#efe7dc", "#1f1a17", "#6b625c"
 
@@ -82,12 +82,14 @@ def shot(name: str) -> str:
     from PIL import Image
     path = ROOT / "docs" / "screenshots" / SHOTS[name]
     im = Image.open(path).convert("RGB")
+    if im.height > im.width:          # full-page captures: the top of the page, so the figure stays legible
+        im = im.crop((0, 0, im.width, int(im.width * 0.9)))
     im.thumbnail((1100, 1100))
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=72, optimize=True, progressive=True)
     data = base64.b64encode(buf.getvalue()).decode()
     alt = {"overview": "Overview page", "station": "Station page", "investigation": "Investigation page",
-           "assistant": "Assistant pane"}[name]
+           "assistant": "Assistant pane", "inventory": "Inventory page", "outcomes": "IT Outcomes page"}[name]
     return f'<img src="data:image/jpeg;base64,{data}" alt="{alt} (demo data)">'
 
 
@@ -133,7 +135,8 @@ def pdf(html_path: Path) -> Path:
         pg.pdf(path=str(out), format="Letter", print_background=True, prefer_css_page_size=True,
                display_header_footer=True, header_template="<span></span>",
                footer_template="<div style='width:100%;font:8px Arial;color:#776d66;padding:0 0.6in;"
-                               "display:flex;justify-content:space-between'><span>BSU Student Printing Ops · SPO-DOC-001 · v1.4.0"
+                               "display:flex;justify-content:space-between'><span>BSU Student Printing Ops · "
+                               f"SPO-DOC-001 · v{__version__}"
                                "</span><span class='pageNumber'></span></div>")
         br.close()
     tmp.unlink()

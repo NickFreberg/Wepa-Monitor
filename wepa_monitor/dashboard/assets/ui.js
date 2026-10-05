@@ -48,6 +48,9 @@
         d.open = false;
       }
     });
+    // Choosing a page from a menu (More, the account menu) closes that menu.
+    var link = e.target.closest && e.target.closest("details.popover a[href]");
+    if (link) { var host = link.closest("details.popover"); if (host) { host.open = false; } }
     var btn = e.target.closest && e.target.closest("[data-print]");
     if (btn) { window.print(); }
   });

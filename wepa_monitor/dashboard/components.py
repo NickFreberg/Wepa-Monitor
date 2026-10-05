@@ -252,6 +252,14 @@ def segmented(id_, options: list[dict], value, multi: bool = False, persistence:
                 labelClassName="seg__opt", inputClassName="seg__input", **extra, **kw)
 
 
+def page_tabs(id_, options: list[dict], value, **kw):
+    """The tabs along the top of a page (Analytics, Inventory, Investigations): one style everywhere, distinct
+    from the pill-shaped choices used for options inside a page."""
+    return html.Div(dcc.RadioItems(id=id_, options=options, value=value, inline=True, className="tabs",
+                                   labelClassName="tabs__opt", inputClassName="tabs__input", **kw),
+                    className="tabs-wrap", role="navigation", **{"aria-label": "Sections of this page"})
+
+
 def section_title(text: str, sub: str = "") -> html.Div:
     return html.Div([html.H2(text, className="section-title"),
                      html.P(sub, className="section-sub") if sub else None], className="section-head")

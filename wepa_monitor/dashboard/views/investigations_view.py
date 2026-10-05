@@ -7,7 +7,7 @@ import pandas as pd
 from dash import dcc, html
 
 from ... import accounts, config, investigations as I, metrics as M, refs, rules
-from ..components import chart_card, data_table, icon, segmented
+from ..components import chart_card, data_table, icon, page_tabs
 from .common import empty
 
 FILTERS = [("open", "Open"), ("closed", "Closed"), ("archived", "Archived"), ("all", "All"), ("metrics", "Metrics")]
@@ -54,11 +54,11 @@ def layout(ds: M.Dataset, params: dict):
                     "replace BSU's ITSM ticketing; record that ticket number on the investigation. Every change is "
                     "kept permanently with who made it and why."], className="muted"),
             _who()]),
+        page_tabs("inv-filter", [{"label": t, "value": k} for k, t in FILTERS], params.get("show", "open")),
         html.Div(className="toolbar", children=[
             html.Div([icon("search"), dcc.Input(id="inv-q", type="search", value=params.get("q", ""), debounce=0.3,
                                                 placeholder="Search by reference, printer, building or text",
                                                 className="search__input")], className="search"),
-            segmented("inv-filter", [{"label": t, "value": k} for k, t in FILTERS], params.get("show", "open")),
         ]),
         dcc.Loading(html.Div(id="inv-list"), type="dot", delay_show=400),
         html.Details(className="card inv-new", children=[

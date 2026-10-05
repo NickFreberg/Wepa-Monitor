@@ -21,26 +21,35 @@ def avatar(u: dict, size: int = 32) -> html.Span:
                      **{"aria-hidden": "true"})
 
 
-def user_menu() -> html.Details:
+def user_menu(admin_links=(), appearance=None) -> html.Details:
+    """The account menu: who you are, your settings and Appearance, the administration pages (System health,
+    Software and security, Activity log), and sign out."""
     me = accounts.current()
     if me.get("username") and me["role"] != "admin":
         me = {**me, **(accounts.get(me["username"]) or {})}
     signed_in = auth.enabled()
+
+    def link(href, label, ic, a=False):
+        return (html.A if a else dcc.Link)([icon(ic), html.Span(label)], href=href, className="user-panel__link")
+
     return html.Details(id="user-menu", className="popover", children=[
-        html.Summary(avatar(me, 30), className="topbar__icon-btn user-btn", title=me.get("name", "Account")),
+        html.Summary(avatar(me, 30), className="topbar__icon-btn user-btn", title=f"{me.get('name', 'Account')}: "
+                     "account, appearance and administration"),
         html.Div(className="popover__panel user-panel", children=[
             html.Div([avatar(me, 44), html.Div([html.B(me.get("name")),
                                                 html.Div(me.get("email") or me.get("username") or "", className="muted"),
                                                 html.Div(me["role"].capitalize(), className="muted")])],
                      className="user-panel__who"),
-            dcc.Link([icon("users"), html.Span("My account")], href="/account", className="user-panel__link")
-            if me["role"] != "admin" else None,
-            dcc.Link([icon("building"), html.Span("Directory")], href="/directory", className="user-panel__link"),
-            dcc.Link([icon("send"), html.Span("Suggest a feature")], href="/feedback", className="user-panel__link"),
-            html.A([icon("lock"), html.Span("Change password")], href="/account/password", className="user-panel__link")
-            if signed_in and me["role"] != "admin" else None,
-            html.A([icon("x"), html.Span("Sign out")], href="/logout", className="user-panel__link")
-            if signed_in else html.P("Sign-in is off on this copy (no WEPA_BASIC_AUTH).", className="muted"),
+            link("/account", "My account", "users") if me["role"] != "admin" else None,
+            appearance,
+            link("/directory", "Directory", "building"),
+            link("/feedback", "Suggest a feature", "send"),
+            html.Div("Administration", className="user-panel__heading") if admin_links else None,
+            *[link(href, label, ic) for href, label, ic in admin_links],
+            html.Hr(className="user-panel__rule"),
+            link("/account/password", "Change password", "lock", a=True) if signed_in and me["role"] != "admin" else None,
+            link("/logout", "Sign out", "x", a=True) if signed_in
+            else html.P("Sign-in is off on this copy (no WEPA_BASIC_AUTH).", className="muted user-panel__note"),
         ]),
     ])
 

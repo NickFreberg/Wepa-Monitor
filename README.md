@@ -15,6 +15,27 @@ It was first written as a terminal script for ResNet Support Representatives (se
 version adds minute-by-minute data capture, documented KPI/KRI definitions, and a styled web dashboard
 for operations staff, management and executives.
 
+### At a glance
+
+**Mission:** keep every BSU print station ready when students need it, by measuring service the way
+students experience it and acting on what the data shows.
+
+| Measure | Act | Improve |
+|---|---|---|
+| Every station, every minute: availability, outages, causes, supplies and usage, computed the same way every time. | Alerts, prioritized rounds, supply forecasts and inventory turn findings into the next visit, the next order and the next fix. | Investigations, evidence for Wepa, placement reviews and reporting close the loop, so service gets measurably better each term. |
+
+| If you are… | Start here | You get |
+|---|---|---|
+| IT leadership | Executive summary · IT Outcomes | Service levels for the month and year, what changed, and a print-ready annual-report feature |
+| A manager or supervisor | Overview · Analytics · Investigations · Inventory | What needs attention, the station report card, root-cause work with an audit trail, supply accountability |
+| A data engineer or statistician | Analytics › Forecasts & statistics · System health | Stated definitions, sample sizes, confidence intervals, model back-tests, data-quality checks |
+| A student worker | Overview · Rounds · Inventory › Record | The next printer to visit, the route, and where to record deliveries, moves and counts |
+| A student | The student status page (QR sign on the printer) | Whether this printer works right now, and the nearest one that does |
+
+The menu is grouped the same way: **Operate** (Overview, Rounds, Stations), **Analyze** (Insights,
+Analytics), **Report** (Executive summary, IT Outcomes) and **Manage** (Investigations, Inventory), with
+System health, Software and security and the Activity log in the account menu.
+
 **Data source:** the public Wepa status page,
 [`cs.wepanow.com/000BRIDGEW149.html`](https://cs.wepanow.com/000BRIDGEW149.html&filter=), which refreshes
 every 60 seconds. As of October 2026 it lists 31 stations: ResNet (16), Student Computer Labs (14) and
@@ -36,9 +57,17 @@ Satellite Campuses (1).
 |---|
 | ![Investigation](docs/screenshots/investigation.png) |
 
-| The Assistant pane | Student status page (phone) |
+| Inventory: stock at every level and the trail of every unit | The kiosk key log |
 |---|---|
-| ![Assistant](docs/screenshots/assistant.png) | <img src="docs/screenshots/student-status.png" alt="Student status page" width="260"> |
+| ![Inventory](docs/screenshots/inventory.png) | ![Kiosk key log](docs/screenshots/inventory-keys.png) |
+
+| IT Outcomes: the launch-year stakeholder briefing |
+|---|
+| ![IT Outcomes](docs/screenshots/outcomes.png) |
+
+| The Assistant pane | On a phone: tab bar, and More | Student status page (phone) |
+|---|---|---|
+| ![Assistant](docs/screenshots/assistant.png) | <img src="docs/screenshots/mobile-overview.png" alt="Overview on a phone" width="200"> <img src="docs/screenshots/mobile-more.png" alt="The More menu on a phone" width="200"> | <img src="docs/screenshots/student-status.png" alt="Student status page" width="200"> |
 
 ![Campus map, aerial view](docs/screenshots/campus-map-aerial.png)
 
@@ -181,27 +210,44 @@ any chart, and every chart carries a one-line takeaway in plain words.
   of changes logged in `reference/changes.csv`).
 - **Executive:** the month as a story, the month vs prior month vs year to date, and trends.
 - **IT Outcomes:** a print-ready feature page for the IT division's annual report, in the style of the
-  printed *IT Outcomes* issues, with every number computed for the chosen year. Headline, subtitle,
-  credits and quote are in `reference/outcomes.json`.
-- **System:** is the monitor healthy (a picture of the moving parts with live status), a read-only
+  printed *IT Outcomes* issues, with every number computed for the chosen year. In the year monitoring
+  began it is written as a **stakeholder briefing**: the mission and its three pillars, the business
+  value, why consistent data matures the way the department works, the commitment to student success,
+  how the app uses AI and its guardrails, an honest note that the first year's data is partial (with the
+  date monitoring began), and how the built-in predictive models will start projecting once they have
+  enough history. Headline, subtitle, mission, pillars, credits and quote are in `reference/outcomes.json`.
+- **Investigations:** root-cause work on recurring problems, missing stock (STK) and lost kiosk keys
+  (KEY), with a governed lifecycle and a permanent audit trail.
+- **Inventory:** parts and paper at every level (parts in central storage; paper in central storage,
+  building closets and under each kiosk), with the trail of every unit. **Record** a delivery (upload
+  the invoice or a photo; the lines are read for you; a second person approves), a move, a count or a
+  write-off. Installed parts and tray refills are deducted automatically. A count that comes up short
+  opens an Inventory investigation. **Paper checks** show what's due by Friday. **Keys** logs who holds
+  a Wepa kiosk key; a lost key opens an investigation requiring counseling with management. **Setup**
+  is where the administrator records storage locations (central storage exists from the start, even
+  before anyone has found the room).
+- **System health** (account menu › Administration): is the monitor healthy (a picture of the moving parts with live status), a read-only
   live log, data quality, who's using the site (visits anonymized to the network) and sign-in security
   (failed sign-ins without passwords, temporary blocks after repeated failures), and AI status.
-- **Software:** the app's check of itself (collector, data quality, audit trail, sign-in, versions,
+- **Software and security** (account menu › Administration): the app's check of itself (collector, data quality, audit trail, sign-in, versions,
   backups, disk), every known vulnerability in its installed packages (CVE/GHSA numbers, severity, the
   fixing version, plain-English summary and sources, checked daily against OSV.dev), update packages the
   administrator can start (GitHub builds, tests and opens a pull request; the app never rewrites itself),
   backup collectors, and the **Change log** (click any version in the activity feed). Each vulnerability
   is ranked Act now / Soon / Routine from CISA KEV and Vulnrichment, NIST NVD, Microsoft MSRC, FIRST EPSS,
   Exploit-DB and Metasploit, and an **OWASP Top 10 (2025)** checklist shows each control with its evidence.
-- **Suggest a feature** (under your picture): sends an idea or problem report to the app's GitHub
+- **Suggest a feature** (in the account menu): sends an idea or problem report to the app's GitHub
   repository as an issue, with a REQ number and its open/closed status. See
   [docs/SECURITY.md](docs/SECURITY.md) for the threat model, how confidentiality, integrity and
   availability are protected, the attacker-style tests, backup-collector setup and known limits.
 
-**Header**, on every page: the **filter** (sections, areas, or search for specific stations), the
-**period** where it applies, **Export** (the current filter and period as CSV, Excel, JSON or PDF),
-the **Activity** log (with a date picker), **notifications**, and **Choose an appearance** (BSU,
-light, dark or match your device; larger text; compact spacing; reduced motion; extra contrast).
+**Header**, on every page: **Alerts** (stations going down or coming back, with a link to the full
+**Activity log**), the **Assistant**, and the **account menu** (My account, **Appearance**, Directory,
+Suggest a feature, and the Administration pages: System health, Software and security, Activity log).
+Under the page title, on pages that use them: **Filters** (one button showing what's applied; choose
+sections, areas or specific stations and the period, or clear them) and **Download** (the current
+filters as CSV, Excel, JSON or PDF). On a phone, a tab bar along the bottom holds Overview, Rounds,
+Stations and Insights, and **More** opens every other page, grouped.
 
 ## Support ownership and desk hours
 
@@ -472,6 +518,9 @@ wepa_monitor/
   risk.py          outage-risk machine learning: features, walk-forward test vs a baseline, go-live gate
   campus.py        bridgew.edu parsers (academic calendar, residence halls, library hours) and day phases
   routing.py       Rounds planner: campus graph from OpenStreetMap, Dijkstra, stop ordering, van parking
+  ledger.py        hash-chained append-only log shared by inventory and the key log
+  inventory.py     parts and paper: locations, stock replay, receipts with approval, counts, automatic deductions
+  keys.py          Wepa kiosk key holders, issue/return/lost/found; lost keys open investigations
   synth.py         demo-data simulator
   dashboard/       Dash app shell (app.py), views/ (one module per page), charts, stylesheet,
                    explain.py (the click-to-explain panels)
@@ -488,8 +537,11 @@ legacy/                  the original v1 terminal script
 
 See also GitHub issue #2 for the analytics backlog.
 
-- **Parking spots.** Replace the suggested lots in `reference/parking.csv` with the spots staff
-  actually use.
-- **Building entrances.** Routes go to each building's center point; adding the door nearest each
-  printer would sharpen the walking times.
+- **Draw the campus.** Van spots, doors and walking paths are drawn in the Rounds map editor
+  (administrator); drawing the real doors and the spots staff use sharpens every route and walk time.
+- **Per-student usage.** Prints, page counts and black-and-white vs color by student are not on Wepa's
+  public page. They would need Wepa's administrative reports; an importer can be added when those are
+  available.
+- **A full academic year.** Seasonal comparisons, the year-end printer review and a more confident
+  outage-risk model arrive as the data covers fall, spring and summer.
 - Confirm the status codes not yet seen on the live page, and the yellow-alert behavior.

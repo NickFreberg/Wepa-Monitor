@@ -3,9 +3,24 @@
   "kicker": "Opportunities. Collaborations. Results.",
   "title": "Every Printer, Every Minute",
   "subtitle": "ResNet turns a status page into a living picture of campus printing",
+  "mission": "Keep every BSU print station ready when students need it, by measuring service the way students experience it and acting on what the data shows.",
+  "pillars": [
+    [
+      "Measure",
+      "Every station, every minute: availability, outages, causes, supplies and usage, computed the same way every time."
+    ],
+    [
+      "Act",
+      "Alerts, prioritized rounds, supply forecasts and inventory turn findings into the next visit, the next order and the next fix."
+    ],
+    [
+      "Improve",
+      "Investigations, evidence for Wepa, placement reviews and reporting close the loop, so service gets measurably better each term."
+    ]
+  ],
   "byline": "",
   "quote": "",
   "quote_by": "",
   "credits": "BSU Student Printing Ops was built for ResNet and the IT Service Center to keep BSU's Wepa print stations printing.",
-  "_help": "With an AI provider on, the AI drafts the title, subtitle, story and pull quote from the computed numbers; set keep_my_text to true to use the title and subtitle here instead. Kicker, byline, credits and quote are always yours. Leave quote empty to show a key number. Plain text, no HTML."
+  "_help": "With an AI provider on, the AI drafts the title, subtitle, story and pull quote from the computed numbers; set keep_my_text to true to use the title and subtitle here instead. Kicker, mission, pillars, byline, credits and quote are always yours. In the year monitoring began, the page is written as a launch briefing (purpose, value, data, AI, what's next). Leave quote empty to show a key number. Plain text, no HTML."
 }

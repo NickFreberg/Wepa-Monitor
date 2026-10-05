@@ -8,6 +8,39 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.7.0] - 2026-10-05
+A reorganized, business-ready app: a grouped menu, a three-button header, one filter bar, a phone tab bar, and an IT Outcomes launch briefing.
+
+### New
+- The menu is grouped by what people come to do: **Operate** (Overview, Rounds, Stations), **Analyze** (Insights, Analytics), **Report** (Executive summary, IT Outcomes) and **Manage** (Investigations, Inventory).
+- On a phone, a tab bar along the bottom holds Overview, Rounds, Stations and Insights. **More** opens every other page, grouped and labelled. Nothing is hidden off the edge of the screen any more.
+- One **Filters** button sits under the page title, in the same place on every page that has filters. It shows what's applied ("All stations · Last 30 days") and opens one panel for the stations and the period, with **Clear filters**. **Download** sits beside it.
+- Tabs along the top of a page (Analytics, Investigations, Inventory) share one style and go into the address, so a tab can be bookmarked or shared.
+- **IT Outcomes launch briefing.** In the year monitoring began, the IT Outcomes page is written as a stakeholder briefing. It opens with the mission and three pillars (Measure, Act, Improve), then covers:
+  - the business value;
+  - why consistent data matures the way the department works;
+  - the commitment to student success;
+  - how the app uses AI, and its guardrails;
+  - an honest note that the first year's data starts on the date monitoring began and is a partial picture;
+  - how the built-in predictive models start projecting once they have enough history.
+
+  The AI draft follows the same outline and may use only the facts given. The mission and pillars are editable in `reference/outcomes.json`.
+- The README and the product documentation open with the mission, the pillars and a "start here" guide for IT leadership, managers, data engineers and statisticians, student workers and students. The user guide covers the new navigation, Inventory, paper checks and lost keys. Screenshots are refreshed and now include Inventory, the key log, IT Outcomes and the phone layout.
+
+### Changed
+- The header has three buttons: **Alerts** (formerly Notifications, with the full activity log one tap away), the **Assistant** and the **account menu**.
+- **Appearance** moved into the account menu.
+- System health, Software and security, and the Activity log moved into the account menu under Administration.
+- Inventory's tabs are now Stock (with the trail underneath), **Record** (delivery received, moved, counted, written off: one form at a time), Paper checks, Keys and Setup. Links to the old tabs still work.
+- In the inventory trail, a count now says "matches the record" or "2 units short" instead of a signed variance.
+- Page titles and subtitles were rewritten to be shorter and plainer.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- WAI-ARIA Authoring Practices, landmark regions and navigation: https://www.w3.org/WAI/ARIA/apg/practices/landmark-regions/
+- Apple Human Interface Guidelines, tab bars: https://developer.apple.com/design/human-interface-guidelines/tab-bars
+- Material Design 3, navigation bar: https://m3.material.io/components/navigation-bar/overview
+
 ## [1.6.1] - 2026-10-05
 Parts live only in central storage; paper can be anywhere.
 

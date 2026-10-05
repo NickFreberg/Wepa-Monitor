@@ -53,7 +53,7 @@ your own computer instead.
   `SameSite=Lax`, and `Secure` over HTTPS. It carries no password, only who you are and a version
   number for revocation.
 * **Session limits:** 2 hours idle or 12 hours after signing in, whichever comes first. Sign out from the
-  menu under your picture. Changing your password, an administrator reset or deactivation ends every
+  account menu (your picture, top right). Changing your password, an administrator reset or deactivation ends every
   other session at once.
 * **Passwords (NIST SP 800-63B):** 12 to 128 characters of anything. Paste is allowed, and there are no
   forced symbol rules and no expiry. Rejected: common passwords; ones containing your username, name

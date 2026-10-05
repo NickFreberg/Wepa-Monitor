@@ -14,11 +14,13 @@ from dash import ALL, Input, Output, State, ctx, dcc, html, no_update
 from dash.exceptions import PreventUpdate
 
 from ... import accounts, config, inventory as inv, keys as K, metrics as M, refs, reference
-from ..components import data_table, icon, segmented, tile
+from ..components import data_table, icon, page_tabs, segmented, tile
 from .common import empty
 
-TABS = [("stock", "Stock"), ("trail", "Trail"), ("receive", "Receive"), ("move", "Move"), ("count", "Count"),
-        ("paper", "Paper checks"), ("locations", "Locations"), ("keys", "Keys")]
+TABS = [("stock", "Stock"), ("record", "Record"), ("paper", "Paper checks"), ("keys", "Keys"), ("setup", "Setup")]
+RECORD = [("receive", "Delivery received"), ("move", "Moved"), ("count", "Counted"), ("writeoff", "Written off")]
+OLD_TABS = {"trail": ("stock", None), "receive": ("record", "receive"), "move": ("record", "move"),
+            "count": ("record", "count"), "locations": ("setup", None)}     # links from earlier versions
 RECEIPT_ROWS = 8
 MAX_UPLOAD = 5 * 1024 * 1024          # the server takes 8 MB a request; base64 adds a third
 KIND_ORDER = {"central": 0, "closet": 1, "paper": 2, "kiosk": 3}
@@ -55,17 +57,19 @@ def invoices_dir(data_dir) -> Path:
 
 def layout(ds: M.Dataset, params: dict):
     tab = params.get("tab", "stock")
+    tab, sub = OLD_TABS.get(tab, (tab, params.get("do")))
     tab = tab if tab in dict(TABS) else "stock"
     p = perms()
     tabs = [(k, t) for k, t in TABS if k != "keys" or p["keys_view"]]
     return [
         html.Div(className="inv-intro", children=[
-            html.P("Toner, drums, belts, fusers and paper: how much is in central storage, in each building's "
-                   "closets and under each kiosk, and where every unit went. Parts installed and trays refilled are "
-                   "deducted automatically from what the printers report; counts correct the rest. Nothing is ever "
-                   "deleted: every change is kept with who made it.", className="muted"),
+            html.P("Supplies on hand and where every unit went. Parts (toner, drums, belts, fusers) are kept in central "
+                   "storage; paper is kept there, in building closets and under each kiosk. Installed parts and tray "
+                   "refills are deducted automatically from what the printers report, and physical counts correct "
+                   "the estimates. Every change is permanent and records who made it.", className="muted"),
             _who(p)]),
-        html.Div(segmented("iv-tab", [{"label": t, "value": k} for k, t in tabs], tab), className="toolbar"),
+        page_tabs("iv-tab", [{"label": t, "value": k} for k, t in tabs], tab),
+        dcc.Store(id="iv-sub", data=sub if sub in dict(RECORD) else "receive"),
         dcc.Store(id="iv-rev", data=0),
         html.Div(id="iv-msg", className="inv-msg", role="status"),
         dcc.Loading(html.Div(id="iv-body"), type="dot", delay_show=400),
@@ -114,11 +118,12 @@ def _when(ts) -> str:
     return t.tz_convert(config.LOCAL_TZ).strftime("%a %b %-d, %-I:%M %p")
 
 
-def render(ds: M.Dataset, tab: str):
+def render(ds: M.Dataset, tab: str, sub: str = "receive"):
     p = perms()
     st = inv.state(ds.data_dir, ds.stations)
-    fn = {"stock": _stock, "trail": _trail, "receive": _receive, "move": _move, "count": _count,
-          "paper": _paper, "locations": _locations, "keys": _keys}.get(tab, _stock)
+    if tab == "record":
+        return _record(ds, st, p, sub)
+    fn = {"stock": _stock, "paper": _paper, "setup": _locations, "keys": _keys}.get(tab, _stock)
     if fn is _keys and not p["keys_view"]:
         return empty("The key log is for staff only.")
     return fn(ds, st, p)
@@ -169,10 +174,24 @@ def _stock(ds, st, p):
                className="footnote footnote--icon inv-bad") if neg else None,
         html.Div(className="card inv-tot", children=[html.H3("On hand by level"), table]),
         html.Div(className="card inv-tot inv-tot--last", children=[html.H3("By location"), rows]),
+        html.Div(className="card", children=[html.H3("Trail: every movement, newest first"), *_trail(ds, st, p)]),
         html.P([icon("shield" if ok else "alert"), html.Span(("Inventory record verified. " if ok else
                                                               "INVENTORY RECORD PROBLEM: ") + chain)],
                className="footnote footnote--icon" + ("" if ok else " inv-bad")),
     ]
+
+
+def _record(ds, st, p, sub):
+    """Record what happened: a delivery, a move, a count or a write-off. One form at a time."""
+    if not p["change"]:
+        return [empty("Recording changes needs a named staff account, so each change has a person behind it. "
+                      "Deliveries awaiting approval are listed below.", big=False), *_receive(ds, st, p)[1:]]
+    count, writeoff = _count(ds, st, p)
+    forms = {"receive": _receive(ds, st, p), "move": _move(ds, st, p), "count": count, "writeoff": writeoff}
+    return [html.Div(className="inv-record", children=[
+        html.Span("What happened?", className="inv-label"),
+        segmented("iv-rec", [{"label": t, "value": k} for k, t in RECORD], sub)]),
+        *[html.Div(forms[k], id=f"iv-rec-{k}", hidden=k != sub) for k, _ in RECORD]]
 
 
 # --- trail ---------------------------------------------------------------------------------------------------
@@ -201,9 +220,14 @@ def trail_table(ds, st, item, loc):
                         for x, a, s in zip(t["to"], t["action"], t["station_id"])]
         t["amount"] = [inv.fmt_qty(q, i) + (" (est.)" if a == "refill" else "") for q, i, a in
                        zip(t["qty"], t["item"], t["action"])]
-        t["detail"] = [" · ".join(x for x in (r, n, (f"variance {v:+g}" if isinstance(v, (int, float)) and v == v
-                                                       else "")) if x) for r, n, v in
-                       zip(t["reason"], t["note"], t["variance"])]
+        def variance(v, item):
+            if not isinstance(v, (int, float)) or v != v:
+                return ""
+            if abs(v) < 1e-9:
+                return "matches the record"
+            return f"{inv.fmt_qty(abs(v), item)} {'short' if v < 0 else 'over'}"
+        t["detail"] = [" · ".join(x for x in (r, n, variance(v, i)) if x) for r, n, v, i in
+                       zip(t["reason"], t["note"], t["variance"], t["item"])]
     return data_table(t, [("ts", "When", _when), ("what", "What", None), ("item_label", "Item", None),
                           ("amount", "How much", None), ("from_name", "From", None), ("to_name", "To", None),
                           ("by", "By", None), ("detail", "Notes", None)], max_rows=300,
@@ -360,8 +384,10 @@ def _count(ds, st, p):
                 html.Label(["Note (optional)", dcc.Input(id="ct-note", type="text", maxLength=300)]),
                 html.Button("Save the count", id="ct-go", className="btn btn--primary", n_clicks=0),
             ])]),
-        html.Details(className="card inv-new", children=[
-            html.Summary([icon("alert"), html.Span("Write off damaged, stolen or returned stock")]),
+        html.Div(className="card", children=[
+            html.H3("Write off damaged, stolen or returned stock"),
+            html.P("Damaged, stolen and returned stock is subtracted; found stock is added; a correction takes the "
+                   "sign you enter. Link the investigation if there is one.", className="muted"),
             html.Div(className="inv-form", children=[
                 html.Div(className="inv-pair", children=[
                     html.Label(["Item", dcc.Dropdown(id="wo-item", options=ITEM_OPTIONS)]),
@@ -576,9 +602,22 @@ def register(app, cache) -> None:
         mime = {v: k for k, v in EXT.items()}[name.rsplit(".", 1)[1]]
         return send_file(path, mimetype=mime, download_name=name, max_age=0)
 
-    @app.callback(Output("iv-body", "children"), Input("iv-tab", "value"), Input("iv-rev", "data"))
-    def body(tab, _rev):
-        return render(cache.get(), tab or "stock")
+    @app.callback(Output("iv-body", "children"), Input("iv-tab", "value"), Input("iv-rev", "data"),
+                  State("iv-sub", "data"))
+    def body(tab, _rev, sub):
+        return render(cache.get(), tab or "stock", sub or "receive")
+
+    @app.callback([Output(f"iv-rec-{k}", "hidden") for k, _ in RECORD] + [Output("iv-sub", "data")],
+                  Input("iv-rec", "value"), prevent_initial_call=True)
+    def record_form(sub):
+        return [k != sub for k, _ in RECORD] + [sub]
+
+    app.clientside_callback(
+        """function(tab, sub) {
+            var q = '?tab=' + encodeURIComponent(tab || 'stock') + (tab === 'record' && sub ? '&do=' + sub : '');
+            return window.location.search === q ? window.dash_clientside.no_update : q;
+        }""", Output("url", "search", allow_duplicate=True), Input("iv-tab", "value"), Input("iv-sub", "data"),
+        prevent_initial_call=True)
 
     @app.callback(Output("iv-tr-body", "children"), Input("iv-tr-item", "value"), Input("iv-tr-loc", "value"),
                   prevent_initial_call=True)

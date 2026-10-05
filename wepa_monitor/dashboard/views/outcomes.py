@@ -145,6 +145,12 @@ def render(ds: M.Dataset, theme: str, year, scope, draft: int = 0):
     p5 = ("Everything is computed only from time the monitor actually saw, gaps are reported rather than "
           "guessed, and nothing identifies a student: the data is about printers, not people.")
 
+    launch = ds.data_start is not None and start <= ds.data_start < end
+    if launch:
+        p1, p2, p4, p5, extra = launch_story(ds, s, when, p3)
+    else:
+        extra = []
+
     quote = s.get("quote", "").strip()
     pull = (html.Blockquote([html.Span("“", className="oc__qmark"), html.P(quote),
                              html.Cite(s.get("quote_by", ""))], className="oc__quote") if quote else
@@ -188,10 +194,15 @@ def render(ds: M.Dataset, theme: str, year, scope, draft: int = 0):
     credits = s.get("credits", "").strip()
     busiest = usage.head(1)
     title, subtitle = s.get("title", "Every Printer, Every Minute"), s.get("subtitle", "")
-    story = [html.P(p1, className="oc__lede"), html.P(p2), html.P(p3), pull, html.P(p4), html.P(p5)]
+    if launch:    # the findings sit inside the "early picture" paragraph, after the purpose and the value
+        story = [html.P(p1, className="oc__lede"), html.P(p2), pull, html.P(p4), *[html.P(x) for x in extra],
+                 html.P(p5)]
+    else:
+        story = [html.P(p1, className="oc__lede"), html.P(p2), html.P(p3), pull, html.P(p4), html.P(p5)]
     written_by = None
     copy = None if s.get("keep_my_text") else _ai_copy(
-        ds, year, scope, draft, when, [p1, p2, p3, p4, p5], numbers, busiest, quote)
+        ds, year, scope, draft, when, [p1, p2, p4, *extra, p5] if launch else [p1, p2, p3, p4, p5], numbers, busiest,
+        quote, launch)
     if copy:
         title = copy.get("title") or title
         subtitle = copy.get("subtitle") or subtitle
@@ -209,6 +220,7 @@ def render(ds: M.Dataset, theme: str, year, scope, draft: int = 0):
         html.H1(title, className="oc__title"),
         html.P(subtitle, className="oc__subtitle"),
         html.P(s.get("byline", ""), className="oc__byline") if s.get("byline") else None,
+        mission_block(s) if launch else None,
         html.Div(className="oc__layout", children=[
             html.Div(className="oc__story", children=[
                 *story,
@@ -260,7 +272,105 @@ Return ONLY a JSON object, no other text:
  "pull_quote": "one striking fact from the numbers as a short sentence (max 14 words), not attributed to a person"}"""
 
 
-def _ai_copy(ds, year, scope, draft, when, paragraphs, numbers, busiest, quote) -> dict | None:
+LAUNCH_PROMPT = """
+This is the LAUNCH YEAR: monitoring began during the period covered, so write it as a stakeholder briefing for IT
+leadership and partners, not just a recap. Over 6 or 7 paragraphs (50-90 words each), cover, in this order:
+1. What BSU Student Printing Ops is and its mission (use the mission statement given, in your own words).
+2. The business value: faster response, supplies and inventory accountability, evidence for the vendor (Wepa),
+   better printer placement, and reporting leadership can trust.
+3. Why data matters and how it matures the way the department works: from reacting to reports to measuring service
+   the way students experience it, with consistent definitions and a permanent record.
+4. The commitment to student success: printers working when assignments are due, and students pointed to the nearest
+   working printer.
+5. How it uses AI for analytics, with its guardrails exactly as described in the facts.
+6. What the first weeks of data show (the numbers), stated honestly as an early, partial picture: say when monitoring
+   began and that it does not tell the full story of the year.
+7. What's next: value grows as data accumulates; the predictive models are built in and say when they have enough
+   history (use the readiness facts given); these measures will be refined as the work continues.
+Keep it confident and professional, never hype. Do not claim results the numbers don't show."""
+
+
+def launch_facts(ds) -> list[str]:
+    """What the launch-year briefing may say about the system itself: start date, AI guardrails and how ready
+    each predictive model is."""
+    from ... import risk
+    began = ds.data_start.tz_convert(TZ)
+    out = [f"- Monitoring began {began:%A, %B %-d, %Y} at {began:%-I:%M %p}"
+           + (" (late at night)" if began.hour >= 21 or began.hour < 4 else "") + "."]
+    out.append("- AI: an analyst built on a large language model answers questions in plain English, drafts summaries "
+               "like this one, and reads supply invoices for a person to approve. It works only from figures the app "
+               "computes; numbers it writes are checked against the data, and anything it can't verify is flagged or "
+               "held back. It never receives information about individual students.")
+    card = None
+    try:
+        card = risk.load_card(ds)
+    except Exception:  # noqa: BLE001 - readiness is optional context
+        card = None
+    gate = risk.GATE
+    if card and card.get("status") == "live":
+        out.append("- Predictive model (outage risk for the next 24 hours): live; it beat the simple baseline in "
+                   "walk-forward testing.")
+    else:
+        out.append(f"- Predictive model (outage risk for the next 24 hours): built in and learning. It goes live "
+                   f"only after at least {gate['min_days']} days of history and {gate['min_train_pos']} outages to "
+                   "learn from, and only if it beats a simple baseline in testing.")
+    out.append("- Supply forecasts project each cartridge's replacement date from its own wear from the first week.")
+    out.append("- Seasonal comparisons and the year-end review of whether each printer is needed wait for a full "
+               "academic year of data.")
+    return out
+
+
+def mission_block(s: dict):
+    pillars = s.get("pillars") or []
+    return html.Section(className="oc__mission", children=[
+        html.Div("Our mission", className="oc__mission-label"),
+        html.P(s.get("mission", ""), className="oc__mission-text"),
+        html.Div(className="oc__pillars", children=[
+            html.Div([html.B(name), html.P(text)], className="oc__pillar") for name, text in pillars]),
+    ])
+
+
+def launch_story(ds, s: dict, when: str, findings: str) -> tuple[str, str, str, str, list[str]]:
+    """The built-in launch-year briefing (used when no AI model is configured, or as the AI's accurate draft)."""
+    from ... import risk
+    began = ds.data_start.tz_convert(TZ)
+    late = began.hour >= 21 or began.hour < 4
+    gate = risk.GATE
+    p1 = ("Student printing is a small service with a big moment: the paper due at 9 AM, the form that has to be "
+          "signed today. This year ResNet launched BSU Student Printing Ops to make sure that moment works. Its "
+          "mission: " + (s.get("mission") or "Keep every BSU print station ready when students need it."))
+    p2 = ("It replaces guesswork with measurement. Once a minute it reads the status of every Wepa print station on "
+          "campus and keeps what it sees, so the department can answer questions it never could before: how often "
+          "printers are really available, what breaks and why, how long repairs take, and where supplies are going. "
+          "Every figure is defined once and computed the same way every time, which is what makes it trustworthy "
+          "enough to act on and to report.")
+    p4 = ("The value is practical. Alerts and a prioritized Rounds route send staff to the right printer first. "
+          "Supply forecasts and a full inventory trail, from delivery to the printer it went into, keep shelves "
+          "stocked and every cartridge accounted for. Investigations build a documented evidence trail for "
+          "conversations with Wepa, and placement reviews show where a printer is missing or no longer needed. "
+          "For students, the result is simple: more printers working when it counts, and directions to the nearest "
+          "one that is.")
+    ai_p = ("The app also uses AI responsibly. A built-in analyst, powered by a large language model, answers "
+            "questions in plain English, drafts summaries such as this one, and reads supply invoices for a person "
+            "to approve. It works only from numbers the app has computed; figures it writes are checked against the "
+            "data, and anything it can't verify is flagged or held back. It never sees information about "
+            "individual students.")
+    early = (f"Monitoring began {'late on the night of ' if late else 'on '}{began:%A, %B %-d}, {began:%Y}"
+             + (f", at {began:%-I:%M %p}" if late else "") + ", so this year's figures are an early, partial "
+             "picture rather than the full story of the year. " + findings).strip()
+    nxt = ("Value grows with every week of data. Prediction is built in: supply forecasts already project when each "
+           "cartridge will need replacing, and an outage-risk model compares several methods against a simple "
+           f"baseline, going live only once it has at least {gate['min_days']} days of history and "
+           f"{gate['min_train_pos']} outages to learn from, and only if it proves more accurate. A full academic "
+           "year will add seasonal comparisons and a review of whether every printer earns its place. These "
+           "measures will be refined as the work continues.")
+    p5 = ("Underneath it all is a commitment to students: measure the service the way they experience it, act on "
+          "what the data shows, and keep improving. Everything is computed only from time the monitor actually saw, "
+          "gaps are reported rather than guessed, and nothing identifies a student.")
+    return p1, p2, p4, p5, [ai_p, early, nxt]
+
+
+def _ai_copy(ds, year, scope, draft, when, paragraphs, numbers, busiest, quote, launch=False) -> dict | None:
     """AI-written headline, subtitle, story and pull quote, from the computed figures only."""
     if not ai.enabled():
         return None
@@ -272,13 +382,19 @@ def _ai_copy(ds, year, scope, draft, when, paragraphs, numbers, busiest, quote) 
         facts.append(f"- Busiest printer: {b['description']} ({b['relative']:.1f}x the typical station)")
     if quote:
         facts.append("- A staff quote will appear on the page separately; don't write another.")
+    if launch:
+        s = _settings()
+        facts += ["Launch-year facts:", f"- Mission: {s.get('mission', '')}"]
+        facts += [f"- {name}: {text}" for name, text in s.get("pillars", [])]
+        facts += launch_facts(ds)
     if ds.is_demo:
         facts.append("- NOTE: this is DEMO DATA (synthetic); say it's a preview.")
     try:
         from ... import analyst
         from .common import scope_ids
-        r = ai.ask(OUTCOMES_PROMPT.replace("{when}", when), "\n".join(facts),
-                   cache_key=f"outcomes|{year}|{scope}|{draft}|{ds.as_of.floor('1h').isoformat()}", timeout=120,
+        prompt = OUTCOMES_PROMPT.replace("{when}", when) + (LAUNCH_PROMPT if launch else "")
+        r = ai.ask(prompt, "\n".join(facts),
+                   cache_key=f"outcomes|{year}|{scope}|{draft}|{launch}|{ds.as_of.floor('1h').isoformat()}", timeout=120,
                    toolkit=analyst.Toolkit(ds, scope_ids(ds, scope)), effort="medium")
         if r.unverified:            # a published report gets the built-in text rather than an unchecked figure
             return None

@@ -7,6 +7,16 @@
     answers: what is broken, for how long, why, when nobody was there to fix it, what to restock, and where a
     student should walk instead.</p>
 
+  <div class="callout"><b>Mission.</b> Keep every BSU print station ready when students need it, by measuring service
+    the way students experience it and acting on what the data shows.</div>
+  <div class="tbl"><table>
+    <tr><th>Measure</th><th>Act</th><th>Improve</th></tr>
+    <tr><td>Every station, every minute: availability, outages, causes, supplies and usage, computed the same way
+      every time.</td><td>Alerts, prioritized rounds, supply forecasts and inventory turn findings into the next visit,
+      the next order and the next fix.</td><td>Investigations, evidence for Wepa, placement reviews and reporting close
+      the loop, so service gets measurably better each term.</td></tr>
+  </table></div>
+
   <div class="extras">
     <div class="extra"><b class="lbl">What it watches</b>31 stations: 16 ResNet printers in and around the
       residence halls, 14 in Student Computer Labs, 1 at a satellite campus.</div>
@@ -14,8 +24,8 @@
       are kept too, so gaps are visible rather than guessed.</div>
     <div class="extra"><b class="lbl">Who it serves</b>Students, ResNet and IT Service Center staff, supervisors and
       IT leadership, each with their own view.</div>
-    <div class="extra"><b class="lbl">How it is built</b>Python, pandas and Dash; about 20,500 lines of application
-      code and 190 automated tests; deployed on Azure Container Apps.</div>
+    <div class="extra"><b class="lbl">How it is built</b>Python, pandas and Dash; about 24,000 lines of application
+      code and more than 200 automated tests; deployed on Azure Container Apps.</div>
   </div>
 
   <h3>What it does</h3>
@@ -30,9 +40,27 @@
       shown when it beats a simple baseline.</li>
     <li><b>Accountability:</b> permanent reference numbers for every outage, governed investigations with a
       tamper-evident trail for Wepa cases, named staff accounts and an audit log.</li>
+    <li><b>Supplies and keys:</b> an inventory of parts and paper from delivery to the printer each unit went into,
+      invoices read automatically and approved by a second person, counts that open an investigation when stock is
+      missing, weekly paper checks, and a log of who holds a Wepa kiosk key.</li>
     <li><b>Self-maintenance:</b> daily vulnerability checks ranked by real-world exploitation, reviewed update
       packages, backup collectors and a self-check.</li>
   </ul>
+
+  <h3>Who uses it, and where to start</h3>
+  <div class="tbl"><table>
+    <tr><th>Audience</th><th>Start here</th><th>What they get</th></tr>
+    <tr><td>IT leadership</td><td>Executive summary · IT Outcomes</td><td>Service levels for the month and year,
+      what changed, and a print-ready annual-report feature</td></tr>
+    <tr><td>Managers and supervisors</td><td>Overview · Analytics · Investigations · Inventory</td><td>What needs
+      attention, the station report card, root-cause work with an audit trail, and supply accountability</td></tr>
+    <tr><td>Data engineers and statisticians</td><td>Analytics › Forecasts &amp; statistics · System health</td>
+      <td>Stated definitions, sample sizes, confidence intervals, model back-tests and data-quality checks</td></tr>
+    <tr><td>Student workers</td><td>Overview · Rounds · Inventory › Record</td><td>The next printer to visit, the
+      route, and a place to record deliveries, moves and counts</td></tr>
+    <tr><td>Students</td><td>The student status page</td><td>Which printers work right now, and the nearest working
+      one they can walk into</td></tr>
+  </table></div>
 
   <figure class="plate">{{SVG_DESKS}}
     <figcaption><b>Figure 0.1 · When a support desk is staffed.</b> Drawn from the desk hours configured in the app
@@ -225,7 +253,7 @@ journey
 
   <h3 id="requirements">1.9 Requirements</h3>
   <p>Requirements are prioritized with MoSCoW and traced to the module that implements them. Status reflects version
-    1.4.0. Quality requirements are grouped by the ISO/IEC 25010 characteristic they serve.</p>
+    1.7.0. Quality requirements are grouped by the ISO/IEC 25010 characteristic they serve.</p>
   <div class="tbl"><table>
     <caption>Functional requirements</caption>
     <tr><th>ID</th><th>Requirement</th><th>Priority</th><th>Status</th><th>Where</th></tr>
@@ -258,6 +286,10 @@ journey
     <tr><td class="nw">FR-27</td><td>Backup collectors with a signed handshake</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>peer.py</code></td></tr>
     <tr><td class="nw">FR-28</td><td>Feature requests filed as GitHub issues</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>feedback.py</code></td></tr>
     <tr><td class="nw">FR-29</td><td>Campus map and Google Earth export</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>geo.py</code></td></tr>
+    <tr><td class="nw">FR-31</td><td>Inventory of parts and paper by location, with a trail of every unit, second-person approval of deliveries and investigations for shortfalls</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>inventory.py</code>, <code>ledger.py</code></td></tr>
+    <tr><td class="nw">FR-32</td><td>Read supply invoices (PDF or photo) into draft lines for approval</td><td><span class="tag tag--could">Could</span></td><td><span class="tag tag--ok">Done</span></td><td><code>inventory.py</code>, <code>ai.py</code></td></tr>
+    <tr><td class="nw">FR-33</td><td>Wepa kiosk key log; a lost key opens an investigation (staff only, never shared with AI)</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>keys.py</code></td></tr>
+    <tr><td class="nw">FR-34</td><td>Grouped navigation, one filter bar and a phone tab bar</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--ok">Done</span></td><td><code>dashboard/app.py</code></td></tr>
     <tr><td class="nw">FR-30</td><td>Single sign-on with BSU's Entra ID (MFA)</td><td><span class="tag tag--should">Should</span></td><td><span class="tag tag--part">Planned</span></td><td>Needs BSU IT registration</td></tr>
   </table></div>
   <div class="tbl"><table>

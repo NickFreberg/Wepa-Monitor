@@ -22,38 +22,47 @@ from .. import (activity, config, export, football, geo, metrics as M, roundsmap
                theme_art)
 from .charts import SECTION_ORDER
 from . import explain as X
-from .components import icon, prose, segmented
+from .components import icon, page_tabs, prose, segmented
 from .views import account_view, assistant, feedback_view, inventory_view, investigations_view, software
 from .views import (activity_log, analytics, executive, insights_view, outcomes, overview, rounds, station,
                     stations, system)
 from .views.common import PERIODS, area_key
 
-NAV = [("/", "Overview", "home"), ("/insights", "Insights", "sparkle"), ("/rounds", "Rounds", "route"),
-       ("/stations", "Stations", "grid"), ("/analytics", "Analytics", "chart"),
-       ("/executive", "Executive", "briefcase"), ("/outcomes", "IT Outcomes", "award"),
-       ("/investigations", "Investigations", "search"), ("/inventory", "Inventory", "boxes"),
-       ("/system", "System", "pulse"), ("/software", "Software", "shield")]
+# The main menu, in four groups by what people come to do. System health, Software and the Activity log are
+# for administrators and live in the account menu.
+NAV_GROUPS = [
+    ("Operate", [("/", "Overview", "home"), ("/rounds", "Rounds", "route"), ("/stations", "Stations", "grid")]),
+    ("Analyze", [("/insights", "Insights", "sparkle"), ("/analytics", "Analytics", "chart")]),
+    ("Report", [("/executive", "Executive", "briefcase"), ("/outcomes", "IT Outcomes", "award")]),
+    ("Manage", [("/investigations", "Investigations", "search"), ("/inventory", "Inventory", "boxes")]),
+]
+NAV = [item for _, items in NAV_GROUPS for item in items]
+ADMIN_NAV = [("/system", "System health", "pulse"), ("/software", "Software and security", "shield"),
+             ("/activity", "Activity log", "history")]
+TABBAR = ["/", "/rounds", "/stations", "/insights"]     # phones: these four, then More
+SHORT = {"/": "Overview", "/rounds": "Rounds", "/stations": "Stations", "/insights": "Insights"}
+ACTIVE_ALIASES = {"/station": "/stations", "/investigation": "/investigations", "/changelog": "/software",
+                  "/release": "/software"}
 PAGE_META = {
-    "/": ("Overview", "What needs attention right now."),
-    "/insights": ("Insights", "The story behind the numbers. Pick a time range, or ask a question."),
+    "/": ("Overview", "Live status of every print station, and what needs attention now."),
+    "/insights": ("Insights", "What happened and why, in plain language. Ask a question in your own words."),
     "/rounds": ("Rounds", "The fastest route to every printer that needs a visit, for whoever is on shift."),
-    "/stations": ("Stations", "Every print station. Click one for its full history."),
-    "/analytics": ("Analytics", "Reliability, faults, supplies, usage and the station report card."),
-    "/executive": ("Executive summary", "Month and year-to-date results, and what stands out."),
-    "/outcomes": ("IT Outcomes", "A ready-to-print page for the IT annual report."),
-    "/system": ("System", "Is the monitor healthy? Data quality, the live log, and who's using the site."),
-    "/activity": ("Activity", "Everything that happened, newest first."),
-    "/investigations": ("Investigations", "Root-cause work on recurring printer problems, with a permanent audit trail."),
-    "/inventory": ("Inventory", "Consumables and paper at every level, where each unit went, deliveries, counts "
-                                "and kiosk keys."),
-    "/account": ("My account", "Your picture, contact phone and password."),
-    "/directory": ("Directory", "Everyone with an account, managed centrally by the administrator."),
+    "/stations": ("Stations", "Every print station with its current status. Select one for its full history."),
+    "/analytics": ("Analytics", "Reliability, faults, supplies, usage, the station report card and forecasts."),
+    "/executive": ("Executive summary", "Service levels for the month and year to date, with what changed."),
+    "/outcomes": ("IT Outcomes", "A print-ready feature for the IT annual report, built from the monitoring data."),
+    "/system": ("System health", "Is the monitor healthy? Data quality, the live log and who is signed in."),
+    "/activity": ("Activity log", "Every status change, part replacement and system event, newest first."),
+    "/investigations": ("Investigations", "Root-cause work on recurring problems, with a permanent audit trail."),
+    "/inventory": ("Inventory", "Supplies on hand, where every unit went, deliveries, counts and kiosk keys."),
+    "/account": ("My account", "Your photo, contact phone and password."),
+    "/directory": ("Directory", "Everyone with an account. The administrator manages accounts."),
     "/investigation": ("Investigation", "One investigation: its record, decisions and audit trail."),
-    "/software": ("Software", "The running version, known vulnerabilities, updates, backup collectors and a "
-                              "self-check of the whole app."),
-    "/feedback": ("Suggest a feature", "Ideas and problem reports go straight to the app's GitHub repository."),
-    "/changelog": ("Change log", "What changed in each version, in plain English, with sources."),
-    "/release": ("Change log", "What changed in this version, in plain English, with sources."),
+    "/software": ("Software and security", "Running version, known vulnerabilities, updates, backup collectors "
+                                           "and a self-check of the whole app."),
+    "/feedback": ("Suggest a feature", "Ideas and problem reports go straight to the development backlog."),
+    "/changelog": ("Change log", "What changed in each version, in plain language, with sources."),
+    "/release": ("Change log", "What changed in this version, in plain language, with sources."),
 }
 USES_PERIOD = {"/analytics", "/station"}
 USES_SCOPE = {"/", "/insights", "/stations", "/analytics", "/executive", "/activity", "/outcomes"}
@@ -193,7 +202,50 @@ def _route(path: str | None) -> str:
     return {"/management": "/analytics", "/operations": "/", "/quality": "/system"}.get(path, path)
 
 
-def _scope_panel(ds: M.Dataset):
+def page_heading(route: str) -> tuple[str, str]:
+    if route == "/station":
+        return "Station", "Status, history and supplies for one print station."
+    return PAGE_META.get(route, ("Page not found", ""))
+
+
+def _nav_link(href: str, label: str, ic: str, here: str, cls: str = "nav__link"):
+    on = here == href
+    # dcc.Link takes no aria attributes; the active page is marked for screen readers in the label instead.
+    return dcc.Link([icon(ic), html.Span(label), html.Span(" (current page)", className="sr-only") if on else None],
+                    href=href, title=label, className=cls + (" is-active" if on else ""))
+
+
+def nav_menu(here: str) -> list:
+    """The sidebar: four labelled groups."""
+    return [html.Div(className="nav__group", role="group", **{"aria-label": group}, children=[
+        html.Div(group, className="nav__heading", **{"aria-hidden": "true"}),
+        *[_nav_link(href, label, ic, here) for href, label, ic in items]]) for group, items in NAV_GROUPS]
+
+
+def tabbar(here: str) -> list:
+    """Phones: the four most used pages along the bottom, and More for everything else, grouped."""
+    by = {href: (label, ic) for href, label, ic in NAV}
+    tabs = [_nav_link(href, SHORT[href], by[href][1], here, "tabbar__link") for href in TABBAR]
+    in_more = here not in TABBAR
+    more = html.Details(id="more", className="popover tabbar__more", children=[
+        html.Summary([icon("more"), html.Span("More")], className="tabbar__link" + (" is-active" if in_more else ""),
+                     title="All pages"),
+        html.Div(className="popover__panel more-sheet", children=[
+            *[html.Div(className="more-sheet__group", children=[
+                html.Div(group, className="more-sheet__heading"),
+                *[_nav_link(href, label, ic, here, "more-sheet__link") for href, label, ic in items]])
+              for group, items in NAV_GROUPS],
+            html.Div(className="more-sheet__group", children=[
+                html.Div("Administration", className="more-sheet__heading"),
+                *[_nav_link(href, label, ic, here, "more-sheet__link") for href, label, ic in ADMIN_NAV]]),
+        ]),
+    ])
+    return [*tabs, more]
+
+
+def _filter_panel(ds: M.Dataset):
+    """One Filters button, in the same place on every page that has filters, showing what's applied. Its panel
+    holds the stations and the reporting period, whichever the page uses."""
     sections = [s for s in SECTION_ORDER if s in set(ds.stations["section"])] + \
         sorted(set(ds.stations["section"]) - set(SECTION_ORDER))
     areas = sorted(set(ds.stations["area"]), key=area_key)
@@ -201,33 +253,43 @@ def _scope_panel(ds: M.Dataset):
     station_opts = [{"label": f"{r.description} #{r.station_id} · {r.building}", "value": r.station_id,
                      "search": f"{r.description} {r.station_id} {r.building} {r.area}"} for r in st.itertuples()]
     return html.Details(id="scope", className="popover", children=[
-        html.Summary([icon("filter"), html.Span("All stations", id="scope-label", className="topbar__label")],
-                     className="topbar__button", title="Choose which stations every page reports on"),
+        html.Summary([icon("sliders"), html.Span("Filters", className="filterbar__word"),
+                      html.Span("All stations", id="scope-label", className="filterbar__value"),
+                      html.Span(id="period-label", className="filterbar__value")],
+                     className="topbar__button filterbar__button",
+                     title="Choose the stations and period this page reports on"),
         html.Div(className="popover__panel popover__panel--wide", children=[
-            html.Div("Show stations", className="popover__title"),
-            html.Label("Find a station", className="popover__label", htmlFor="scope-stations"),
-            dcc.Dropdown(id="scope-stations", options=station_opts, value=[], multi=True, searchable=True,
-                         placeholder="Type a name, building or number…", className="dropdown",
-                         persistence=True, persistence_type="session"),
-            html.Div(className="popover__cols", children=[
-                html.Div([html.Div("Section", className="popover__label"),
-                          dcc.Checklist(id="scope-sections", options=[{"label": x, "value": x} for x in sections],
-                                        value=[], className="checks", labelClassName="checks__opt",
-                                        persistence=True, persistence_type="session")]),
-                html.Div([html.Div("Area", className="popover__label"),
-                          dcc.Checklist(id="scope-areas", options=[{"label": x, "value": x} for x in areas],
-                                        value=[], className="checks", labelClassName="checks__opt",
-                                        persistence=True, persistence_type="session")]),
+            html.Div(id="period-wrap", className="filter-section", children=[
+                html.Div("Period", className="popover__title"),
+                segmented("period", [{"label": PERIODS[k].capitalize() if k == "all" else f"Last {PERIODS[k]}",
+                                      "value": k} for k in PERIODS], "30", persistence="session"),
             ]),
-            html.Button("Show all stations", id="scope-reset", className="btn btn--sm btn--block"),
+            html.Div(id="scope-wrap", className="filter-section", children=[
+                html.Div("Stations", className="popover__title"),
+                html.Label("Find a station", className="popover__label", htmlFor="scope-stations"),
+                dcc.Dropdown(id="scope-stations", options=station_opts, value=[], multi=True, searchable=True,
+                             placeholder="Type a name, building or number…", className="dropdown",
+                             persistence=True, persistence_type="session"),
+                html.Div(className="popover__cols", children=[
+                    html.Div([html.Div("Section", className="popover__label"),
+                              dcc.Checklist(id="scope-sections", options=[{"label": x, "value": x} for x in sections],
+                                            value=[], className="checks", labelClassName="checks__opt",
+                                            persistence=True, persistence_type="session")]),
+                    html.Div([html.Div("Area", className="popover__label"),
+                              dcc.Checklist(id="scope-areas", options=[{"label": x, "value": x} for x in areas],
+                                            value=[], className="checks", labelClassName="checks__opt",
+                                            persistence=True, persistence_type="session")]),
+            ]),
+            ]),
+            html.Button("Clear filters", id="scope-reset", className="btn btn--sm btn--block"),
         ]),
     ])
 
 
 def _appearance_panel():
-    return html.Details(id="appearance", className="popover", children=[
-        html.Summary(icon("palette", "Appearance"), className="topbar__icon-btn", title="Choose an appearance"),
-        html.Div(className="popover__panel popover__panel--wide appearance", children=[
+    return html.Details(id="appearance", className="menu-section", children=[
+        html.Summary([icon("palette"), html.Span("Appearance")], className="user-panel__link"),
+        html.Div(className="appearance", children=[
             html.Div("Choose an appearance", className="popover__title"),
             html.P("Make it yours. Your choices are saved in this browser.", className="popover__hint"),
             dcc.RadioItems(id="theme-switch", value="crimson", persistence=True, persistence_type="local",
@@ -253,8 +315,8 @@ def _appearance_panel():
 
 def _export_panel():
     return html.Details(id="export", className="popover", children=[
-        html.Summary([icon("download"), html.Span("Export", className="topbar__label")], className="topbar__button",
-                     title="Download the data behind this page"),
+        html.Summary([icon("download"), html.Span("Download", className="filterbar__word")],
+                     className="topbar__button", title="Download the data behind this page"),
         html.Div(className="popover__panel popover__panel--wide", children=[
             html.Div("Download data", className="popover__title"),
             html.P("Uses the stations and period you've chosen.", className="popover__hint"),
@@ -301,21 +363,20 @@ def _shell(ds: M.Dataset):
         ]),
         html.Div(className="main", children=[
             html.Header(className="topbar", children=[
+                dcc.Link(html.Span([html.I(), html.I(), html.I()], className="brand__mark", role="img",
+                                   **{"aria-label": "BSU Student Printing Ops: Overview"}),
+                         href="/", className="topbar__brand"),
                 html.Div([html.H1(id="page-title", className="topbar__title"),
                           html.P(id="page-sub", className="topbar__sub")], className="topbar__heading"),
                 html.Div(className="topbar__tools", children=[
-                    html.Div(_scope_panel(ds), id="scope-wrap"),
-                    html.Div(segmented("period", [{"label": k if k == "all" else f"{k}d", "value": k}
-                                                  for k in PERIODS], "30", persistence="session"),
-                             id="period-wrap", title="Reporting period"),
-                    _export_panel(),
-                    dcc.Link(icon("history", "Activity log"), href="/activity", id="activity-link",
-                             className="topbar__icon-btn", title="Activity log"),
-                    html.Button([icon("bell", "Notifications"), html.Span(id="bell-count", className="badge")],
-                                id="bell", className="topbar__icon-btn", title="Notifications"),
-                    _appearance_panel(),
+                    html.Button([icon("bell", "Alerts"), html.Span(id="bell-count", className="badge")],
+                                id="bell", className="topbar__icon-btn", title="Alerts and recent activity"),
                     assistant.button(),
-                    account_view.user_menu(),
+                    account_view.user_menu(admin_links=ADMIN_NAV, appearance=_appearance_panel()),
+                ]),
+                html.Div(id="filterbar", className="filterbar", children=[
+                    _filter_panel(ds),
+                    html.Div(id="export-wrap", children=_export_panel()),
                 ]),
             ]),
             html.Div(id="gameday-banner", className="gameday-banner", hidden=True),
@@ -329,6 +390,7 @@ def _shell(ds: M.Dataset):
             html.Div(id="banner"),
             html.Main(id="content", className="content", tabIndex="-1"),
         ]),
+        html.Nav(id="tabbar", className="tabbar", **{"aria-label": "Main (phone)"}),
         assistant.pane(),
         html.Div(id="egg-toast", className="egg-toast", role="status", **{"aria-live": "polite"}),
         dcc.Store(id="hints-off", storage_type="local"),
@@ -345,14 +407,14 @@ def _shell(ds: M.Dataset):
         ]),
         html.Div(id="drawer", className="drawer", children=[
             html.Div(id="drawer-backdrop", className="drawer__backdrop"),
-            html.Aside(className="drawer__panel", role="dialog", **{"aria-label": "Notifications"}, children=[
+            html.Aside(className="drawer__panel", role="dialog", **{"aria-label": "Alerts"}, children=[
                 html.Div(className="drawer__head", children=[
-                    html.H2("Notifications"),
+                    html.H2("Alerts"),
                     html.Div([html.Button("Mark all read", id="mark-read", className="btn btn--sm"),
                               html.Button(icon("x", "Close"), id="drawer-close", className="topbar__icon-btn")],
                              className="drawer__actions"),
                 ]),
-                html.P("Stations going down or coming back, and monitoring gaps, from the last 72 hours.",
+                html.P("Stations going down or coming back, and gaps in monitoring, from the last 72 hours.",
                        className="drawer__sub"),
                 html.Div(id="drawer-body", className="drawer__body"),
                 dcc.Link("Open the full activity log", href="/activity", className="link drawer__foot",
@@ -531,24 +593,21 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
     )
 
     # --- navigation & page chrome ---------------------------------------------------------------
-    @app.callback(Output("nav", "children"), Output("page-title", "children"), Output("page-sub", "children"),
-                  Output("period-wrap", "hidden"), Output("scope-wrap", "hidden"),
-                  Output("activity-link", "className"), Input("url", "pathname"))
+    @app.callback(Output("nav", "children"), Output("tabbar", "children"), Output("page-title", "children"),
+                  Output("page-sub", "children"), Output("period-wrap", "hidden"), Output("scope-wrap", "hidden"),
+                  Output("filterbar", "hidden"), Output("export-wrap", "hidden"), Input("url", "pathname"))
     def chrome(path):
         route = _route(path)
-        links = [dcc.Link([icon(ic), html.Span(label)], href=href, title=label,
-                          className="nav__link" + (" is-active" if route == href or
-                                                   (href == "/stations" and route == "/station") or
-                                                   (href == "/investigations" and route == "/investigation") or
-                                                   (href == "/software" and route in ("/changelog", "/release"))
-                                                   else ""))
-                 for href, label, ic in NAV]
-        if route == "/station":
-            title, sub = "Station", "Status, history and consumables for one print station."
-        else:
-            title, sub = PAGE_META.get(route, ("Not found", ""))
-        return (links, title, sub, route not in USES_PERIOD, route not in USES_SCOPE,
-                "topbar__icon-btn" + (" is-active" if route == "/activity" else ""))
+        here = ACTIVE_ALIASES.get(route, route)
+        return (nav_menu(here), tabbar(here), *page_heading(route), route not in USES_PERIOD,
+                route not in USES_SCOPE, route not in USES_PERIOD | USES_SCOPE,
+                route not in USES_PERIOD | USES_SCOPE)
+
+    @app.callback(Output("period-label", "children"), Input("period", "value"), Input("url", "pathname"))
+    def period_label(period, path):
+        if _route(path) not in USES_PERIOD:
+            return ""
+        return "All time" if period == "all" else f"Last {PERIODS.get(period or '30', '30 days')}"
 
     @app.callback(Output("scope-store", "data"), Output("scope-label", "children"),
                   Input("scope-sections", "value"), Input("scope-areas", "value"), Input("scope-stations", "value"))
@@ -610,8 +669,7 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             tab = params.get("tab", "reliability")
             if tab == "quality":
                 return system.layout()
-            return [html.Div(segmented("an-tab", analytics.TABS, tab,
-                                       persistence="session"), className="toolbar"), loading("an-body")]
+            return [page_tabs("an-tab", analytics.TABS, tab), loading("an-body")]
         if route == "/executive":
             opts = executive.month_options(ds)
             return [html.Div(segmented("ex-month", opts, executive.default_month(ds)), className="toolbar"),
@@ -985,6 +1043,14 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
         return investigations_view.render_detail(ds, ref), msg
 
     inventory_view.register(app, cache)
+
+    # Page tabs go into the address, so a tab can be bookmarked, shared or reopened.
+    for tab_id, key, default in (("an-tab", "tab", "reliability"), ("inv-filter", "show", "open")):
+        app.clientside_callback(
+            f"""function(v) {{
+                var q = (v && v !== '{default}') ? '?{key}=' + encodeURIComponent(v) : '';
+                return window.location.search === q ? window.dash_clientside.no_update : q;
+            }}""", Output("url", "search", allow_duplicate=True), Input(tab_id, "value"), prevent_initial_call=True)
 
     # --- assistant pane ------------------------------------------------------------------------------
     # Opening the assistant always starts a new chat: the old conversation is deleted, not just hidden.

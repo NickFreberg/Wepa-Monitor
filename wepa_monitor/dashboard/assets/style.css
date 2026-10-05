@@ -652,6 +652,15 @@ details.popover[open] > summary { border-color: var(--ink-2); }
 .oc__credit p { margin: 0; }
 .oc__credit-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--oc-gold);
   color: #fff; flex: none; }
+.oc__mission { margin: 4px 0 22px; padding: 18px 20px; border-radius: 16px; background: var(--oc-crimson, #89191f); color: #fff;
+  font-family: system-ui, sans-serif; break-inside: avoid; }
+.oc__mission-label { font-size: 11.5px; font-weight: 750; letter-spacing: .2em; text-transform: uppercase; color: #ffd77a; }
+.oc__mission-text { margin: 6px 0 14px; font: 700 clamp(17px, 1.6vw, 21px)/1.35 system-ui, sans-serif; }
+.oc__pillars { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.oc__pillar { padding: 10px 12px; border-radius: 12px; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .22); }
+.oc__pillar b { display: block; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: #ffd77a; }
+.oc__pillar p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; color: #fff; }
+@media print { .oc__mission { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 .oc__numbers { background: #efedea; border-radius: 18px; padding: 18px 16px; align-self: start;
   font-family: system-ui, sans-serif; }
 .oc__numbers h3 { text-align: center; font: 800 19px/1.2 system-ui, sans-serif; color: #1c1717; margin: 0 0 12px; }
@@ -1375,3 +1384,107 @@ body::after { background: var(--pattern-b); transform: translate(var(--pat-shift
 }
 .inv-tot:not(.inv-tot--last) td:not(:first-child), .inv-tot:not(.inv-tot--last) th:not(:first-child),
 .inv-tot--last td:last-child, .inv-tot--last th:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================================================
+   Shell, version 1.7: a grouped menu, a three-button header, one filter bar, and a tab bar on phones.
+   ========================================================================================================== */
+.nav { gap: 14px; }
+.nav__group { display: flex; flex-direction: column; gap: 2px; }
+.nav__heading { padding: 0 10px 4px; font-size: 10.5px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--side-muted); }
+@media (max-height: 760px) and (min-width: 901px) { .nav { gap: 8px; } .nav__heading { padding-bottom: 2px; } }
+@media (max-width: 1180px) and (min-width: 901px) {
+  .nav__heading { font-size: 0; padding: 0; height: 1px; margin: 2px 14px; background: var(--side-border); }
+}
+
+/* Header: page title on the left; Alerts, Assistant and the account menu on the right; filters underneath. */
+.topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 20px; }
+.topbar__brand { display: none; }
+.topbar__tools { margin-left: 0; flex-wrap: nowrap; gap: 8px; }
+.filterbar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filterbar[hidden] { display: none !important; }
+.filterbar__button { max-width: 100%; }
+.filterbar__word { font-weight: 650; }
+.filterbar__value { display: inline-block; padding: 2px 9px; border-radius: 99px; background: var(--surface-2);
+  color: var(--ink-2); font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 220px; }
+.filterbar__value:empty { display: none; }
+#scope-label { display: inline-block; max-width: 220px; }
+.filterbar #scope .popover__panel { left: 0; right: auto; }
+.filter-section { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--hairline); }
+.filter-section:last-of-type { border-bottom: 0; margin-bottom: 4px; padding-bottom: 0; }
+#export-wrap { margin-left: auto; }
+#export-wrap .popover__panel { right: 0; left: auto; }
+
+/* Account menu: profile, Appearance (expands in place), administration, sign out. */
+.user-panel { width: 320px; max-height: min(82vh, 720px); overflow: auto; }
+.user-panel__heading { margin: 8px 6px 2px; font-size: 10.5px; font-weight: 750; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--muted); }
+.user-panel__rule { border: 0; border-top: 1px solid var(--hairline); margin: 6px 0; }
+.user-panel__note { font-size: 12.5px; margin: 4px 6px; }
+.menu-section > summary { list-style: none; cursor: pointer; }
+.menu-section > summary::-webkit-details-marker { display: none; }
+.menu-section > summary::after { content: "›"; margin-left: auto; color: var(--muted); transition: transform .15s; }
+.menu-section[open] > summary::after { transform: rotate(90deg); }
+.menu-section .appearance { padding: 6px 6px 10px; }
+
+/* Phones: no sidebar. A compact header (logo, title, three buttons) and a tab bar along the bottom. */
+.tabbar { display: none; }
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .topbar { position: sticky; top: 0; grid-template-columns: auto minmax(0, 1fr) auto; padding: 8px 12px; gap: 8px 10px;
+    padding-top: max(8px, env(safe-area-inset-top)); }
+  .topbar__brand { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; text-decoration: none;
+    background: var(--side-bg); }   /* the sidebar's colors, so the mark reads the same as on a computer */
+  .topbar__brand .brand__mark { width: 28px; height: 28px; }
+  .topbar__title { font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar__sub { display: none; }
+  .topbar__tools { width: auto; gap: 6px; }
+  .topbar__tools .topbar__icon-btn, .topbar__tools .assist-btn { height: 40px; min-width: 40px; justify-content: center; }
+  .assist-btn__label { display: none; }
+  .filterbar { gap: 6px; }
+  .filterbar__word { display: none; }
+  .filterbar__value { max-width: 46vw; }
+  .content { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0;
+    z-index: 40; padding: 4px 4px max(4px, env(safe-area-inset-bottom)); background: var(--side-bg);
+    border-top: 1px solid var(--side-border); box-shadow: 0 -6px 20px rgba(0, 0, 0, .12); }
+  .tabbar__link { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-height: 52px; padding: 4px 2px; border-radius: 12px; color: var(--side-ink); text-decoration: none; font-size: 11px;
+    font-weight: 650; list-style: none; cursor: pointer; }
+  .tabbar__link::-webkit-details-marker { display: none; }
+  .tabbar__link .icon { width: 22px; height: 22px; }
+  .tabbar__link.is-active { background: var(--side-active-bg); color: var(--side-active-ink); }
+  .tabbar__more { position: static; }
+  .tabbar__more > .more-sheet { position: fixed; left: 8px; right: 8px; top: auto; bottom: calc(68px + env(safe-area-inset-bottom));
+    width: auto; max-height: 72vh; overflow: auto; padding: 10px 12px; border-radius: 16px; }
+  .popover__panel.user-panel { position: fixed; left: 8px; right: 8px; top: 60px; width: auto; max-height: calc(100dvh - 150px); }
+  .filterbar .popover__panel, #export-wrap .popover__panel { position: fixed; left: 8px; right: 8px; top: 110px; width: auto;
+    max-height: calc(100dvh - 200px); }
+}
+.more-sheet__group { display: grid; gap: 2px; padding: 4px 0 8px; }
+.more-sheet__group + .more-sheet__group { border-top: 1px solid var(--hairline); padding-top: 8px; }
+.more-sheet__heading { padding: 0 8px 2px; font-size: 10.5px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--muted); }
+.more-sheet__link { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 10px; border-radius: 10px;
+  color: var(--ink); text-decoration: none; font-weight: 600; }
+.more-sheet__link .icon { color: var(--muted); }
+.more-sheet__link.is-active { background: var(--surface-2); }
+@media print { .tabbar, .filterbar { display: none !important; } }
+
+/* Page tabs: one underlined row along the top of a page, scrolling sideways on a phone rather than wrapping. */
+.tabs-wrap { margin: 0 0 18px; border-bottom: 1px solid var(--hairline); overflow-x: auto; scrollbar-width: none; }
+.tabs-wrap::-webkit-scrollbar { display: none; }
+.tabs { display: flex; gap: 2px; white-space: nowrap; }
+.tabs > label { position: relative; display: inline-flex; margin: 0; cursor: pointer; }
+.tabs .dash-options-list-option-wrapper { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); opacity: 0; }
+.tabs__opt { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; color: var(--ink-2);
+  font-weight: 600; font-size: 14.5px; border-radius: 8px 8px 0 0; user-select: none; }
+.tabs > label:hover .tabs__opt { color: var(--ink); background: var(--surface-2); }
+.tabs > label.selected .tabs__opt { color: var(--ink); }
+.tabs > label.selected::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px;
+  border-radius: 3px 3px 0 0; background: var(--brand, #89191f); }
+:root[data-theme="dark"] .tabs > label.selected::after { background: #e0636b; }
+.tabs > label:has(input:focus-visible) .tabs__opt { outline: 2px solid var(--accent); outline-offset: -2px; }
+.inv-record { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 14px; }
