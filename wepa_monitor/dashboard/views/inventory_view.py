@@ -128,9 +128,10 @@ def render(ds: M.Dataset, tab: str):
 
 def _stock(ds, st, p):
     if st["started"] is None:
-        return [empty("Inventory isn't set up yet. The administrator adds storage locations (Locations tab); then "
-                      "receive the first delivery or count what's on the shelves, and automatic deductions start "
-                      "from that moment.", big=False)]
+        return [empty("Inventory isn't started yet. Receive the first delivery or count what's on the shelves "
+                      "(parts in central storage; paper in central storage, the closets and under the kiosks), and "
+                      "automatic deductions start from that moment. The administrator records where central storage "
+                      "and the closets are on the Locations tab.", big=False)]
     t = inv.totals(st)
     paper = t[t["item"] == inv.PAPER].iloc[0]
     parts = t[t["item"] != inv.PAPER]
@@ -147,7 +148,8 @@ def _stock(ds, st, p):
     ])
     shown = t.copy()
     for c in ("central", "closets", "kiosks", "total"):
-        shown[c] = [_num(v, i) for v, i in zip(t[c], t["item"])]
+        shown[c] = [_num(v, i) if i == inv.PAPER or c in ("central", "total") or abs(v) > 1e-9 else "—"
+                    for v, i in zip(t[c], t["item"])]
     shown["item_label"] = [lbl + (" (reams)" if i == inv.PAPER else "") for lbl, i in zip(t["item_label"], t["item"])]
     table = data_table(shown, [("item_label", "Item", None), ("central", "Central", None), ("closets", "Closets", None),
                                ("kiosks", "Under kiosks", None), ("total", "Total", None)])
@@ -158,7 +160,7 @@ def _stock(ds, st, p):
     b["on_hand"] = [html.Span(inv.fmt_qty(v, i), className="inv-bad" if v < 0 else None)
                     for v, i in zip(b["qty"], b["item"])]
     rows = data_table(b, [("location_name", "Location", None), ("building", "Building", None),
-                          ("item_label", "Item", None), ("on_hand", "On hand", None)],
+                          ("item_label", "Item", None), ("on_hand", "On hand", lambda v: v)],
                       max_rows=500, empty="Nothing on hand anywhere yet.")
     return [
         tiles,
@@ -321,12 +323,13 @@ def _move(ds, st, p):
     opts = _loc_options(st)
     return [html.Div(className="card", children=[
         html.H3("Move stock"),
-        html.P("Record it whenever supplies change places: central storage to a hall's closet, a closet to under a "
-               "kiosk, one closet to another. The automatic deductions then take parts and paper from the right place.",
-               className="muted"),
+        html.P("Record it whenever paper changes places: central storage to a telecom or paper closet, a closet to "
+               "under a kiosk, one closet to another. Parts (toner, drums, belts, fusers) stay in central storage "
+               "until they go into a printer, and that's deducted automatically.", className="muted"),
         html.Div(className="inv-form", children=[
             html.Div(className="inv-pair", children=[
-                html.Label(["Item", dcc.Dropdown(id="mv-item", options=ITEM_OPTIONS, value=inv.PAPER, clearable=False)]),
+                html.Label(["Item", dcc.Dropdown(id="mv-item", options=ITEM_OPTIONS, value=inv.PAPER,
+                                                 clearable=False)]),
                 html.Label(["How much (paper in reams, to two decimals)",
                             dcc.Input(id="mv-qty", type="number", min=0, step=0.01, inputMode="decimal")])]),
             html.Div(className="inv-pair", children=[
@@ -378,7 +381,8 @@ def _count(ds, st, p):
 def count_fields(st: dict, loc: str | None):
     if not loc:
         return html.P("Pick a location.", className="inv-hint")
-    items = [inv.PAPER] if loc.startswith("paper:") else list(inv.ITEMS)
+    kind = st["locations"].get(loc, {}).get("kind", "")
+    items = [i for i in inv.ITEMS if inv.allowed(i, kind)]
     return [html.Label([f"{inv.ITEMS[i]}", html.Span(f"on record: {inv.fmt_qty(st['stock'].get((loc, i), 0.0), i)}",
                                                      className="inv-hint"),
                         dcc.Input(id={"type": "ct-n", "item": i}, type="number", min=0,
@@ -424,8 +428,10 @@ def _locations(ds, st, p):
         locs = locs.sort_values(["active", "kind", "name"], ascending=[False, True, True])
     table = data_table(locs, [("name", "Name", None), ("kind_label", "Kind", None), ("building", "Building", None),
                               ("notes", "Notes", None), ("state", "", None)], empty="No storage locations yet.")
-    out = [html.P("Kiosk locations (under each printer) are automatic. Storage is defined here and can change: "
-                  "closets move, so edit a location rather than adding a new one, and its history stays with it.",
+    out = [html.P("Parts are kept only in central storage; paper can be in central storage, a building's telecom "
+                  "closet, a hall's paper closet, or under a kiosk (those are automatic). Central storage exists "
+                  "from the start even if nobody knows where it is: edit it to record the room once it's found. "
+                  "Closets move too, so edit a location rather than adding a new one, and its history stays with it.",
                   className="muted"), html.Div(className="card", children=[html.H3("Storage locations"), table])]
     if not p["configure"]:
         return out + [html.P("Only the administrator adds or changes locations.", className="inv-hint")]
@@ -440,6 +446,7 @@ def _locations(ds, st, p):
                 {"label": "Paper closet (a residence hall's)", "value": "paper"}])]),
             html.Label(["Name", dcc.Input(id="lc-name", type="text", maxLength=80,
                                           placeholder="e.g. Shea Hall telecom closet, room 012")]),
+            html.P("Paper only: parts always stay in central storage.", className="inv-hint"),
             html.Label(["Building", dcc.Dropdown(id="lc-bld", options=bopts, placeholder="Building (not needed for "
                                                                                        "central storage)")]),
             html.Label(["Notes", dcc.Input(id="lc-notes", type="text", maxLength=300,

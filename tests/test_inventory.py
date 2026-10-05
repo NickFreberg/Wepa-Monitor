@@ -28,7 +28,7 @@ def _setup(ds):
     d = ds.data_dir
     sid = ds.stations["station_id"].iloc[0]
     bld = ds.stations.set_index("station_id").at[sid, "building"]
-    central = inv.add_location(d, A, "central", "Central storage (Library basement)")
+    central = inv.DEFAULT_CENTRAL
     closet = inv.add_location(d, A, "closet", f"{bld} telecom closet", building=bld)
     rid = inv.draft_receipt(d, A, [{"item": "toner_k", "qty": 6, "to": central},
                                    {"item": "paper", "qty": 40, "to": central}], vendor="CDW", stations=ds.stations)
@@ -78,7 +78,7 @@ def test_moves_counts_and_the_trail(ds):
     assert st["stock"][(central, "paper")] == 30
     assert st["stock"][(closet, "paper")] == 7.5
     with pytest.raises(inv.InventoryError, match="on record"):
-        inv.move(d, A, "toner_k", 99, central, closet, stations=ds.stations)
+        inv.move(d, A, "paper", 99, central, closet, stations=ds.stations)
     t = inv.totals(st).set_index("item")
     assert t.at["paper", "total"] == 40 and t.at["paper", "kiosks"] == 2.5
     trail = inv.trail(d, item="paper")
@@ -111,7 +111,7 @@ def test_write_offs_take_the_reasons_sign(ds):
 
 def test_automatic_deductions_follow_the_trail(ds):
     d, sid, bld, central, closet = _setup(ds)
-    inv.move(d, A, "toner_k", 1, central, closet, stations=ds.stations)
+    inv.move(d, A, "paper", 5, central, closet, stations=ds.stations)
     t0 = pd.Timestamp(inv.state(d)["started"], unit="s", tz="UTC") + pd.Timedelta(minutes=1)
     ds.repl = pd.DataFrame([{"station_id": sid, "component": "toner_k", "ts": t0, "level_before": 2, "level_after": 100},
                             {"station_id": sid, "component": "toner_k", "ts": t0 + pd.Timedelta(days=1),
@@ -121,9 +121,9 @@ def test_automatic_deductions_follow_the_trail(ds):
     assert inv.sync(ds) == 3
     assert inv.sync(ds) == 0                                           # idempotent
     st = inv.state(d, ds.stations)
-    assert st["stock"][(closet, "toner_k")] == 0                       # the building's closet first...
-    assert st["stock"][(central, "toner_k")] == 4                      # ...then central storage
-    assert st["stock"][(central, "paper")] == round(40 - inv.DEFAULT_TRAY_REAMS, 2)
+    assert st["stock"][(central, "toner_k")] == 4                      # parts: always central storage
+    assert st["stock"][(closet, "paper")] == round(5 - inv.DEFAULT_TRAY_REAMS, 2)   # paper: the building's closet
+    assert st["stock"][(central, "paper")] == 35
 
 
 def test_no_deductions_before_tracking_starts(ds):
@@ -203,3 +203,22 @@ def test_assistant_gets_bsu_policy_facts_but_never_the_key_log(ds):
     assert any("academic work only" in ln for ln in kb) and any("8 cents" in ln for ln in kb)
     keys.add_holder(ds.data_dir, A, "Private Person", "pp@bridgew.edu", "Staff")
     assert "Private Person" not in ai.facts(ds) and "pp@bridgew.edu" not in ai.facts(ds)
+
+
+def test_parts_stay_in_central_storage_and_paper_goes_anywhere(ds):
+    d, sid, bld, central, closet = _setup(ds)
+    st = inv.state(d, ds.stations)
+    assert st["locations"][inv.DEFAULT_CENTRAL]["kind"] == "central"      # exists before anyone finds the room
+    for bad in (lambda: inv.move(d, A, "toner_k", 1, central, closet, stations=ds.stations),
+                lambda: inv.move(d, A, "drum_c", 1, central, f"kiosk:{sid}", stations=ds.stations),
+                lambda: inv.count(d, A, closet, {"fuser": 1}),
+                lambda: inv.draft_receipt(d, A, [{"item": "belt", "qty": 1, "to": closet}])):
+        with pytest.raises(inv.InventoryError, match="only in central storage"):
+            bad()
+    inv.move(d, A, "paper", 1.5, central, f"kiosk:{sid}", stations=ds.stations)
+    inv.update_location(d, A, central, name="Central storage, Maxwell Library B12", building="Maxwell Library")
+    assert inv.state(d)["locations"][central]["building"] == "Maxwell Library"
+    inv.adjust(d, A, "toner_k", 6, central, "returned to vendor", "test")
+    inv.adjust(d, A, "paper", 38.5, central, "returned to vendor", "test")
+    with pytest.raises(inv.InventoryError, match="last"):               # parts always need a central storage
+        inv.retire_location(d, A, central)

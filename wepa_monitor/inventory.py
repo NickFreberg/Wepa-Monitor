@@ -5,10 +5,14 @@ Items
   paper, counted in reams to two decimals (a refill seldom uses a whole ream).
 
 Locations (the administrator defines all but the kiosks; closets move, so they're editable)
-  central      Central storage
+  central      Central storage. One always exists ("Central storage", where to be recorded) so stock has a
+               home before anyone has found the room; the administrator fills in where it is.
   closet       a building's telecom closet
   paper        a residence hall's paper closet
   kiosk        under a print kiosk: one per station, automatic
+
+Where things may be kept: parts (toner, drums, belts, fusers) only ever in central storage; paper anywhere
+(central storage, a telecom or paper closet, under a kiosk).
 
 The ledger (records/inventory.jsonl, hash-chained: see ledger.py). Every change is an entry; stock is the
 replay of the entries, so every unit's trail is there to read:
@@ -26,9 +30,9 @@ replay of the entries, so every unit's trail is there to read:
   kiosk.config    a kiosk's tray size (reams one refill uses)
   start           when tracking began: automatic deductions only count events after it
 
-Where an automatic deduction comes from: the kiosk's own stock if it has the part, else a closet in the same
-building, else central storage. If none had it, the deduction still happens (the part came from
-somewhere), the balance goes negative, and the location is flagged for a count.
+Where an automatic deduction comes from: a part, always central storage. Paper: the kiosk's own stock if it
+has any, else a closet in the same building, else central storage. If none had it, the deduction still
+happens (it came from somewhere), the balance goes negative, and the location is flagged for a count.
 """
 from __future__ import annotations
 
@@ -51,8 +55,23 @@ PAPER_CHECK_DAYS = 7                 # paper is counted at least weekly; Friday 
 PAPER_CHECK_WEEKDAY = 4              # Friday
 
 
+DEFAULT_CENTRAL = "central:main"
+PART_KINDS = ("central",)            # parts are only ever kept in central storage
+
+
 class InventoryError(ValueError):
     pass
+
+
+def allowed(item: str, kind: str) -> bool:
+    """Parts are kept only in central storage; paper anywhere."""
+    return item == PAPER or kind in PART_KINDS
+
+
+def _allowed_at(st: dict, item: str, loc: str) -> None:
+    L = st["locations"].get(loc)
+    if L and not allowed(item, L["kind"]):
+        raise InventoryError(f"{ITEMS[item]} is kept only in central storage, not at {L['name']}.")
 
 
 def ledger(data_dir) -> Ledger:
@@ -95,6 +114,8 @@ def state(data_dir, stations: pd.DataFrame | None = None) -> dict:
     counted: dict[tuple[str, str], float] = {}
     seen_auto: set[str] = set()
     started = None
+    locs[DEFAULT_CENTRAL] = {"id": DEFAULT_CENTRAL, "kind": "central", "name": "Central storage (room not recorded yet)",
+                             "building": "", "notes": "", "active": True}
     if stations is not None:
         for r in stations.itertuples():
             locs[f"kiosk:{r.station_id}"] = {"id": f"kiosk:{r.station_id}", "kind": "kiosk", "name": f"Under {r.label}",
@@ -251,9 +272,14 @@ def update_location(data_dir, user: dict, loc_id: str, name: str | None = None, 
 
 def retire_location(data_dir, user: dict, loc_id: str) -> None:
     st = state(data_dir)
+    if loc_id not in st["locations"] or loc_id.startswith("kiosk:"):
+        raise InventoryError("That location can't be retired.")
     left = {i: q for (loc, i), q in st["stock"].items() if loc == loc_id and abs(q) > 1e-9}
     if left:
         raise InventoryError("Move or write off what's stored there first.")
+    if st["locations"][loc_id]["kind"] == "central" and sum(
+            L["kind"] == "central" and L.get("active", True) for L in st["locations"].values()) < 2:
+        raise InventoryError("Parts need a central storage location; add or edit one instead of retiring the last.")
     ledger(data_dir).append(_actor(user), "location.retire", {"id": loc_id})
 
 
@@ -273,6 +299,8 @@ def move(data_dir, user: dict, item: str, amount, frm: str, to: str, note: str =
     st = state(data_dir, stations)
     _known(st, frm)
     _known(st, to)
+    _allowed_at(st, item, frm)
+    _allowed_at(st, item, to)
     have = st["stock"].get((frm, item), 0.0)
     if q > have + 1e-9:
         raise InventoryError(f"{st['locations'][frm]['name']} has {fmt_qty(have, item)} on record. Count it first if "
@@ -299,6 +327,7 @@ def adjust(data_dir, user: dict, item: str, amount, location: str, reason: str, 
         raise InventoryError("Enter how many.")
     st = state(data_dir, stations)
     _known(st, location)
+    _allowed_at(st, item, location)
     start(data_dir, user)
     return ledger(data_dir).append(_actor(user), "adjust", {"item": item, "qty": q, "location": location,
                                                             "reason": reason, "incident": incident}, note)
@@ -315,6 +344,7 @@ def count(data_dir, user: dict, location: str, counts: dict, note: str = "", sta
         if c is None or c == "":
             continue
         item = _item(item)
+        _allowed_at(st, item, location)
         q = qty(c, item)
         if q < 0:
             raise InventoryError("Counts can't be negative.")
@@ -353,6 +383,7 @@ def draft_receipt(data_dir, user: dict, lines: list[dict], vendor: str = "", inv
         if q <= 0:
             continue
         _known(st, ln.get("to", ""))
+        _allowed_at(st, item, ln["to"])
         clean.append({"item": item, "qty": q, "to": ln["to"], "text": str(ln.get("text", ""))[:200]})
     if not clean:
         raise InventoryError("Add at least one line with an item, a quantity and where it's going.")
@@ -408,20 +439,24 @@ SYSTEM = {"username": "system", "name": "Automatic (from the printers)"}
 
 
 def _source(st: dict, station_id: str, building: str, item: str) -> str:
-    """Where a part or paper for this kiosk most likely came from."""
-    kiosk = f"kiosk:{station_id}"
-    if st["stock"].get((kiosk, item), 0.0) > 1e-9:
-        return kiosk
-    kinds = ("paper", "closet") if item == PAPER else ("closet", "paper")
-    for kind in kinds:
-        for loc, L in st["locations"].items():
-            if L["kind"] == kind and L.get("active", True) and L.get("building") == building \
-                    and st["stock"].get((loc, item), 0.0) > 1e-9:
-                return loc
-    for loc, L in st["locations"].items():
-        if L["kind"] == "central" and L.get("active", True) and st["stock"].get((loc, item), 0.0) > 1e-9:
+    """Where a part or paper for this kiosk most likely came from. Parts: central storage only. Paper: under
+    the kiosk, then the building's paper or telecom closet, then central storage."""
+    centrals = [loc for loc, L in st["locations"].items() if L["kind"] == "central" and L.get("active", True)]
+    if item == PAPER:
+        kiosk = f"kiosk:{station_id}"
+        if st["stock"].get((kiosk, item), 0.0) > 1e-9:
+            return kiosk
+        for kind in ("paper", "closet"):
+            for loc, L in st["locations"].items():
+                if L["kind"] == kind and L.get("active", True) and L.get("building") == building \
+                        and st["stock"].get((loc, item), 0.0) > 1e-9:
+                    return loc
+    for loc in centrals:
+        if st["stock"].get((loc, item), 0.0) > 1e-9:
             return loc
-    return kiosk
+    if item == PAPER:
+        return f"kiosk:{station_id}"
+    return centrals[0] if centrals else DEFAULT_CENTRAL
 
 
 def sync(ds, data_dir=None) -> int:

@@ -8,6 +8,21 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.6.1] - 2026-10-05
+Parts live only in central storage; paper can be anywhere.
+
+### Changed
+- Toner, drums, belts and fusers are kept only in central storage. The app no longer lets parts be moved, received or counted anywhere else, and every installed part is deducted from central storage.
+- Paper can be in central storage, a building's telecom closet, a hall's paper closet, or under a kiosk. A refill still takes paper from under the kiosk first, then the building's closets, then central storage.
+- Central storage now exists from the start as "Central storage (room not recorded yet)", so stock has a home before anyone has found the room. The administrator edits it on the Locations tab to record where it is. The last central storage location can't be retired.
+- Counting a closet or a kiosk shows paper only.
+
+### Fixed
+- The "By location" table on the Stock tab showed quantities as raw code instead of numbers.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
 ## [1.6.0] - 2026-10-05
 Inventory: consumables and paper at every level, where every unit went, deliveries read from invoices, and the Wepa kiosk key log.
 
