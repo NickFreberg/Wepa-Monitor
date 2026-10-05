@@ -115,21 +115,33 @@ def render(ds: M.Dataset, theme: str, ids, start, end, plabel: str):
         pl = _m(ds, "place", lambda d, i, s0, e0: A.placement(d, s0, e0, i), ids, start, end)
         if len(pl):
             best = pl.iloc[0]
+            rest = pl.iloc[1:]
+            if best["verdict"] == "Hard to justify":
+                story = ["None of the buildings without a printer makes a strong case: each is either close to a "
+                         "printer already or has few classes."]
+            else:
+                story = [("b", best["building"]), f" makes the {best['verdict'].lower()} of the buildings without a "
+                         f"printer, with {best['meetings_week']:,} class meetings a week; the nearest printer "
+                         f"({best['nearest']}) is {A.walk_words(best['walk_min'])} away."]
+                weak = rest[rest["verdict"] == "Hard to justify"]["building"].tolist()
+                if weak:
+                    story += [" " + _join(weak) + (" are" if len(weak) > 1 else " is") + " hard to justify."]
             blocks.append(chart_card(
-                "Where one more printer would help most", "Walking students would have saved, had there been one more "
-                "printer in that building.",
-                story=["A printer in ", ("b", best["building"]),
-                       f" would have saved about {best['minutes_saved_per_week']:,.0f} minutes of walking a week, "
-                       f"mostly for people in {best['helps']}."],
-                body=data_table(pl, [("building", "Add a printer in", None),
-                                     ("minutes_saved_per_week", "Walking saved (min/week)", lambda v: f"{v:,.0f}"),
-                                     ("helps", "Mostly helps", None),
-                                     ("has_printer", "Already has one", lambda v: "yes" if v else "no")]),
-                explain="Counts only time when a printer was actually down, weighted by how busy that printer is: "
-                        "the walk students really took, not a hypothetical.",
-                nerd="A one-step greedy p-median: for each candidate building, recompute every down printer's walk "
-                     "to its nearest backup with the candidate added; saved minutes = Σ (old walk − new walk) × hours "
-                     "down × relative usage, per week of the period."))
+                "Where one more printer would help most", "The buildings students use that have no print station, "
+                "weighed on everyday class traffic and on backup value when nearby printers go down.",
+                story=story,
+                body=_sites(pl, plabel),
+                explain="Class meetings measure how many students pass through a building, not how much they would "
+                        "print. A short walk to an existing printer usually covers a building; the backup column counts "
+                        "only time when a printer was actually down, weighted by how busy it is. Before buying a kiosk, "
+                        "a pilot (or a few weeks of usage at the nearest printer) is the real test.",
+                nerd="Candidates come from reference/printer_candidates.csv (campus map numbers 6, 17, 28 and 29). "
+                     "Walks are shortest paths on the OpenStreetMap footpath network. Class meetings are this term's "
+                     "in-person section meetings a week from the course schedule. Backup value is a one-step greedy "
+                     "p-median: saved minutes = Σ (old walk − new walk) × hours down × relative usage, per week. A "
+                     f"printer within {A.NEAR_MIN:g} minutes, or no classes, rules a site out unless backup value "
+                     f"reaches {A.BACKUP_MIN_WEEK} minutes a week; {A.BUSY_MEETINGS}+ meetings with a longer walk "
+                     "makes the strongest case.", wide=True))
 
     # --- classes vs printing --------------------------------------------------------------------------------
     cvp = _m(ds, "cvp", lambda d, i, s0, e0: courses.class_vs_printing(d, s0, e0, i), ids, start, end)
@@ -236,3 +248,31 @@ def stats_extras(ds: M.Dataset, theme: str, ids, start, end, plabel: str) -> lis
              "before), comparison = the same support team's other printers. Removes campus-wide swings such as "
              "finals or breaks; assumes both groups would otherwise have moved in parallel."))
     return cards
+
+
+def _join(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+def _walk(minutes: float) -> str:
+    w = A.walk_words(minutes)
+    return w.removeprefix("a ").replace("-minute walk", " minutes")
+
+
+def _sites(pl, plabel: str) -> html.Div:
+    """One short block per candidate building: name and verdict, the facts, and the reason."""
+    tone = {"Strongest case": "good", "Worth a look": "warning", "Hard to justify": "neutral"}
+    items = []
+    for r in pl.itertuples():
+        facts = [f"{r.meetings_week:,} class meetings a week" if r.meetings_week else "no classes this term",
+                 f"nearest printer {r.nearest}, {_walk(r.walk_min)}"]
+        facts.append(f"would have saved {r.backup_saved:,.0f} min a week of walking while printers were down "
+                     f"({plabel})" if r.backup_saved >= 0.5 else f"no walking saved while printers were down ({plabel})")
+        items.append(html.Li(className="site", children=[
+            html.Div([html.B(r.building), html.Span(f"campus map no. {r.map_no}", className="site__map"),
+                      html.Span(r.verdict, className=f"site__verdict site__verdict--{tone[r.verdict]}")],
+                     className="site__head"),
+            html.Div(" · ".join(facts), className="site__facts"),
+            html.Div(r.why, className="site__why"),
+        ]))
+    return html.Ul(items, className="sites")

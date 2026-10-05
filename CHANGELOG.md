@@ -8,6 +8,26 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.9] - 2026-10-05
+"Where one more printer would help most" now weighs the real candidates.
+
+### Changed
+- The card now looks only at the buildings students use that have no print station: Hart Hall, Burnell Hall, Art Center and Kelly Gymnasium (campus map numbers 28, 29, 6 and 17). Before, it ranked every building, including ones that already have printers and residence halls only their residents can enter.
+- Each building gets three pieces of evidence and a plain verdict:
+  - class meetings a week, from this term's schedule;
+  - the walk to the nearest printer anyone can use;
+  - how much walking it would have saved while nearby printers were down.
+- A printer under 2 minutes away, or no classes, makes a site hard to justify. A busy building with a longer walk makes the strongest case, with a note to pilot it before buying a kiosk.
+- On this term's schedule: Hart Hall has 396 class meetings a week with Moakley Center 2 minutes away (the strongest case). Kelly Gymnasium is under 2 minutes from DMF Science & Math and Art Center is under a minute from Tillinghast Hall (both hard to justify). Burnell Hall has no classes this term.
+
+### New
+- The four buildings are on the campus walking map (OpenStreetMap footprints), and reference/printer_candidates.csv lists the candidate sites.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- Bridgewater State University campus map: https://www.bridgew.edu/sites/bridgew/files/media/file/Campus_Map.pdf
+- OpenStreetMap building footprints: way/212207618 (Hart Hall), way/212207505 (Burnell Hall), way/212208580 (Art Center), way/212208110 (Kelly Gymnasium)
+
 ## [1.4.8] - 2026-10-05
 A certain number is only funny once a year.
 

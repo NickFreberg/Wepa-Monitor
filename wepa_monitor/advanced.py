@@ -3,8 +3,8 @@
 Every function returns plain tables with honest uncertainty, and each needs a minimum amount of
 data before it says anything:
 
-* coverage / placement  spatial: walk to the nearest open backup printer; where one more printer
-                        would save students the most walking.
+* coverage / placement  spatial: walk to the nearest open backup printer; whether a building with no
+                        printer (reference/printer_candidates.csv) should get one.
 * supplies_monte_carlo  how many of each part to stock for the next N days at 50/90/95% confidence.
 * staffing_whatif       downtime an extra coverage window would have saved, replayed on real outages.
 * bayes_rates           outages per week per printer, shrunk toward the campus rate (Gamma-Poisson),
@@ -54,32 +54,96 @@ def coverage(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
     return pd.DataFrame(rows).sort_values(["gap", "walk_min"], ascending=[False, False]).reset_index(drop=True)
 
 
-def placement(ds: M.Dataset, start, end, ids=None, top: int = 5) -> pd.DataFrame:
-    """Where one more printer would save the most walking: for each candidate building, the
-    walking minutes saved when printers are down (weighted by how busy each printer is and how long
-    it was down), as if a printer had been there during the window. A greedy one-step p-median."""
+CANDIDATES = config.REFERENCE_DIR / "printer_candidates.csv"
+NEAR_MIN = 2.0          # a printer anyone can use within this walk already covers a building
+BUSY_MEETINGS = 150     # class meetings a week that make a building a real stop for students
+BACKUP_MIN_WEEK = 60    # walking saved per week, while nearby printers were down, that counts on its own
+
+
+def candidate_sites() -> pd.DataFrame:
+    """The buildings students use that have no print station (reference/printer_candidates.csv)."""
+    if not CANDIDATES.exists():
+        return pd.DataFrame(columns=["building", "schedule_name", "map_no", "address"])
+    return pd.read_csv(CANDIDATES, dtype=str).fillna("")
+
+
+def placement(ds: M.Dataset, start, end, ids=None) -> pd.DataFrame:
+    """Should one of the buildings without a printer get one? For each candidate site, two kinds of evidence:
+
+    * everyday demand: class meetings a week in the building (this term's schedule) and the walk to the
+      nearest printer anyone can use (OpenStreetMap footpaths);
+    * backup value: walking minutes it would have saved while printers were down in the period, weighted by
+      how busy each printer is (a one-step greedy p-median over real outages).
+
+    Then a plain verdict. A printer about a minute away already covers a building, and a building without
+    classes has little foot traffic, so both are hard to justify however the numbers fall."""
+    sites = candidate_sites()
+    if sites.empty or not routing_ok():
+        return pd.DataFrame()
+    from . import courses
+    sched = courses.load()
+    sched = sched[~sched.get("status", pd.Series(dtype=str)).astype(str).str.upper().eq("CANCELLED")]
+    meetings = sched.groupby("building")["days"].apply(lambda d: int(d.astype(str).str.len().sum()))
+    cur = ops.current_status(ds)
+    public = cur[(cur["access"] == "public") & (cur.get("campus", "Main") == "Main")]["building"].unique()
     cov = coverage(ds, start, end, ids)
-    if cov.empty or not routing_ok():
-        return pd.DataFrame()
-    use = M.usage_by_station(ds, start, end, ids).set_index("station_id")["relative"].fillna(1.0)
-    cov = cov.assign(w=cov["station_id"].map(use).fillna(1.0) * cov["down_h"])
-    cov = cov[(cov["same_building"] == 0) & cov["walk_min"].notna() & (cov["w"] > 0)]
-    if cov.empty:
-        return pd.DataFrame()
-    from . import reference
-    cands = reference.load_buildings()
-    cands = cands[(cands["campus"] == "Main") & cands["lat"].notna()]["building"]
-    out = []
-    for c in cands:
-        new = cov["building"].map(lambda b: nearby.walk_seconds(b, c) / 60)
-        saved = (cov["walk_min"] - np.minimum(cov["walk_min"], new)).clip(lower=0) * cov["w"]
-        helped = cov.loc[saved > 0, "building"].unique()
-        if saved.sum() > 0:
-            weeks = max((end - start).total_seconds() / 604800, 1 / 7)
-            out.append({"building": c, "minutes_saved_per_week": float(saved.sum()) / weeks,
-                        "helps": ", ".join(sorted(helped)[:4]) + ("…" if len(helped) > 4 else ""),
-                        "has_printer": c in set(ds.stations["building"])})
-    return pd.DataFrame(out).sort_values("minutes_saved_per_week", ascending=False).head(top).reset_index(drop=True)
+    if len(cov):
+        use = M.usage_by_station(ds, start, end, ids).set_index("station_id")["relative"].fillna(1.0)
+        cov = cov.assign(w=cov["station_id"].map(use).fillna(1.0) * cov["down_h"])
+        cov = cov[(cov["same_building"] == 0) & cov["walk_min"].notna() & (cov["w"] > 0)]
+    weeks = max((end - start).total_seconds() / 604800, 1 / 7)
+    rows = []
+    for s in sites.itertuples():
+        walks = sorted((nearby.walk_seconds(s.building, b) / 60, b) for b in public)
+        walks = [w for w in walks if np.isfinite(w[0])]
+        walk, near = walks[0] if walks else (np.nan, "")
+        saved, helped = 0.0, []
+        if len(cov):
+            new = cov["building"].map(lambda b: nearby.walk_seconds(b, s.building) / 60)
+            gain = (cov["walk_min"] - np.minimum(cov["walk_min"], new)).clip(lower=0) * cov["w"]
+            saved = float(gain.sum()) / weeks
+            helped = sorted(cov.loc[gain > 0, "building"].unique())
+        n = int(meetings.get(s.schedule_name or s.building, 0))
+        verdict, why = _verdict(n, walk, near, saved)
+        rows.append({"building": s.building, "map_no": s.map_no, "address": s.address, "meetings_week": n,
+                     "nearest": near, "walk_min": walk, "backup_saved": saved,
+                     "helps": ", ".join(helped[:4]) + ("…" if len(helped) > 4 else ""),
+                     "verdict": verdict, "why": why})
+    order = {"Strongest case": 0, "Worth a look": 1, "Hard to justify": 2}
+    out = pd.DataFrame(rows)
+    out = out.assign(_o=out["verdict"].map(order), _d=-(out["meetings_week"] * out["walk_min"].fillna(0)))
+    return out.sort_values(["_o", "_d"]).drop(columns=["_o", "_d"]).reset_index(drop=True)
+
+
+def _verdict(meetings: int, walk: float, near: str, backup: float) -> tuple[str, str]:
+    walk_txt = walk_words(walk)
+    if not np.isfinite(walk):
+        return "Hard to justify", "It isn't on the campus walking map, so the walk can't be measured."
+    if walk < NEAR_MIN and backup < BACKUP_MIN_WEEK:
+        return "Hard to justify", f"{near} already has a printer {walk_txt} away."
+    if meetings == 0 and backup < BACKUP_MIN_WEEK:
+        return "Hard to justify", "No classes meet here this term, so few students pass through."
+    strong = meetings >= BUSY_MEETINGS and walk >= NEAR_MIN
+    if strong and backup >= BACKUP_MIN_WEEK:
+        return "Strongest case", (f"{meetings} class meetings a week, {walk_txt} from {near}, and it would have "
+                                  "cut real walks while printers were down.")
+    if strong:
+        return "Strongest case", (f"The busiest building without a printer, though {near} is only {walk_txt} "
+                                  "away: worth a pilot before buying a kiosk.")
+    if backup >= BACKUP_MIN_WEEK:
+        return "Worth a look", "Few classes, but it would have cut real walks while nearby printers were down."
+    return "Worth a look", f"{meetings} class meetings a week; the nearest printer ({near}) is {walk_txt} away."
+
+
+def walk_words(minutes: float) -> str:
+    """'under a minute', 'under 2 minutes', 'a 4-minute walk': whole minutes, never rounded across NEAR_MIN."""
+    if not np.isfinite(minutes):
+        return "an unknown walk"
+    if minutes < 1:
+        return "under a minute"
+    if minutes < NEAR_MIN:
+        return f"under {math.ceil(minutes)} minutes"
+    return f"a {int(minutes)}-minute walk"
 
 
 def routing_ok() -> bool:
