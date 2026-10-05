@@ -197,7 +197,8 @@
     };
   })();
 
-  // 6 7. Whenever the number 67 shows up anywhere (text, chart labels, tooltips, what someone types), Bristaco
+  // 6 7, on April Fools' Day only (campus time; the server sets data-april-fools on <html>). That day, whenever
+  // the number 67 shows up anywhere (text, chart labels, tooltips, what someone types), Bristaco
   // pops up and weighs "6... 7..." on his paws (each arm is its own layer, rocking at the shoulder), the page
   // shakes a little, and a ring wobbles around the 67. Only 67 as a
   // number of its own: not 167, 670, 0.67, 67.5 or 1,067. Each show lasts under 5 seconds (WCAG 2.2.2), nothing
@@ -247,9 +248,10 @@
       return r.getBoundingClientRect();
     } catch (err) { return null; }
   }
+  function aprilFools() { return document.documentElement.dataset.aprilFools === "1"; }
   function scan67() {
     scan67Timer = null;
-    if (!document.body) { return; }
+    if (!document.body || !aprilFools()) { return; }
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode: function (n) {
         var p = n.parentElement;
@@ -268,10 +270,10 @@
     }
     if (first) { show67(first); }
   }
-  function queue67() { if (!scan67Timer) { scan67Timer = setTimeout(scan67, 350); } }
+  function queue67() { if (aprilFools() && !scan67Timer) { scan67Timer = setTimeout(scan67, 350); } }
   document.addEventListener("input", function (e) {
     var t = e.target;
-    if (t && typeof t.value === "string" && SIXSEVEN.test(t.value)) { show67(t.getBoundingClientRect()); }
+    if (aprilFools() && t && typeof t.value === "string" && SIXSEVEN.test(t.value)) { show67(t.getBoundingClientRect()); }
   }, true);
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") { hide67(); } });
 

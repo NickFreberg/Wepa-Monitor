@@ -6,8 +6,11 @@ navigation and reloads.
 """
 from __future__ import annotations
 
+import os
 import threading
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -76,6 +79,15 @@ def theme_options(eggs: dict | None, gameday: bool) -> list[dict]:
                                  html.Span([html.B(name), html.Span(desc, className="themes__desc")],
                                            className="themes__text")]), "value": slot}
             for slot, (look, name, desc) in names.items()]
+
+
+def april_fools(now: datetime | None = None) -> bool:
+    """True on April 1 on campus (America/New_York). WEPA_APRIL_FOOLS=1 or =0 overrides, for a demo or a test."""
+    force = os.environ.get("WEPA_APRIL_FOOLS", "").strip()
+    if force in ("0", "1"):
+        return force == "1"
+    today = (now or datetime.now(ZoneInfo(config.LOCAL_TZ))).date()
+    return (today.month, today.day) == (4, 1)
 
 
 def _voice(eggs: dict | None) -> str | None:
@@ -256,6 +268,7 @@ def _shell(ds: M.Dataset):
         dcc.Store(id="theme", storage_type="local"),
         dcc.Store(id="eggs", storage_type="local"),
         dcc.Store(id="gameday"),
+        dcc.Store(id="aprilfools"),
         dcc.Store(id="scope-store", storage_type="session"),
         dcc.Store(id="seen", storage_type="local"),
         dcc.Store(id="notif-latest"),
@@ -448,6 +461,18 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
             return False, None, True
         return True, [html.Span(className="gameday-banner__ball", **{"aria-hidden": "true"}),
                       html.Span(football.headline(game))], False
+
+    # 6 7 Bristaco (ui.js) only on April Fools' Day, campus time. WEPA_APRIL_FOOLS=1 / =0 forces it on / off.
+    @app.callback(Output("aprilfools", "data"), Input("url", "pathname"))
+    def aprilfools(_):
+        return april_fools()
+
+    app.clientside_callback(
+        """
+        function(on) { document.documentElement.dataset.aprilFools = on ? '1' : ''; return window.dash_clientside.no_update; }
+        """,
+        Output("aprilfools", "id"), Input("aprilfools", "data"),
+    )
 
     @app.callback(Output("theme-switch", "options"), Output("eggs-reset", "hidden"), Output("sandman-exit", "hidden"),
                   Input("eggs", "data"), Input("gameday", "data"))

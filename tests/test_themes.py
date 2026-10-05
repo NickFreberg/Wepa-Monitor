@@ -125,3 +125,18 @@ def test_cup_art_is_the_installed_image_or_the_drawn_stand_in(tmp_path, monkeypa
     monkeypatch.setenv("WEPA_CUP_IMAGE", str(tmp_path / "missing.png"))
     assert c.get("/_theme/cup").mimetype == "image/svg+xml"
 
+
+
+def test_six_seven_only_on_april_fools(monkeypatch):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("America/New_York")
+    monkeypatch.delenv("WEPA_APRIL_FOOLS")
+    assert A.april_fools(datetime(2027, 4, 1, 0, 5, tzinfo=tz))
+    assert A.april_fools(datetime(2027, 4, 1, 23, 55, tzinfo=tz))
+    assert not A.april_fools(datetime(2027, 3, 31, 23, 59, tzinfo=tz))
+    assert not A.april_fools(datetime(2026, 10, 5, 12, 0, tzinfo=tz))
+    monkeypatch.setenv("WEPA_APRIL_FOOLS", "1")
+    assert A.april_fools(datetime(2026, 10, 5, 12, 0, tzinfo=tz))
+    monkeypatch.setenv("WEPA_APRIL_FOOLS", "0")
+    assert not A.april_fools(datetime(2027, 4, 1, 12, 0, tzinfo=tz))

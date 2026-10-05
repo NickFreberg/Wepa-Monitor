@@ -8,6 +8,15 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.4.8] - 2026-10-05
+A certain number is only funny once a year.
+
+### Changed
+- The reaction to a certain number now happens only on April Fools' Day (April 1, campus time). On every other day the app doesn't even look for it. Operators: WEPA_APRIL_FOOLS=1 turns it on for a demo, =0 turns it off.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+
 ## [1.4.7] - 2026-10-04
 Every chat with the Assistant starts fresh.
 
