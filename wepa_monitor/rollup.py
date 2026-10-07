@@ -170,7 +170,9 @@ class RollupStore:
     def refresh(self) -> dict[str, pd.DataFrame]:
         days = store.snapshot_days(self.data_dir)
         self._prune_old_versions()
-        if not days:
+        if not days:                      # nothing collected yet: an empty dataset, not an error
+            self.history, self.today, self.history_key = ({k: _empty(k) for k in KINDS},
+                                                          {k: _empty(k) for k in KINDS}, ())
             return {k: _empty(k) for k in KINDS}
         # Every day but the newest is finished: build (or load) it once and keep it. If a finished
         # day's files change (an import), it and its neighbors are rebuilt from fresh reads.

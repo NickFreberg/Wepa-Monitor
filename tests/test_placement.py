@@ -29,9 +29,14 @@ def test_walk_words_never_round_across_the_threshold():
     assert A.walk_words(4.0) == "a 4-minute walk"
 
 
-def test_printer_review_waits_for_a_full_year(monkeypatch):
-    from wepa_monitor import config, metrics as M
-    ds = M.load(config.DEMO_DATA_DIR)
+def test_printer_review_waits_for_a_full_year(monkeypatch, tmp_path):
+    # Its own small synthetic history (CI has no demo data folder): three weeks, well short of a year.
+    from datetime import datetime, timezone
+
+    from wepa_monitor import metrics as M, synth
+    synth.generate(tmp_path, days=21, end=datetime(2026, 9, 24, 16, 0, tzinfo=timezone.utc), seed=11,
+                   progress=lambda m: None)
+    ds = M.load(tmp_path)
     monkeypatch.delenv("WEPA_PRINTER_REVIEW", raising=False)
     st = A.review_status(ds)
     assert not st["ready"] and 0 < st["days"] < A.REVIEW_DAYS
