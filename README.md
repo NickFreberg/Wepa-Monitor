@@ -193,7 +193,16 @@ any chart, and every chart carries a one-line takeaway in plain words.
   computed numbers (with "The numbers behind it" underneath for checking). See *AI summaries* in
   `deploy/azure-containerapps/README.md`.
 - **Rounds:** the fastest route to every printer that needs a visit, on foot or by transit van, for
-  ResNet or the IT Service Center, with what to bring. Distances are in feet and miles.
+  ResNet or the IT Service Center, with what to bring. Distances are in feet and miles. **Entrances**
+  can be set to accessible doors. In van mode the round starts by walking to where the team's van is now.
+- **Rounds map editor** (Rounds › "Edit the Rounds map", administrator, built for a phone): pins for
+  **Home Base** (RSR stations, the IT Service Center, the ResNet office), **Door** (tick *Accessible
+  entrance* for the blue wheelchair symbol), **Printer**, **Parking space** (either van or one team's),
+  **Van location** (where each team's van is now; placing it again moves it), **Fuel station** (one) and
+  **Supply closet**; lines for **Walk paths** (both ways), **Van routes** (both ways) and **One-way van
+  routes** (drawn in the direction of travel, shown with arrows; "Reverse the direction" flips one). The
+  **Eraser** removes any pin or line with a tap (**Undo erase** brings it back), and **Clear…** removes
+  all walk paths, all van routes, all pins except doors, or everything except doors.
 - **Stations:** every printer, grouped by area; buildings with several printers share one box. Each
   card shows toner and all four drums. The station page has the status timeline, supplies with an
   end-of-life projection for any part, faults, incident history, and **where students can print if
@@ -537,7 +546,7 @@ legacy/                  the original v1 terminal script
 
 See also GitHub issue #2 for the analytics backlog.
 
-- **Draw the campus.** Van spots, doors and walking paths are drawn in the Rounds map editor
+- **Draw the campus.** Home Bases, doors, printers, parking, the vans and paths are drawn in the Rounds map editor
   (administrator); drawing the real doors and the spots staff use sharpens every route and walk time.
 - **Per-student usage.** Prints, page counts and black-and-white vs color by student are not on Wepa's
   public page. They would need Wepa's administrative reports; an importer can be added when those are

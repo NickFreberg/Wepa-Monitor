@@ -791,10 +791,11 @@ def create_app(data_dir: Path, preload: bool = False) -> Dash:
 
     @app.callback(Output("rd-body", "children"), Input("rd-team", "value"), Input("rd-start", "value"),
                   Input("rd-mode", "value"), Input("rd-include", "value"), Input("rd-order", "value"),
-                  Input("rd-return", "value"), Input("theme", "data"), Input("tick", "n_intervals"))
-    def rd_body(team, start, mode, include, order, finish, theme, _):
+                  Input("rd-return", "value"), Input("rd-access", "value"), Input("theme", "data"),
+                  Input("tick", "n_intervals"))
+    def rd_body(team, start, mode, include, order, finish, access, theme, _):
         return rounds.render(cache.get(), theme or "light", team or "ResNet", start, mode or "walk", include,
-                             order or "urgent", finish or "loop")
+                             order or "urgent", finish or "loop", access or "any")
 
     # --- insights -------------------------------------------------------------------------------------
     @app.callback(Output("story-body", "children"), Input("story-period", "value"), scope, Input("tick", "n_intervals"))

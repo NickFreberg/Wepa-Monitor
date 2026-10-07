@@ -40,11 +40,15 @@ def layout(team: str = "ResNet"):
                       segmented("rd-return", [{"label": "Back at start", "value": "loop"},
                                               {"label": "At the last stop", "value": "open"}]
                                 + [{"label": f"At {roundsmap.place_name(p)}", "value": "end:" + roundsmap.place_name(p)}
-                                   for p in roundsmap.points("end")], "loop",
+                                   for p in roundsmap.points("home")], "loop",
+                                persistence="local")], className="field"),
+            html.Div([html.Label("Entrances", className="field__label"),
+                      segmented("rd-access", [{"label": "Any door", "value": "any"},
+                                              {"label": "Accessible doors", "value": "accessible"}], "any",
                                 persistence="local")], className="field"),
         ]),
-        html.A("Edit the Rounds map: starts, doors, van spots, paths", href="/rounds/map", className="rounds-edit",
-               hidden=not can_edit_map()),
+        html.A("Edit the Rounds map: Home Bases, doors, printers, parking, the vans, paths", href="/rounds/map",
+               className="rounds-edit", hidden=not can_edit_map()),
     ]), dcc.Loading(html.Div(id="rd-body"), type="dot", delay_show=300)]
 
 
@@ -53,10 +57,11 @@ def can_edit_map() -> bool:
 
 
 def places() -> pd.DataFrame:
-    """The campus buildings plus the starts and ends drawn on the Rounds map, as rows Rounds can route to."""
+    """The campus buildings plus the Home Bases and supply closets drawn on the Rounds map, as rows Rounds can
+    route to."""
     b = reference.load_buildings()
     drawn = [{"building": roundsmap.place_name(p), "short_name": roundsmap.place_name(p), "lat": p["lat"],
-              "lon": p["lon"], "campus": "Main"} for p in roundsmap.points("start") + roundsmap.points("end")]
+              "lon": p["lon"], "campus": "Main"} for p in roundsmap.points("home") + roundsmap.points("closet")]
     if not drawn:
         return b
     extra = pd.DataFrame(drawn)
@@ -67,7 +72,10 @@ def places() -> pd.DataFrame:
 def start_options(team: str) -> list[dict]:
     named = routing.TEAM_STARTS.get(team, [])
     opts = [{"label": n, "value": routing.STARTS[n]} for n in named]
-    opts += [{"label": roundsmap.place_name(p), "value": roundsmap.place_name(p)} for p in roundsmap.points("start")]
+    opts += [{"label": f"Home Base: {roundsmap.place_name(p)}", "value": roundsmap.place_name(p)}
+             for p in roundsmap.points("home") if p.get("team") in ("", team)]
+    opts += [{"label": f"Supply closet: {roundsmap.place_name(p)}", "value": roundsmap.place_name(p)}
+             for p in roundsmap.points("closet")]
     taken = {o["value"] for o in opts}
     b = reference.load_buildings()
     b = b[(b["campus"] == "Main") & ~b["building"].isin(taken)].sort_values("building")
@@ -83,7 +91,20 @@ def _fmt_s(s: float) -> str:
     return f"{m} min" if m < 60 else f"{m // 60} h {m % 60:02d} min"
 
 
-def render(ds: M.Dataset, theme: str, team: str, start: str, mode: str, include, order: str, finish: str):
+def map_extras() -> list[dict]:
+    """Pins from the Rounds map worth seeing on a route: the vans, the fuel station and the supply closets."""
+    out = [{"lat": p["lat"], "lon": p["lon"], "label": f"{p['team']} van (now)", "kind": "van"}
+           for p in roundsmap.points("van")]
+    out += [{"lat": p["lat"], "lon": p["lon"], "label": roundsmap.place_name(p), "kind": "closet"}
+            for p in roundsmap.points("closet")]
+    fuel = roundsmap.fuel_station()
+    if fuel:
+        out.append({"lat": fuel["lat"], "lon": fuel["lon"], "label": fuel["name"] or "Fuel station", "kind": "fuel"})
+    return out
+
+
+def render(ds: M.Dataset, theme: str, team: str, start: str, mode: str, include, order: str, finish: str,
+           access: str = "any"):
     if ds.empty:
         return empty("No data yet.")
     if routing.network() is None:
@@ -98,11 +119,13 @@ def render(ds: M.Dataset, theme: str, team: str, start: str, mode: str, include,
         return [headline("good", f"Nothing on {team}'s list right now",
                          "No printer matches what you chose to visit. Widen 'Visit' to include parts due soon.")]
     end = finish[4:] if (finish or "").startswith("end:") else None
-    p = routing.plan(q, b, start, mode, round_trip=finish == "loop", urgent_first=order == "urgent", end=end)
+    accessible = access == "accessible"
+    p = routing.plan(q, b, start, mode, round_trip=finish == "loop", urgent_first=order == "urgent", end=end,
+                     team=team, accessible=accessible)
     if p is None or not p.order:
         return [headline("info", "Nothing to route", "The only items are off the main campus.")]
     alt = routing.plan(q, b, start, "van" if mode == "walk" else "walk", round_trip=finish == "loop",
-                       urgent_first=order == "urgent", end=end)
+                       urgent_first=order == "urgent", end=end, team=team, accessible=accessible)
     total = p.travel_s + p.service_s
     hint = ""
     if alt and alt.travel_s + 60 < p.travel_s:
@@ -153,13 +176,24 @@ def render(ds: M.Dataset, theme: str, team: str, start: str, mode: str, include,
         mine = int((park["park_source"] == "your parking list").sum())
         note += (f" Parking: {drawn} of {len(park)} stops use a van spot on your Rounds map, {mine} your parking "
                  "list (reference/parking.csv); the rest the nearest lot on OpenStreetMap.")
+    van = roundsmap.van_location(team)
+    if mode == "van" and van:
+        note += f" {team}'s van is where your Rounds map says it is now, so the round starts by walking to it."
+    elif mode == "van":
+        note += f" {team}'s van has no location on the Rounds map, so the round starts from the nearest parking."
     doors = sum(1 for s in p.order if roundsmap.door_for(s.building))
+    ada = sum(1 for s in p.order if any(d["building"] == s.building and d.get("accessible")
+                                        for d in roundsmap.points("door")))
     if doors:
-        note += f" {doors} stop{'s use' if doors != 1 else ' uses'} a door from your Rounds map."
+        note += f" {doors} stop{'s use' if doors != 1 else ' uses'} a door from your Rounds map"
+        note += (f" ({ada} accessible)." if accessible else ".")
+    if accessible and ada < len(p.order):
+        note += (f" {len(p.order) - ada} stop{'s have' if len(p.order) - ada != 1 else ' has'} no accessible door "
+                 "marked yet.")
     if p.skipped:
         note += f" Not routed (off the main campus): {', '.join(p.skipped)}."
     return [hl, html.Div(className="grid grid--2-1", children=[
         chart_card("Map", "Solid: on foot. Orange: transit van. Numbers are the order of stops.",
-                   charts.route_map(theme, p, (float(st["lat"]), float(st["lon"]))), note=note),
+                   charts.route_map(theme, p, (float(st["lat"]), float(st["lon"])), map_extras()), note=note),
         html.Div(side, className="stack"),
     ])]

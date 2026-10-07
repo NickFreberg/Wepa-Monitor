@@ -50,3 +50,14 @@ body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; 
   .rm-field { color: #d4cbc4; }
   .rm-field input, .rm-field select { background: #2a2320; color: #f2ece6; border-color: #4a403a; }
 }
+.rm-tools button { flex: 0 0 auto; min-width: 64px; }
+.rm-btn--block { display: block; width: 100%; margin-bottom: 8px; }
+.rm-check { display: flex; gap: 10px; align-items: center; min-height: 44px; margin-bottom: 10px; font-size: 14px; font-weight: 600; }
+.rm-check input { width: 22px; height: 22px; accent-color: #1565c0; }
+.rm-pin--ada span { box-shadow: 0 0 0 2px #fff, 0 2px 8px rgba(0, 0, 0, .35); }
+.rm-arrow { background: none; border: 0; }
+.rm-arrow span { display: grid; place-items: center; width: 18px; height: 18px; font-size: 15px; line-height: 1;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+.rm-erasing .leaflet-container { cursor: not-allowed; }
+.rm-erasing .leaflet-marker-icon, .rm-erasing .leaflet-interactive { cursor: pointer; }
+#rm-erasebar { bottom: calc(76px + env(safe-area-inset-bottom)); }

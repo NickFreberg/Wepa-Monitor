@@ -599,10 +599,18 @@ def phase_bars(theme: str, g: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def route_map(theme: str, plan, start_xy: tuple[float, float]) -> go.Figure:
-    """The planned round: walking legs solid, van legs dashed, numbered stops, the start as a square."""
+def route_map(theme: str, plan, start_xy: tuple[float, float], extras: list[dict] | None = None) -> go.Figure:
+    """The planned round: walking legs solid, van legs dashed, numbered stops, the start as a square, plus
+    reference pins from the Rounds map (the vans, the fuel station, supply closets)."""
     t = TOKENS[theme]
     fig = go.Figure()
+    styles = {"van": ("Van (now)", "#b4470b"), "closet": ("Supply closet", "#0e6f74"), "fuel": ("Fuel", "#555555")}
+    for kind, (name, color) in styles.items():
+        pts = [e for e in extras or [] if e["kind"] == kind]
+        if pts:
+            fig.add_trace(go.Scattermap(lat=[e["lat"] for e in pts], lon=[e["lon"] for e in pts], mode="markers",
+                                        name=name, marker=dict(size=13, color=color),
+                                        hovertext=[e["label"] for e in pts], hoverinfo="text"))
     walk_c, drive_c = t["series"][0], t["series"][1]
     shown = set()
     for legs in plan.legs + [plan.back]:

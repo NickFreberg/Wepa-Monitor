@@ -8,6 +8,33 @@ Format: one `## [version] - date` heading per release, a one-line summary, then 
 `### Changed`, `### Fixed`, `### Security` and `### Sources` lists. Updates prepared in the app add
 their own entry here through the update pipeline (see docs/SECURITY.md).
 
+## [1.7.1] - 2026-10-07
+The Rounds map gets the pins staff actually need, an eraser, accessible doors and one-way van routes.
+
+### New
+- **Eraser** in the Rounds map editor: tap any pin or line to remove it, and **Undo erase** brings it back. **Clear…** removes all walk paths, all van routes, all pins except doors, or everything except doors at once. Nothing is final until you Save.
+- New pins:
+  - **Home Base**: RSR stations, the IT Service Center in Maxwell and the ResNet office in ECC. It can belong to a team, and Rounds can start and finish there.
+  - **Printer**: where a printer is in its building. Rounds uses it as the stop when the building has no door marked.
+  - **Parking space**: for either van, or one team's.
+  - **Van location**: where each team's van is right now, one per team; placing it again moves it. In van mode the round begins by walking to the van, and Rounds says when walking would be faster.
+  - **Fuel station**: there's only one.
+  - **Supply closet**: shown on the route map, and Rounds can start from one.
+- **Accessible entrances.** In the editor, tick "Accessible entrance" on a door to show it with the blue wheelchair symbol. In Rounds, set **Entrances** to "Accessible doors" to route to those doors; the page says which stops don't have one marked yet.
+- **Van routes in two kinds:**
+  - **Both ways.**
+  - **One-way**, for one-way streets: drawn in the direction of travel and shown with arrows. "Reverse the direction" flips one, and route planning only drives it the way it was drawn.
+
+### Changed
+- The editor's pins are now Home Base, Door, Printer, Parking, Van location, Fuel and Supply closet.
+  - Doors already on the map are kept as they are.
+  - Earlier start and end pins become Home Bases, and earlier van spots become shared Parking spaces. Remove any you don't need with the Eraser.
+- Walk paths are always usable both ways.
+
+### Sources
+- Pull request branch `claude/dazzling-volta-8b6lst`
+- U.S. Access Board, the International Symbol of Accessibility (ADA Standards 703.7.2.1): https://www.access-board.gov/ada/#ada-703_7_2_1
+
 ## [1.7.0] - 2026-10-05
 A reorganized, business-ready app: a grouped menu, a three-button header, one filter bar, a phone tab bar, and an IT Outcomes launch briefing.
 

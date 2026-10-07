@@ -1,17 +1,25 @@
 """The Rounds map: points and paths the administrator draws, so Rounds plans real routes.
 
 Points
-  start    where a round can begin (an office, a desk)
-  end      where a one-way round can finish
-  door     the entrance to use for a building; Rounds routes to the door instead of the building's middle
-  parking  where the transit van parks for a building
+  home     Home Base: where a round begins and ends (an RSR station, the IT Service Center in Maxwell, the ResNet
+           office in East Campus Commons). Can belong to a team.
+  door     a building entrance; Rounds routes to the door instead of the building's middle. A door can be marked
+           accessible (shown with the blue wheelchair symbol); "Use accessible entrances" in Rounds prefers those.
+  printer  where a printer (or printers) is in a building: a stop on a round, or its final destination
+  parking  a parking space for a transit van (ResNet and the IT Service Center each have one); can belong to a team
+  van      where a team's transit van is right now (one per team). In van mode, a round starts by walking to it,
+           and Rounds compares that with going on foot
+  fuel     the fuel station (only one)
+  closet   a supply closet, where consumables are kept; Rounds can start from one
 Paths
-  walk     a walking path (a shortcut, a cut-through, a path OpenStreetMap is missing); joins the walking network
-  van      a road or lane the van can use; joins the driving network
+  walk        a walking path, always usable both ways; joins the walking network
+  van         a van route usable both ways; joins the driving network
+  van_oneway  a van route one way only, in the direction it was drawn (one-way streets)
 
 Stored in records/rounds_map.json in the data folder. Everyone signed in can read it (Rounds uses it); only the
 administrator can change it, from the editor at /rounds/map (a phone-friendly Leaflet page). Saves are checked
-(campus bounds, sizes, kinds) and written atomically, with one backup of the previous version.
+(campus bounds, sizes, kinds, one fuel station, one van per team) and written atomically, with one backup of the
+previous version. Maps saved by earlier versions are read as: start and end -> Home Base, van spot -> Parking.
 """
 from __future__ import annotations
 
@@ -21,8 +29,12 @@ import re
 import time
 from pathlib import Path
 
-POINT_KINDS = ("start", "end", "door", "parking")
-PATH_KINDS = ("walk", "van")
+POINT_KINDS = ("home", "door", "printer", "parking", "van", "fuel", "closet")
+PATH_KINDS = ("walk", "van", "van_oneway")
+LEGACY_KINDS = {"start": "home", "end": "home"}       # version 1 maps
+TEAMS = ("ResNet", "IT Service Center")
+SINGLE = {"fuel"}                                     # one on the whole map
+ONE_PER_TEAM = {"van"}                                # one per team
 BOUNDS = (41.975, 42.000, -70.990, -70.950)       # south, north, west, east: main campus with a margin
 MAX_POINTS, MAX_PATHS, MAX_VERTICES = 400, 300, 400
 _dir: Path | None = None
@@ -38,7 +50,7 @@ def path() -> Path | None:
 
 
 def empty() -> dict:
-    return {"version": 1, "points": [], "paths": [], "updated": None, "updated_by": None}
+    return {"version": 2, "points": [], "paths": [], "updated": None, "updated_by": None}
 
 
 def load() -> dict:
@@ -82,6 +94,10 @@ def _id(value, prefix: str, i: int) -> str:
     return v or f"{prefix}{i}"
 
 
+LABELS = {"home": "Home Base", "door": "Door", "printer": "Printer", "parking": "Parking space",
+          "van": "Van location", "fuel": "Fuel station", "closet": "Supply closet"}
+
+
 def validate(data: dict) -> dict:
     """A clean copy of `data`, or MapError. Unknown fields are dropped; text is trimmed and stripped of markup."""
     if not isinstance(data, dict):
@@ -92,17 +108,36 @@ def validate(data: dict) -> dict:
     if len(pts) > MAX_POINTS or len(paths) > MAX_PATHS:
         raise MapError("the map has too many points or paths")
     out = empty()
-    seen = set()
+    seen, singles, vans = set(), set(), set()
     for i, p in enumerate(pts):
-        if not isinstance(p, dict) or p.get("kind") not in POINT_KINDS:
+        if not isinstance(p, dict):
+            raise MapError("a point has an unknown kind")
+        kind = LEGACY_KINDS.get(p.get("kind"), p.get("kind"))
+        if kind not in POINT_KINDS:
             raise MapError("a point has an unknown kind")
         pid = _id(p.get("id"), "p", i)
         if pid in seen:
             raise MapError("two points share an id")
         seen.add(pid)
         lat, lon = _coord(p.get("lat"), p.get("lon"))
-        out["points"].append({"id": pid, "kind": p["kind"], "lat": lat, "lon": lon,
-                              "name": _text(p.get("name")), "building": _text(p.get("building"))})
+        team = p.get("team") if p.get("team") in TEAMS else ""
+        if kind in SINGLE:
+            if kind in singles:
+                raise MapError(f"the map can have only one {LABELS[kind].lower()}")
+            singles.add(kind)
+        if kind in ONE_PER_TEAM:
+            if not team:
+                raise MapError("say whose van it is (ResNet or IT Service Center)")
+            if team in vans:
+                raise MapError(f"{team}'s van can only be in one place")
+            vans.add(team)
+        q = {"id": pid, "kind": kind, "lat": lat, "lon": lon, "name": _text(p.get("name")),
+             "building": _text(p.get("building"))}
+        if kind == "door":
+            q["accessible"] = bool(p.get("accessible"))
+        if kind in ("home", "parking", "van"):
+            q["team"] = team
+        out["points"].append(q)
     for i, q in enumerate(paths):
         if not isinstance(q, dict) or q.get("kind") not in PATH_KINDS:
             raise MapError("a path has an unknown kind")
@@ -143,24 +178,41 @@ def paths(kind: str) -> list[dict]:
     return [q for q in load()["paths"] if q["kind"] == kind]
 
 
-def door_for(building: str) -> tuple[float, float] | None:
-    for p in points("door"):
-        if p["building"] == building:
-            return p["lat"], p["lon"]
-    return None
+def _xy(p: dict | None) -> tuple[float, float] | None:
+    return (p["lat"], p["lon"]) if p else None
 
 
-def parking_for(building: str) -> tuple[float, float] | None:
-    for p in points("parking"):
-        if p["building"] == building:
-            return p["lat"], p["lon"]
-    return None
+def door_for(building: str, accessible: bool = False) -> tuple[float, float] | None:
+    """The door Rounds uses for a building: an accessible one first when asked for, else the first drawn."""
+    doors = [p for p in points("door") if p["building"] == building]
+    if accessible:
+        doors = sorted(doors, key=lambda p: not p.get("accessible"))
+    return _xy(doors[0] if doors else None)
+
+
+def printer_for(building: str) -> tuple[float, float] | None:
+    return _xy(next((p for p in points("printer") if p["building"] == building), None))
+
+
+def parking_for(building: str, team: str = "") -> tuple[float, float] | None:
+    """A parking space for this building: the team's own first, then one shared by both vans."""
+    spaces = [p for p in points("parking") if p["building"] == building and p.get("team") in ("", team)]
+    spaces.sort(key=lambda p: p.get("team") != team)
+    return _xy(spaces[0] if spaces else None)
+
+
+def van_location(team: str) -> dict | None:
+    return next((p for p in points("van") if p.get("team") == team), None)
+
+
+def fuel_station() -> dict | None:
+    return next(iter(points("fuel")), None)
 
 
 def place_name(p: dict) -> str:
-    """How a start or end point appears in Rounds."""
-    base = p["name"] or (f"{p['building']} " if p["building"] else "") + ("start" if p["kind"] == "start" else "end")
-    return base.strip()
+    """How a Home Base or supply closet appears in Rounds."""
+    base = p["name"] or ((f"{p['building']} " if p["building"] else "") + LABELS.get(p["kind"], p["kind"]).lower())
+    return base.strip()[:1].upper() + base.strip()[1:]
 
 
 # --- web: editor page and JSON ----------------------------------------------------------------------------------
@@ -218,7 +270,7 @@ def editor_html(csrf: str) -> str:
     b = reference.load_buildings()
     b = b[(b["campus"] == "Main") & b["lat"].notna()]
     buildings = [{"name": r.building, "lat": float(r.lat), "lon": float(r.lon)} for r in b.itertuples()]
-    boot = json.dumps({"buildings": buildings, "csrf": csrf}).replace("</", "<\\/")
+    boot = json.dumps({"buildings": buildings, "csrf": csrf, "teams": list(TEAMS)}).replace("</", "<\\/")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
@@ -234,18 +286,27 @@ def editor_html(csrf: str) -> str:
 <div id="rm-hint" class="rm-hint" role="status"></div>
 <div id="rm-sheet" class="rm-sheet" hidden></div>
 <nav class="rm-tools" aria-label="Tools">
-  <button type="button" data-tool="select" class="is-on"><span class="rm-ico rm-ico--select"></span>Select</button>
-  <button type="button" data-tool="start"><span class="rm-ico rm-ico--start"></span>Start</button>
-  <button type="button" data-tool="door"><span class="rm-ico rm-ico--door"></span>Door</button>
-  <button type="button" data-tool="parking"><span class="rm-ico rm-ico--van"></span>Van spot</button>
-  <button type="button" data-tool="end"><span class="rm-ico rm-ico--end"></span>End</button>
-  <button type="button" data-tool="walk"><span class="rm-ico rm-ico--walk"></span>Walk path</button>
-  <button type="button" data-tool="van"><span class="rm-ico rm-ico--route"></span>Van route</button>
+  <button type="button" data-tool="select" class="is-on"><span class="rm-ico"></span>Select</button>
+  <button type="button" data-tool="erase"><span class="rm-ico"></span>Eraser</button>
+  <button type="button" data-tool="home"><span class="rm-ico"></span>Home Base</button>
+  <button type="button" data-tool="door"><span class="rm-ico"></span>Door</button>
+  <button type="button" data-tool="printer"><span class="rm-ico"></span>Printer</button>
+  <button type="button" data-tool="parking"><span class="rm-ico"></span>Parking</button>
+  <button type="button" data-tool="van"><span class="rm-ico"></span>Van now</button>
+  <button type="button" data-tool="fuel"><span class="rm-ico"></span>Fuel</button>
+  <button type="button" data-tool="closet"><span class="rm-ico"></span>Supplies</button>
+  <button type="button" data-tool="walk"><span class="rm-ico"></span>Walk path</button>
+  <button type="button" data-tool="van_route"><span class="rm-ico"></span>Van route</button>
+  <button type="button" data-tool="van_oneway"><span class="rm-ico"></span>One-way</button>
 </nav>
 <div class="rm-line" id="rm-line" hidden>
   <button type="button" id="rm-undo" class="rm-btn">Undo point</button>
   <button type="button" id="rm-cancel" class="rm-btn">Cancel</button>
   <button type="button" id="rm-finish" class="rm-btn rm-btn--primary">Finish line</button>
+</div>
+<div class="rm-line" id="rm-erasebar" hidden>
+  <button type="button" id="rm-unerase" class="rm-btn" disabled>Undo erase</button>
+  <button type="button" id="rm-clear" class="rm-btn rm-btn--danger">Clear…</button>
 </div>
 <script id="rm-boot" type="application/json">{boot}</script>
 <script src="/assets/vendor/leaflet/leaflet.js"></script>

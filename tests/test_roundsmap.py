@@ -25,7 +25,7 @@ def test_validate_cleans_and_rejects():
                                             "name": "<b>Main door</b>", "building": "Boyden Hall", "extra": 1}],
                                 "paths": [{"kind": "walk", "coords": [[41.9875, -70.97], [41.988, -70.971]]}]})
     assert clean["points"][0] == {"id": "ab", "kind": "door", "lat": 41.9875, "lon": -70.97, "name": "bMain door/b",
-                                  "building": "Boyden Hall"}
+                                  "building": "Boyden Hall", "accessible": False}
     assert clean["paths"][0]["id"] == "l0"
     for bad in ({"points": [{"kind": "helipad", "lat": 41.98, "lon": -70.97}]},
                 {"points": [{"kind": "start", "lat": 40.0, "lon": -70.97}]},                 # off campus
@@ -92,7 +92,7 @@ def test_doors_parking_and_end_points_shape_the_plan():
     door = (41.98760, -70.97440)
     roundsmap.save({"points": [{"kind": "door", "lat": door[0], "lon": door[1], "building": "Boyden Hall"},
                                {"kind": "parking", "lat": 41.98745, "lon": -70.97500, "building": "Boyden Hall"},
-                               {"kind": "end", "lat": 41.98620, "lon": -70.96520, "name": "Crimson desk"}]}, "admin")
+                               {"kind": "home", "lat": 41.98620, "lon": -70.96520, "name": "Crimson desk"}]}, "admin")
     from wepa_monitor import reference
     b = reference.load_buildings()
     b = pd.concat([b, pd.DataFrame([{"building": "Crimson desk", "lat": 41.98620, "lon": -70.96520, "campus": "Main"}])])
@@ -103,3 +103,58 @@ def test_doors_parking_and_end_points_shape_the_plan():
     assert p.end == "Crimson desk" and p.back                        # and on to the end point
     park = routing.parking_spots(b[b["building"] == "Boyden Hall"])
     assert park.iloc[0]["park_source"] == "your Rounds map"
+
+
+def test_new_pin_kinds_and_their_rules():
+    pt = lambda kind, **kw: {"kind": kind, "lat": 41.9875, "lon": -70.97, **kw}  # noqa: E731
+    clean = roundsmap.validate({"points": [pt("start", name="Old start"), pt("end"), pt("door", accessible=True),
+                                           pt("van", team="ResNet"), pt("van", team="IT Service Center"),
+                                           pt("fuel"), pt("closet"), pt("printer"), pt("parking", team="nobody")]})
+    kinds = [p["kind"] for p in clean["points"]]
+    assert kinds[:2] == ["home", "home"]                                    # earlier maps' starts and ends
+    assert clean["points"][2]["accessible"] is True and clean["points"][-1]["team"] == ""
+    for bad, why in (([pt("fuel"), pt("fuel")], "only one fuel"),
+                     ([pt("van", team="ResNet"), pt("van", team="ResNet")], "one place"),
+                     ([pt("van")], "whose van")):
+        with pytest.raises(roundsmap.MapError, match=why):
+            roundsmap.validate({"points": bad})
+
+
+def test_accessible_doors_printers_and_team_parking(_map):
+    roundsmap.save({"points": [
+        {"kind": "door", "lat": 41.9870, "lon": -70.9740, "building": "Boyden Hall"},
+        {"kind": "door", "lat": 41.9872, "lon": -70.9742, "building": "Boyden Hall", "accessible": True},
+        {"kind": "printer", "lat": 41.9876, "lon": -70.9745, "building": "Boyden Hall"},
+        {"kind": "parking", "lat": 41.9871, "lon": -70.9750, "building": "Boyden Hall"},
+        {"kind": "parking", "lat": 41.9874, "lon": -70.9751, "building": "Boyden Hall", "team": "ResNet"}]}, "admin")
+    assert roundsmap.door_for("Boyden Hall") == (41.9870, -70.9740)
+    assert roundsmap.door_for("Boyden Hall", accessible=True) == (41.9872, -70.9742)
+    assert roundsmap.printer_for("Boyden Hall") == (41.9876, -70.9745)
+    assert roundsmap.parking_for("Boyden Hall", "ResNet") == (41.9874, -70.9751)
+    assert roundsmap.parking_for("Boyden Hall", "IT Service Center") == (41.9871, -70.9750)   # the shared space
+
+
+def test_one_way_van_routes_only_go_one_way(_map):
+    net = {"nodes": [[41.9870, -70.9700], [41.9880, -70.9700]], "walk": [], "drive": [[0, 1, 111.0, 25.0]],
+           "parking": []}
+    roundsmap.save({"paths": [{"kind": "van_oneway", "coords": [[41.9871, -70.9701], [41.9879, -70.9701]]},
+                              {"kind": "van", "coords": [[41.9871, -70.9699], [41.9879, -70.9699]]}]}, "admin")
+    out = routing._with_drawn(net, "drive")
+    edges = {(a, b) for a, b, *_ in out["drive"]}
+    # Two-way routes are added first (nodes 2 and 3), then one-way routes (nodes 4 and 5).
+    assert (2, 3) in edges and (3, 2) in edges         # the two-way route goes both ways
+    assert (4, 5) in edges and (5, 4) not in edges     # the one-way route only in the direction drawn
+    assert (0, 4) in edges and (4, 0) not in edges     # joined on at its start, off at its end, one way
+
+
+@needs_network
+def test_the_van_starts_where_it_is(_map):
+    from wepa_monitor import reference
+    b = reference.load_buildings()
+    q = pd.DataFrame([{"building": "Boyden Hall", "kind": "red", "station_id": "x", "station": "Boyden",
+                       "issue": "Jam", "fix": "Clear"}])
+    far = routing.plan(q, b, "Maxwell Library", "van", round_trip=False, team="ResNet")
+    roundsmap.save({"points": [{"kind": "van", "lat": 41.98745, "lon": -70.97500, "team": "ResNet"}]}, "admin")
+    near = routing.plan(q, b, "Maxwell Library", "van", round_trip=False, team="ResNet")
+    walk_to_van = lambda p: p.legs[0][0].meters if p.legs[0] and p.legs[0][0].to == "the van" else 0  # noqa: E731
+    assert walk_to_van(near) != walk_to_van(far)

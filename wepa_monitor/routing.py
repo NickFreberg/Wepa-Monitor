@@ -216,9 +216,10 @@ JOIN_MAX_M = 150              # a drawn path's ends join the nearest network nod
 
 def _with_drawn(net: dict, mode: str) -> dict:
     """The network plus the paths drawn on the Rounds map (roundsmap.py) for this mode: each drawn line becomes
-    new nodes and edges, and its two ends join the nearest existing node of the same mode."""
+    new nodes and edges, and its two ends join the nearest existing node of the same mode. Walk paths and van
+    routes go both ways; a one-way van route only in the direction it was drawn."""
     from . import roundsmap
-    drawn = roundsmap.paths("walk" if mode == "walk" else "van")
+    drawn = roundsmap.paths("walk") if mode == "walk" else roundsmap.paths("van") + roundsmap.paths("van_oneway")
     if not drawn:
         return net
     nodes = [list(n) for n in net["nodes"]]
@@ -235,24 +236,27 @@ def _with_drawn(net: dict, mode: str) -> dict:
         m = _meters((lat, lon), tuple(net["nodes"][j]))
         return (j, m) if m <= JOIN_MAX_M else None
 
-    def add(a, b, m):
+    def add(a, b, m, both=True):
         if mode == "walk":
             walk.append([a, b, m])
         else:
             drive.append([a, b, m, m / VAN_PATH_SPEED])
-            drive.append([b, a, m, m / VAN_PATH_SPEED])
+            if both:
+                drive.append([b, a, m, m / VAN_PATH_SPEED])
 
     for q in drawn:
+        both = q["kind"] != "van_oneway"
         ids = []
         for lat, lon in q["coords"]:
             nodes.append([lat, lon])
             ids.append(len(nodes) - 1)
         for a, b in zip(ids, ids[1:]):
-            add(a, b, _meters(tuple(nodes[a]), tuple(nodes[b])))
-        for end in (ids[0], ids[-1]):
-            hit = join(*nodes[end])
-            if hit:
-                add(end, hit[0], max(hit[1], 0.5))
+            add(a, b, _meters(tuple(nodes[a]), tuple(nodes[b])), both)
+        first, last = join(*nodes[ids[0]]), join(*nodes[ids[-1]])
+        if first:                          # onto the line at its start, off it at its end
+            add(first[0], ids[0], max(first[1], 0.5), both)
+        if last:
+            add(ids[-1], last[0], max(last[1], 0.5), both)
     return {**net, "nodes": nodes, "walk": walk, "drive": drive}
 
 
@@ -272,14 +276,14 @@ def graph(mode: str) -> Graph:
 
 # --- parking -------------------------------------------------------------------------------------------------------
 
-def parking_spots(buildings: pd.DataFrame) -> pd.DataFrame:
+def parking_spots(buildings: pd.DataFrame, team: str = "") -> pd.DataFrame:
     """Where the van parks for each building: a van spot on the Rounds map first, then reference/parking.csv
     when filled in, else the nearest OSM parking lot that isn't marked no-access."""
     from . import roundsmap
     out = buildings[["building", "lat", "lon"]].copy()
     out["park_lat"], out["park_lon"], out["park_source"] = np.nan, np.nan, ""
     for i, r in out.iterrows():
-        spot = roundsmap.parking_for(r["building"])
+        spot = roundsmap.parking_for(r["building"], team)
         if spot:
             out.loc[i, ["park_lat", "park_lon"]] = spot
             out.loc[i, "park_source"] = "your Rounds map"
@@ -417,12 +421,18 @@ def _two_opt(cost, start, seq, back):
 
 
 def plan(queue: pd.DataFrame, buildings: pd.DataFrame, start_building: str, mode: str = "walk",
-         round_trip: bool = True, urgent_first: bool = True, end: str | None = None) -> Plan | None:
+         round_trip: bool = True, urgent_first: bool = True, end: str | None = None, team: str = "",
+         accessible: bool = False) -> Plan | None:
     """Plan a round from start_building through every building in `queue` (ops.work_queue rows).
-    mode: 'walk' (on foot) or 'van' (drive to each building's parking spot, walk in and out).
-    end: a place in `buildings` to finish at instead (a one-way round). Buildings with a door on the Rounds
-    map are routed to that door."""
+    mode: 'walk' (on foot) or 'van' (drive to each building's parking spot, walk in and out). In van mode, when
+    the team's van has a location on the Rounds map, the round begins by walking to the van.
+    end: a place in `buildings` to finish at instead (a one-way round). Each stop is the building's door on the
+    Rounds map (an accessible door first when `accessible`), else its printer pin, else its middle."""
     from . import roundsmap
+
+    def spot(name):
+        return roundsmap.door_for(name, accessible) or roundsmap.printer_for(name) or (
+            float(b.loc[name, "lat"]), float(b.loc[name, "lon"]))
     if network() is None:
         return None
     b = buildings.set_index("building")
@@ -432,16 +442,16 @@ def plan(queue: pd.DataFrame, buildings: pd.DataFrame, start_building: str, mode
     stops = []
     for name, rows in on_campus.groupby("building", sort=False):
         items = rows.to_dict("records")
-        lat, lon = roundsmap.door_for(name) or (float(b.loc[name, "lat"]), float(b.loc[name, "lon"]))
+        lat, lon = spot(name)
         stops.append(Stop(name, lat, lon, items, 0 if (rows["kind"] == "red").any() else 1,
                           sum(SERVICE_MIN.get(k, 6) for k in rows["kind"])))
     start = b.loc[start_building]
-    start_pt = roundsmap.door_for(start_building) or (float(start["lat"]), float(start["lon"]))
+    start_pt = roundsmap.door_for(start_building, accessible) or (float(start["lat"]), float(start["lon"]))
     points = [start_pt] + [(s.lat, s.lon) for s in stops]
     finish = None
     if end and end in b.index and end != start_building:
         finish = len(points)
-        points.append(roundsmap.door_for(end) or (float(b.loc[end, "lat"]), float(b.loc[end, "lon"])))
+        points.append(roundsmap.door_for(end, accessible) or (float(b.loc[end, "lat"]), float(b.loc[end, "lon"])))
         round_trip = True                 # the "way back" now leads to the end point
     walk_nodes = [walk.nearest(*p) for p in points]
 
@@ -449,8 +459,12 @@ def plan(queue: pd.DataFrame, buildings: pd.DataFrame, start_building: str, mode
         drive = graph("drive")
         park = parking_spots(pd.DataFrame({"building": [start_building] + [s.building for s in stops]
                                            + ([end] if finish else []),
-                                           "lat": [p[0] for p in points], "lon": [p[1] for p in points]}))
+                                           "lat": [p[0] for p in points], "lon": [p[1] for p in points]}),
+                             team)
         park_pts = list(zip(park["park_lat"], park["park_lon"]))
+        van = roundsmap.van_location(team) if team else None
+        if van:                            # the van is where it was left, not at the start's parking space
+            park_pts[0] = (van["lat"], van["lon"])
         drive_nodes = [drive.nearest(*p) for p in park_pts]
         park_walk = [walk.nearest(*p) for p in park_pts]
         runs = [dijkstra(drive, n) for n in drive_nodes]
