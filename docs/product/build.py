@@ -124,7 +124,10 @@ async () => {
   // One font everyone has, so labels are measured and drawn in the same face (no clipped words).
   mermaid.initialize({startOnLoad: false, securityLevel: 'strict', fontFamily: FONT,
                       themeVariables: {fontFamily: FONT}, flowchart: {useMaxWidth: false},
-                      sequence: {useMaxWidth: false}, er: {useMaxWidth: false}, state: {useMaxWidth: false}});
+                      sequence: {useMaxWidth: false}, er: {useMaxWidth: false}, state: {useMaxWidth: false},
+                      // Journey steps: boxes wide and tall enough for three lines, so no step runs out of its box.
+                      journey: {useMaxWidth: false, width: 190, height: 70, taskMargin: 40},
+                      timeline: {useMaxWidth: false}});
   const out = [];
   const blocks = [...document.querySelectorAll('pre.mermaid')];
   for (let i = 0; i < blocks.length; i++) {
@@ -133,6 +136,11 @@ async () => {
     host.innerHTML = svg;
     document.body.appendChild(host);
     const el = host.querySelector('svg');
+    // Grow the frame to everything drawn (self-loops and long labels can reach past Mermaid's own frame).
+    const box = el.getBBox(), pad = 16, v0 = el.viewBox.baseVal;
+    const x0 = Math.min(v0.x, box.x) - pad, y0 = Math.min(v0.y, box.y) - pad;
+    const x1 = Math.max(v0.x + v0.width, box.x + box.width) + pad, y1 = Math.max(v0.y + v0.height, box.y + box.height) + pad;
+    el.setAttribute('viewBox', `${x0} ${y0} ${x1 - x0} ${y1 - y0}`);
     const vb = el.viewBox.baseVal;
     const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     for (const [k, v] of [['x', vb.x], ['y', vb.y], ['width', vb.width], ['height', vb.height], ['fill', '%s']]) {

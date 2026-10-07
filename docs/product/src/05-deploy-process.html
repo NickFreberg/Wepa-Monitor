@@ -18,9 +18,9 @@ flowchart LR
     U2["Student phone<br/>(QR status page)"]
     U3["Administrator CLI"]
   end
-  subgraph Azure["Azure Container Apps (HTTPS ingress)"]
+  subgraph Azure["Azure Container Apps · HTTPS"]
     direction TB
-    subgraph App["Container · python:3.12-slim · gunicorn"]
+    subgraph App["One container: Python, gunicorn"]
       direction TB
       DASH["Dash web app<br/>pages · callbacks · exports"]
       AUTH["Sign-in · sessions · CSRF · CSP"]
