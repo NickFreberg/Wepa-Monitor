@@ -1,6 +1,10 @@
 """Build the product documentation: assemble src/*.html, draw charts from the app's real settings, embed
 screenshots, and write a single self-contained page.
 
+Every figure is drawn at build time and embedded as SVG with its own light background (diagrams are rendered
+once with Mermaid in Chromium), so the page needs no scripts and every figure reads the same in light mode,
+dark mode, print and viewers that drop page backgrounds.
+
     python docs/product/build.py            -> docs/product/BSU-Student-Printing-Ops-Documentation.html
     python docs/product/build.py --pdf      -> also docs/product/BSU-Student-Printing-Ops-Documentation.pdf
 
@@ -25,6 +29,7 @@ SHOTS = {"overview": "overview-bsu.png", "station": "station-detail.png", "inves
          "assistant": "assistant.png", "inventory": "inventory.png", "outcomes": "outcomes.png"}
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 CRIMSON, GOLD, BOTH, NONE, INK, MUTED = "#8b1e24", "#d6a84a", "#5a2b1a", "#efe7dc", "#1f1a17", "#6b625c"
+PAPER = "#fffdf9"            # every figure carries this background itself
 
 
 def desk_hours_svg() -> str:
@@ -32,7 +37,8 @@ def desk_hours_svg() -> str:
     teams = config.SUPPORT_TEAMS
     cell, gap, left, top = 26, 2, 46, 30
     w, h = left + 24 * (cell + gap) + 10, top + 7 * (cell + gap) + 64
-    parts = [f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Weekly grid of staffed support desk hours">']
+    parts = [f'<svg viewBox="0 0 {w} {h}" role="img" aria-label="Weekly grid of staffed support desk hours">'
+             f'<rect width="{w}" height="{h}" fill="{PAPER}"/>']
     for hr in range(0, 24, 3):
         x = left + hr * (cell + gap)
         label = f"{(hr % 12) or 12}{'a' if hr < 12 else 'p'}"
@@ -64,8 +70,9 @@ def desk_hours_svg() -> str:
 def data_quality_svg() -> str:
     parts_ = [("Freshness", 30, "#8b1e24"), ("Completeness", 40, "#b8892b"), ("Validity", 20, "#4f6f8f"),
               ("Station coverage", 10, "#2f7d4f")]
-    w, x0, bar_w, y = 760, 10, 740, 20
-    out = [f'<svg viewBox="0 0 {w} 118" role="img" aria-label="Data quality score weights: freshness 30, completeness 40, validity 20, station coverage 10">']
+    w, x0, bar_w, y = 800, 10, 740, 20
+    out = [f'<svg viewBox="0 0 {w} 118" role="img" aria-label="Data quality score weights: freshness 30, completeness 40, validity 20, station coverage 10">'
+           f'<rect width="{w}" height="118" fill="{PAPER}"/>']
     x = x0
     for name, pts, color in parts_:
         seg = bar_w * pts / 100
@@ -105,8 +112,83 @@ def build() -> Path:
     for name in SHOTS:
         html = html.replace("{{IMG_" + name + "}}", shot(name))
     assert "{{" not in html, "unfilled placeholder"
+    html = draw_diagrams(html)
     OUT.write_text(html, encoding="utf-8")
     return OUT
+
+
+DRAW_JS = """
+async () => {
+  const FONT = 'Arial, Helvetica, sans-serif';
+  await document.fonts.ready;
+  // One font everyone has, so labels are measured and drawn in the same face (no clipped words).
+  mermaid.initialize({startOnLoad: false, securityLevel: 'strict', fontFamily: FONT,
+                      themeVariables: {fontFamily: FONT}, flowchart: {useMaxWidth: false},
+                      sequence: {useMaxWidth: false}, er: {useMaxWidth: false}, state: {useMaxWidth: false}});
+  const out = [];
+  const blocks = [...document.querySelectorAll('pre.mermaid')];
+  for (let i = 0; i < blocks.length; i++) {
+    const {svg} = await mermaid.render('fig' + i, blocks[i].textContent);
+    const host = document.createElement('div');
+    host.innerHTML = svg;
+    document.body.appendChild(host);
+    const el = host.querySelector('svg');
+    const vb = el.viewBox.baseVal;
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    for (const [k, v] of [['x', vb.x], ['y', vb.y], ['width', vb.width], ['height', vb.height], ['fill', '%s']]) {
+      bg.setAttribute(k, v);
+    }
+    el.insertBefore(bg, el.firstChild);           // the figure's own background: readable whatever the page does
+    // Bake every color into the drawing, so no page style (dark mode, forced colors, a viewer's own text
+    // color) can turn a label or a line the same color as what's behind it.
+    el.querySelectorAll('text, tspan, rect, path, polygon, polyline, circle, ellipse, line').forEach(n => {
+      const c = getComputedStyle(n);
+      n.style.setProperty('fill', c.fill, 'important');
+      n.style.setProperty('stroke', c.stroke, 'important');
+    });
+    el.querySelectorAll('foreignObject *').forEach(n => {
+      n.style.setProperty('color', getComputedStyle(n).color, 'important');
+      n.style.setProperty('font-family', FONT, 'important');
+    });
+    el.querySelectorAll('text, tspan').forEach(n => n.style.setProperty('font-family', FONT, 'important'));
+    el.removeAttribute('style');
+    el.setAttribute('width', Math.round(vb.width)); el.setAttribute('height', Math.round(vb.height));
+    out.push(host.innerHTML);
+  }
+  return out;
+}
+"""
+
+
+def draw_diagrams(html: str) -> str:
+    """Render every Mermaid block to SVG in Chromium and put the SVG in its place."""
+    import re
+    from playwright.sync_api import sync_playwright
+    blocks = re.findall(r'<pre class="mermaid">.*?</pre>', html, flags=re.S)
+    if not blocks:
+        return html
+    blocks = [re.sub(r',?"fontFamily":"[^"]*"', "", b) for b in blocks]     # the font is set once, below
+    # A <br/> inside <pre> would become a real line-break element and vanish from the diagram's source text.
+    blocks = [re.sub(r"<br\s*/?>", "&lt;br/&gt;", b) for b in blocks]
+    page = ("<!doctype html><html><head><meta charset='utf-8'>"
+            "</head><body>" + "".join(blocks) +
+            f"<script src='{MERMAID}'></script></body></html>")
+    tmp = HERE / ".diagrams.html"
+    tmp.write_text(page, encoding="utf-8")
+    exe = "/opt/pw-browsers/chromium" if Path("/opt/pw-browsers/chromium").exists() else None
+    try:
+        with sync_playwright() as p:
+            br = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
+            pg = br.new_page()
+            pg.goto(tmp.as_uri())
+            pg.wait_for_function("window.mermaid !== undefined", timeout=60000)
+            svgs = pg.evaluate(DRAW_JS % PAPER)
+            br.close()
+    finally:
+        tmp.unlink(missing_ok=True)
+    it = iter(svgs)
+    return re.sub(r'<pre class="mermaid">.*?</pre>', lambda m: f'<div class="diagram">{next(it)}</div>', html,
+                  flags=re.S)
 
 
 def pdf(html_path: Path) -> Path:
@@ -114,10 +196,7 @@ def pdf(html_path: Path) -> Path:
     page_html = ("<!doctype html><html lang='en'><head><meta charset='utf-8'>"
                  "<meta name='viewport' content='width=device-width, initial-scale=1'></head><body>"
                  + html_path.read_text(encoding="utf-8")
-                 + f"<script src='{MERMAID}'></script>"
-                 "<script>mermaid.initialize({startOnLoad:false, securityLevel:'strict'});"
-                 "mermaid.run({querySelector:'pre.mermaid'}).then(()=>document.body.dataset.ready='1')"
-                 ".catch(e=>{document.body.dataset.ready='err:'+e});</script></body></html>")
+                 + "<script>document.fonts.ready.then(()=>{document.body.dataset.ready='1'})</script></body></html>")
     tmp = html_path.with_suffix(".print.html")
     tmp.write_text(page_html, encoding="utf-8")
     out = html_path.with_suffix(".pdf")

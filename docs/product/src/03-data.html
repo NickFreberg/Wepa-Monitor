@@ -89,7 +89,7 @@
   <figure class="plate">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
-flowchart LR
+flowchart TB
   A["Wepa status page"] -->|"every 60 s"| B["scrape.py<br/>parse by header text"]
   B --> C[("snapshots/<br/>YYYY-MM-DD.csv")]
   B --> D[("scrape_log/<br/>every attempt")]

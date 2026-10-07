@@ -11,14 +11,17 @@
   <figure class="plate">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"13px"}}}%%
-flowchart TB
+flowchart LR
   subgraph Users
+    direction TB
     U1["Staff browser"]
     U2["Student phone<br/>(QR status page)"]
     U3["Administrator CLI"]
   end
   subgraph Azure["Azure Container Apps (HTTPS ingress)"]
+    direction TB
     subgraph App["Container · python:3.12-slim · gunicorn"]
+      direction TB
       DASH["Dash web app<br/>pages · callbacks · exports"]
       AUTH["Sign-in · sessions · CSRF · CSP"]
       COL["Collector thread<br/>every 60 s · daily jobs"]
@@ -27,12 +30,13 @@ flowchart TB
     FS[("Azure Files share<br/>code · data · records · security")]
   end
   subgraph Outside["Outside services"]
+    direction TB
     WEPA["Wepa status page"]
     BSU["bridgew.edu"]
     OSM["OpenStreetMap"]
     AI["Claude API (optional)"]
     GH["GitHub<br/>issues · update workflow"]
-    INTEL["OSV · CISA · NVD · MSRC · EPSS · Exploit-DB · Metasploit"]
+    INTEL["OSV · CISA · NVD · MSRC<br/>EPSS · Exploit-DB · Metasploit"]
   end
   BK["Backup collector<br/>(any spare computer)"]
   U1 --> AUTH --> DASH
@@ -155,7 +159,7 @@ sequenceDiagram
   <figure class="plate">
 <pre class="mermaid">
 %%{init: {"theme":"base","themeVariables":{"primaryColor":"#f6e9e7","primaryBorderColor":"#8b1e24","primaryTextColor":"#1f1a17","lineColor":"#6b625c","fontFamily":"Libre Franklin, Arial, sans-serif","fontSize":"12.5px"}}}%%
-flowchart LR
+flowchart TB
   subgraph L1["Printer and Wepa"]
     direction TB
     S((" ")) --> F["Fault occurs"] --> R["Row turns red<br/>on Wepa's page"]
