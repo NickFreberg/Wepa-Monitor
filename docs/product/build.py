@@ -102,7 +102,7 @@ def shot(name: str) -> str:
 
 def build() -> Path:
     html = "".join(p.read_text(encoding="utf-8") for p in sorted((HERE / "src").glob("*.html")))
-    html = html.replace("{{SVG_DESKS}}", desk_hours_svg()).replace("{{SVG_DQ}}", data_quality_svg())
+    html = html.replace("{{SVG_DESKS}}", "{{FIG_DESKS}}").replace("{{SVG_DQ}}", "{{FIG_DQ}}")
     sys.path.insert(0, str(ROOT / "scripts"))
     import make_brand
     pattern = base64.b64encode(make_brand.pattern_svg().encode()).decode()
@@ -111,8 +111,8 @@ def build() -> Path:
             .replace("{{MARK_COVER}}", make_brand.boyden_svg(False, ("#ffffff", "#f3c25b", "#f19aa0"))))
     for name in SHOTS:
         html = html.replace("{{IMG_" + name + "}}", shot(name))
+    html = draw_diagrams(html, {"{{FIG_DESKS}}": desk_hours_svg(), "{{FIG_DQ}}": data_quality_svg()})
     assert "{{" not in html, "unfilled placeholder"
-    html = draw_diagrams(html)
     OUT.write_text(html, encoding="utf-8")
     return OUT
 
@@ -126,7 +126,7 @@ async () => {
                       themeVariables: {fontFamily: FONT}, flowchart: {useMaxWidth: false},
                       sequence: {useMaxWidth: false}, er: {useMaxWidth: false}, state: {useMaxWidth: false},
                       // Journey steps: boxes wide and tall enough for three lines, so no step runs out of its box.
-                      journey: {useMaxWidth: false, width: 190, height: 70, taskMargin: 40},
+                      journey: {useMaxWidth: false, width: 200, height: 84, taskMargin: 30, taskFontSize: 16, sectionFontSize: 16},
                       timeline: {useMaxWidth: false}});
   const out = [];
   const blocks = [...document.querySelectorAll('pre.mermaid')];
@@ -168,14 +168,16 @@ async () => {
 """
 
 
-def draw_diagrams(html: str) -> str:
-    """Render every Mermaid block to SVG in Chromium and put the SVG in its place."""
+def draw_diagrams(html: str, drawn: dict[str, str]) -> str:
+    """Render every Mermaid block in Chromium, then every figure (those and the `drawn` SVGs, keyed by their
+    placeholder) to a PNG image, and put the images in place. Pictures, unlike drawings, are left alone by
+    dark modes, auto-darkening browsers and PDF readers, so every figure looks the same everywhere."""
     import re
     from playwright.sync_api import sync_playwright
     blocks = re.findall(r'<pre class="mermaid">.*?</pre>', html, flags=re.S)
-    if not blocks:
-        return html
     blocks = [re.sub(r',?"fontFamily":"[^"]*"', "", b) for b in blocks]     # the font is set once, below
+    # Journeys put six steps side by side, so they shrink most on a page: give them larger text.
+    blocks = [re.sub(r'"fontSize":"[^"]*"', '"fontSize":"17px"', b) if "\njourney" in b else b for b in blocks]
     # A <br/> inside <pre> would become a real line-break element and vanish from the diagram's source text.
     blocks = [re.sub(r"<br\s*/?>", "&lt;br/&gt;", b) for b in blocks]
     page = ("<!doctype html><html><head><meta charset='utf-8'>"
@@ -190,13 +192,33 @@ def draw_diagrams(html: str) -> str:
             pg = br.new_page()
             pg.goto(tmp.as_uri())
             pg.wait_for_function("window.mermaid !== undefined", timeout=60000)
-            svgs = pg.evaluate(DRAW_JS % PAPER)
+            svgs = pg.evaluate(DRAW_JS % PAPER) if blocks else []
+            shot_pg = br.new_page(device_scale_factor=2, viewport={"width": 2400, "height": 1600})
+            pics = [_picture(shot_pg, svg) for svg in svgs]
+            extra = {k: _picture(shot_pg, svg) for k, svg in drawn.items()}
             br.close()
     finally:
         tmp.unlink(missing_ok=True)
-    it = iter(svgs)
-    return re.sub(r'<pre class="mermaid">.*?</pre>', lambda m: f'<div class="diagram">{next(it)}</div>', html,
+    it = iter(pics)
+    html = re.sub(r'<pre class="mermaid">.*?</pre>', lambda m: f'<div class="diagram">{next(it)}</div>', html,
                   flags=re.S)
+    for key, pic in extra.items():
+        html = html.replace(key, f'<div class="diagram">{pic}</div>')
+    return html
+
+
+def _picture(pg, svg: str) -> str:
+    """One figure as a PNG <img>, at twice its size so it stays sharp when zoomed or printed."""
+    import html as h
+    import re
+    label = re.search(r'aria-label="([^"]*)"', svg)
+    alt = h.unescape(label.group(1)) if label else "Diagram; the caption below describes it"
+    pg.set_content(f"<!doctype html><body style='margin:0;background:{PAPER}'>{svg}</body>")
+    el = pg.locator("svg").first
+    box = el.bounding_box()
+    data = base64.b64encode(el.screenshot(type="png")).decode()
+    return (f'<img src="data:image/png;base64,{data}" width="{round(box["width"])}" height="{round(box["height"])}" '
+            f'alt="{h.escape(alt)}" class="figure-img">')
 
 
 def pdf(html_path: Path) -> Path:
